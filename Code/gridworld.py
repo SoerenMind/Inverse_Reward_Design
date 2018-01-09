@@ -2,8 +2,321 @@ from collections import defaultdict
 from disjoint_sets import DisjointSets
 import numpy as np
 import random
+import itertools
+import random
+from scipy.stats import invwishart, multivariate_normal
+from random import normalvariate
+from scipy.stats import itemfreq
 
-class GridworldMdp(object):
+
+class Mdp(object):
+    def __init__(self):
+        pass
+
+    def get_start_state(self):
+        """Returns the start state."""
+        raise NotImplementedError
+
+
+    def get_states(self):
+        """Returns a list of all possible states the agent can be in.
+
+        Note it is not guaranteed that the agent can reach all of these states.
+        """
+        raise NotImplementedError
+
+    def get_actions(self, state):
+        """Returns the list of valid actions for 'state'.
+
+        Note that you can request moves into walls. The order in which actions
+        are returned is guaranteed to be deterministic, in order to allow agents
+        to implement deterministic behavior.
+        """
+        raise NotImplementedError
+
+    def get_features(self,state):
+        """Returns feature vector for state"""
+        raise NotImplementedError
+
+    def get_feature_expectations_from_trajectories(self, trajectories):
+        """
+        Returns a vector of feature expectations.
+        -trajectories: List of trajectories of transitions of the form (state, next_state, action, reward),
+         as created by agent_runner.run_agent.
+        """
+        raise NotImplementedError
+
+    def get_reward(self, state, action):
+        """Get reward for state, action transition.
+
+        This is the living reward, except when we take EXIT, in which case we
+        return the reward for the current state.
+        """
+        raise NotImplementedError
+
+
+    def is_terminal(self, state):
+        """Returns True if the current state is terminal, False otherwise.
+
+        A state is terminal if there are no actions available from it (which
+        means that the episode is over).
+        """
+        return state == self.terminal_state
+
+    def get_transition_states_and_probs(self, state, action):
+        """Gets information about possible transitions for the action.
+
+        Returns list of (next_state, prob) pairs representing the states
+        reachable from 'state' by taking 'action' along with their transition
+        probabilities.
+        """
+        raise NotImplementedError
+
+
+
+
+class NStateMdp(Mdp):
+    '''An MDP with N=num_states states and N actions which are always possible.
+    Action i leads to state i.
+    preterminal_states transition to a generic terminal state via a terminal action.
+    '''
+    def __init__(self,num_states, rewards, start_state, preterminal_states):
+        self.num_states = num_states    # Or make a grid and add n actions
+        self.terminal_state = 'Terminal State'
+        self.preterminal_states = preterminal_states    # Preterminal states should include states with no available actions. Otherwise get_actions==>[]==>
+        # self.populate_rewards_and_start_state(rewards)
+        self.start_state = start_state
+        self.rewards = np.array(rewards)
+
+    # def populate_rewards_and_start_state(self, rewards):
+    #     """
+    #     :param rewards: list or array of rewards. rewards[i] is the reward for state i.
+    #
+    #     Defines self.rewards, a *dictionary from features to reward*.
+    #     """
+    #     self.rewards = {}
+    #     assert len(rewards) == self.num_states
+    #     for i in range(self.num_states):
+    #         features = self.get_features(i)#np.zeros(self.num_states)
+    #         features[i] = 1
+    #         self.rewards[tuple(features)] = rewards[i]
+    #     # for i, x in enumerate(rewards):
+    #     #     features = self.get_features(i)#np.zeros(self.num_states)
+    #     #     features[i] = 1
+    #     #     self.rewards[i] = x
+
+    def get_states(self):
+        all_states = range(self.num_states)
+        return all_states + [self.terminal_state]
+
+    def get_start_state(self):
+        """Returns the start state."""
+        return self.start_state
+
+    def get_actions(self, state):
+        """Returns the list of valid actions for 'state'.
+        Note that all actions are valid unless the state is terminal (then none are valid).
+        """
+        if self.is_terminal(state):
+            return []
+        if state in self.preterminal_states:
+            return [Direction.EXIT]
+        act = range(self.num_states)
+        return act
+
+    def get_reward(self,state,action):
+        """Get reward for state, action transition."""
+        features = self.get_features(state)
+        return self.get_reward_from_features(features)
+        # features = tuple(self.get_features(state))
+        # return self.rewards[features]
+
+    def change_reward(self, rewards):
+        '''Sets new reward function (for reward design).'''
+        assert self.rewards.shape == rewards.shape
+        self.rewards = rewards
+
+    # def get_reward_from_features(self, features, rewards=self.rewards):
+    def get_reward_from_features(self, *args):
+        """Returns dot product of features with reward weights. Uses self.rewards unless extra argument is given."""
+        features = args[0]
+        if len(args) == 2:
+            rewards = args[1]
+        else: rewards = self.rewards
+        assert features.shape == rewards.shape
+        return np.dot(features, rewards)
+
+    def get_feature_expectations_from_trajectories(self, trajectories):
+        '''
+        Modify run_agent to do learning and then produce trajectories. Call this in run_agent after learning is done and trajectories can be made.
+        Problem: Trajectories should maybe be generated one by one not all at once.
+
+        Reward:
+            - Either mdp.get_avg_reward(trajectories)
+            - Or    mdp.get_avg_reward( (get_feature_expectations(trajectories)))
+            - Latter goes trajectories ==> feature exp ==> self.rewards[feature_exp] (which has to be remade)
+            - Need a linear function features => reward (and a function state => features => reward which saves time with a dictionary)
+
+        Option: make agent.run_agent ?
+        '''
+        # Decompose trajectories into list of all visited feature vectors
+        # TODO: Deleted the first state here!
+        state_feature_list = [[self.get_features(tup[0]) for tup in trajectory[1:]] for trajectory in trajectories]
+        state_feature_list = list(itertools.chain(*state_feature_list))     # flatten list of lists
+        feature_sum = np.array(state_feature_list).sum(axis=0)
+        feature_expectations = np.true_divide(feature_sum, len(state_feature_list))
+        # assert feature_expectations.max() <= 1    # only if features are max 1
+        return np.array(feature_expectations)
+
+    def get_state_list(self, trajectories):
+        """Returns list of states in 'trajectories'."""
+        state_list = np.array([tup[0] for trajectory in trajectories for tup in trajectory])
+        return state_list
+
+    def is_terminal(self, state):
+        """Returns True if the current state is terminal, False otherwise."""
+        return state == self.terminal_state
+
+    def get_transition_states_and_probs(self, state, action):
+        """Gets information about possible transitions for the action.
+
+        Returns [(next_state, 1.0)] if dynamics are deterministic.
+        """
+        if action not in self.get_actions(state):
+            raise ValueError("Illegal action %s in state %s" % (action, state))
+
+        if action == Direction.EXIT:
+            # TODO: Terminal state integer returns corresponding reward or reward for 'Terminal state'?
+            return [(self.terminal_state, 1.0)]
+
+        # TODO: Really unsure about terminal state situation
+        next_state = self.attempt_to_move_in_direction(state, action)
+        return [(next_state, 1.0)]
+
+    def attempt_to_move_in_direction(self, state, action):
+        """Return the new state an agent would be in if it took the action."""
+        assert type(action) == int
+        new_state = action
+        return new_state   # new state is action
+
+
+
+
+
+########################################################
+class NStateMdpHardcodedFeatures(NStateMdp):
+    def get_features(self,state):
+        """Outputs np array of features - a one-hot encoding of the state.
+        """
+        # features = np.zeros(self.num_states)
+        # features[state] = 1
+        features = np.zeros(2)
+        if state == 0:
+            features[0] = 1
+        elif state == 1 and self.num_states == 3:   # if three states (test env), cut out state 1
+            pass
+        elif state == 1 and self.num_states == 2:
+            features[1] = 1; features[0] = 1
+        elif state == 2:
+            features[1] = 1
+        else:
+            raise ValueError('should only have three states for this featurization')
+        return features
+
+
+
+
+
+########################################################
+class NStateMdpGaussianFeatures(NStateMdp):
+    """
+    Features for each state are drawn from the same Gaussian for all states. The map: state \mapsto features is deterministic.
+
+    Additional variables:
+    -num_states_reachable: Integer k <= N which we may change between training and test MDP.
+    -SEED
+    """
+    def __init__(self, num_states, rewards, start_state, preterminal_states, feature_dim, num_states_reachable, SEED=1):
+        self.SEED = SEED
+        super(NStateMdpGaussianFeatures, self).__init__(num_states, rewards, start_state, preterminal_states)
+        self.feature_dim = feature_dim
+        self.num_states_reachable = num_states_reachable
+        self.populate_features()
+        # self.populate_reward
+
+    def populate_features(self):
+        """Draws each state's features from a Gaussian and stores them in a dictionary."""
+        self.features = {}
+        np.random.seed(self.SEED)
+        mean = np.zeros(self.feature_dim)
+        # cov = invwishart.rvs(df=self.feature_dim, scale=np.ones(self.feature_dim), size=1)
+        cov = np.eye(self.feature_dim)
+        for state in self.get_states():
+            features = multivariate_normal.rvs(mean=mean,cov=cov,size=1)
+            self.features[state] = features
+
+    def get_features(self, state):
+        return self.features[state]
+
+    def get_actions(self, state):
+        """Returns available actions except ones that lead to unreachable states"""
+        actions = super(NStateMdpGaussianFeatures, self).get_actions(state)
+        if Direction.EXIT in actions:
+            return actions
+        else:   # TODO: Why only two actions in debugger when there could be 3?
+            return actions[:self.num_states_reachable]
+
+    def add_feature_map(self, feature_dict):
+        """Adds a feature map that overwrites the one from self.populate_features.
+        This makes sure that a test MDP can have the same feature map as the training MDP.
+        """
+        self.feature_dim = feature_dict.copy()
+
+def NStateMdpRandomGaussianFeatures(NStateMdp):
+    """
+    Features for each state are drawn from a different Gaussian for each state. The map: state \mapsto features is stochastic.
+
+    Additional variables:
+    -num_states_reachable: Integer k <= N which we may change between training and test MDP.
+    -SEED
+    """
+    def __init__(self, num_states, rewards, start_state, preterminal_states, feature_dim, num_states_reachable, SEED=1):
+        self.SEED = SEED
+        super(NStateMdpGaussianFeatures, self).__init__(num_states, rewards, start_state, preterminal_states)
+        self.feature_dim = feature_dim
+        self.num_states_reachable = num_states_reachable
+        self.populate_features()
+        # self.populate_reward
+
+    def populate_features(self):
+        """Draws each state's feature DISTRIBUTION PARAMETERS from an Inv Wishard and stores them in a
+        dictionary self.feature_params: state -> feature parameters."""
+        self.feature_params = {}
+        np.random.seed(self.SEED)
+        mean_hyperprior = np.zeros(self.feature_dim)
+        cov_hyperprior = np.eye(self.feature_dim)
+        # mean = np.zeros(self.feature_dim)
+        for state in self.get_states():
+            mean = multivariate_normal.rvs(mean=mean_hyperprior, cov=cov_hyperprior)
+            cov = invwishart.rvs(df=self.feature_dim, scale=np.ones(self.feature_dim), size=1)
+            self.feature_params[state] = (mean, cov)
+
+    def get_features(self, state):
+        """Draws features(state) from the Gaussian corresponding to the state."""
+        (mean, cov) = self.feature_params[state]
+        features = multivariate_normal.rvs(mean, cov)
+
+
+    def add_feature_map(self, feature_dict):
+        """Adds a feature map that overwrites the one from self.populate_features.
+        This makes sure that a test MDP can have the same feature map as the training MDP.
+        """
+        raise NotImplementedError
+
+
+
+########################################################
+class GridworldMdp(Mdp):
     """A grid world where the objective is to navigate to one of many rewards.
 
     Specifies all of the static information that an agent has access to when
@@ -38,6 +351,7 @@ class GridworldMdp(object):
 
         self.walls = [[space == 'X' for space in row] for row in grid]
         self.populate_rewards_and_start_state(grid)
+
 
     def assert_valid_grid(self, grid):
         """Raises an AssertionError if the grid is invalid.
@@ -333,110 +647,19 @@ class GridworldMdp(object):
 
 
 
-class NStateMdp(GridworldMdp):
-    '''An MDP with N=num_states states and N actions which are always possible.
-    Action i leads to state i.
-    preterminal_states transition to a generic terminal state via a terminal action.
-    '''
-    def __init__(self,num_states, rewards, start_state, preterminal_states):
-        self.num_states = num_states    # Or make a grid and add n actions
-        self.terminal_state = 'Terminal State'
-        self.preterminal_states = preterminal_states    # Preterminal states should include states with no available actions. Otherwise get_actions==>[]==>
-        # TODO: add states that lead to terminal state
-        # self.terminal_state = terminal_state
-        self.populate_rewards_and_start_state(rewards)
-        self.start_state = start_state
-
-    def populate_rewards_and_start_state(self, rewards):
-        """
-        :param rewards: list or array of rewards. rewards[i] is the reward for state i.
-
-        Defines self.rewards, a *dictionary from features to reward*.
-        """
-        self.rewards = {}
-        assert len(rewards) == self.num_states
-        for i in range(self.num_states):
-            features = self.get_features(i)#np.zeros(self.num_states)
-            features[i] = 1
-            self.rewards[tuple(features)] = rewards[i]
-        # for i, x in enumerate(rewards):
-        #     features = self.get_features(i)#np.zeros(self.num_states)
-        #     features[i] = 1
-        #     self.rewards[i] = x
-
-    def get_states(self):
-        all_states = range(self.num_states)
-        return all_states + [self.terminal_state]
-
-    def get_actions(self, state):
-        """Returns the list of valid actions for 'state'.
-        Note that all actions are valid unless the state is terminal (then none are valid).
-        """
-        if self.is_terminal(state):
-            return []
-        if state in self.preterminal_states:
-            return [Direction.EXIT]
-        act = range(self.num_states)
-        return act
-
-    def get_reward(self,state,action):
-        """Get reward for state, action transition."""
-        features = tuple(self.get_features(state))
-        return self.rewards[features]
-
-    # def get_reward_from_features(self, features):
-    #
-
-    def get_features(self,state):
-        """Outputs np array of features - a one-hot encoding of the state.
-        TODO: semi-implemented MDP super-class that doesn't use gridworld
-        """
-        features = np.zeros(self.num_states)
-        features[state] = 1
-        return features
-
-    def get_feature_expectations(self, trajectories):
-        '''
-        Modify run_agent to do learning and then produce trajectories. Call this in run_agent after learning is done and trajectories can be made.
-        Problem: Trajectories should maybe be generated one by one not all at once.
-
-        Reward:
-            - Either mdp.get_avg_reward(trajectories)
-            - Or    mdp.get_avg_reward( (get_feature_expectations(trajectories)))
-            - Latter goes trajectories ==> feature exp ==> self.rewards[feature_exp] (which has to be remade)
-            - Need a linear function features => reward (and a function state => features => reward which saves time with a dictionary)
-
-        Option: make agent.run_agent ?
-        '''
-
-    def is_terminal(self, state):
-        """Returns True if the current state is terminal, False otherwise."""
-        return state == self.terminal_state
-
-    def get_transition_states_and_probs(self, state, action):
-        """Gets information about possible transitions for the action.
-
-        Returns [(next_state, 1.0)] if dynamics are deterministic.
-        """
-        if action not in self.get_actions(state):
-            raise ValueError("Illegal action %s in state %s" % (action, state))
-
-        if action == Direction.EXIT:
-            # TODO: Terminal state integer returns corresponding reward or reward for 'Terminal state'?
-            return [(self.terminal_state, 1.0)]
-
-        # TODO: Really unsure about terminal state situation
-        next_state = self.attempt_to_move_in_direction(state, action)
-        return [(next_state, 1.0)]
-
-    def attempt_to_move_in_direction(self, state, action):
-        """Return the new state an agent would be in if it took the action."""
-        assert type(action) == int
-        new_state = action
-        return new_state   # new state is action
 
 
 
+
+
+
+
+
+
+
+
+
+########################################################
 # TODO(rohinmshah): This is a generic MDP environment, it isn't specific to
 # Gridworlds. Put it in its own file and rename the gridworld field to mdp.
 class GridworldEnvironment(object):
@@ -484,6 +707,16 @@ class GridworldEnvironment(object):
     def is_done(self):
         """Returns True if the episode is over and the agent cannot act."""
         return self.gridworld.is_terminal(self.get_current_state())
+
+
+
+
+
+
+
+
+
+
 
 
 

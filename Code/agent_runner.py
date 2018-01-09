@@ -2,7 +2,7 @@ from agents import DirectionalAgent, ImmediateRewardAgent
 from gridworld import GridworldMdp, GridworldEnvironment, Direction, NStateMdp
 
 
-def run_agent(agent, env, episode_length=float("inf")):
+def run_agent(agent, env, episode_length=20):
     """Runs the agent on the environment for one episode.
 
     The agent will keep being asked for actions until the environment says the
@@ -19,7 +19,8 @@ def run_agent(agent, env, episode_length=float("inf")):
     """
     env.reset()
     trajectory = []
-    # Note: Trajectory will include terminal state iff episode length not reached. Then the final next_state won't be rewarded.
+    # Todo: Trajectory will include terminal state iff episode length not reached. Then the final next_state won't be rewarded.
+    # Tweak: Exclude start state from trajectory?
     while len(trajectory) < episode_length and not env.is_done():
         curr_state = env.get_current_state()
         action = agent.get_action(curr_state)
@@ -38,4 +39,4 @@ if __name__=='__main__':
     # agent = DirectionalAgent(default_action)
     agent = ImmediateRewardAgent()
     agent.set_mdp(mdp)
-    print(run_agent(agent, env, episode_length=float(6)))
+    print(run_agent(agent, env, episode_length=6))
