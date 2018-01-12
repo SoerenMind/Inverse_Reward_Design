@@ -1,6 +1,6 @@
 from agent_interface import Agent
 from collections import defaultdict
-from utils import Distribution
+# from utils import Distribution
 from gridworld import Direction
 import numpy as np
 import random
@@ -57,7 +57,8 @@ class ImmediateRewardAgent(Agent):
         # If ending episode:
         if actions[0] == Direction.EXIT:
             assert len(actions) == 1
-            return Distribution({actions[0]: 1})
+            # return Distribution({actions[0]: 1})
+            return [Direction.EXIT]
 
         for a in actions:
             action_value = self.qvalue(state, a)
@@ -66,7 +67,8 @@ class ImmediateRewardAgent(Agent):
             elif action_value == best_value:
                 best_actions.append(a)
         # return Distribution({a: 1 for a in best_actions})
-        return Distribution({best_actions[0]: 1})
+        # return Distribution({best_actions[0]: 1})
+        return best_actions
 
 
 class ValueIterationLikeAgent(Agent):

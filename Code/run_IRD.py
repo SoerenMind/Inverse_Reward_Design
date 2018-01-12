@@ -1,50 +1,36 @@
+import time
+
+print('importing')
+
+start = time.clock()
 import numpy as np
 import environment
 import agent_class
 from inference_class import Inference, test_inference
 import itertools
-from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures
+from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures, NStateMdpRandomGaussianFeatures
 from agents import ImmediateRewardAgent, DirectionalAgent
-from agent_runner import run_agent
-# from scipy.stats import itemfreq
-from interface_discrete import Interface
+from query_chooser_class import Regret_Minimizing_Query_Chooser
+# from interface_discrete import Interface
+from random import choice
+from scipy.special import comb
+import copy
 
 
+print('importing done')
+print 'Time to import: {deltat}'.format(deltat=time.clock() - start)
 
+"""Time sinks:
+-import agent runner in inference
+-from utils import Distribution in agents.py (ca 2s)
+-from agent_runner import run_agent in interface_discrete.py (0.3s)
+"""
 
 def powerset(s):
     x = len(s)
     masks = [1 << i for i in range(x)]
     for i in range(1, 1 << x):
         yield [ss for mask, ss in zip(masks, s) if i & mask]
-
-    '''Regret minimization:
-    # -Get regret before asking: sum_r p(r) regret(r_avg, r): wrong?
-    #     -Problem: Gotta loop through ALL rewards r and get p(r)*regret(post_avg | r)
-    #     -This is gonna be the same for every reward set, so omit! (Unless you assume the set contains the truth)
-    -Regret = test_inference.get_avg_reward(proxy, true_reward) - (true | true)
-    -Regret after asking:
-        for r in omega:
-            posterior|r =
-            post_avg =
-            exp_reward_after_answer = sum_{rs_true} post(r_true) * regret(r_true | post_avg)
-            exp_reward_after_asking += prior(r) * exp_reward_after_answer
-
-    '''
-
-
-# def choose_proposal_delta(reward_space, prior, inference, cost_of_asking = 0.01):
-#     '''Chooses a proposal reward sub space by assuming that the picked reward function is the true one (delta posterior)
-#     and minimizing regret. Possible issue: calculating things over the proposal set vs the whole reward_space.'''
-#     for omega in powerset(reward_space):
-#         post_avg = sum([prior[tuple(reward)] * reward for reward in omega])
-#         avg_weighted_reward = inference.get_avg_reward(post_avg, post_avg)
-#         exp_reward_after_asking = sum([prior[tuple(reward)] * inference.get_avg_reward(reward, reward)
-#                                        for reward in omega])
-#         gain_for_asking = exp_reward_after_asking - avg_weighted_reward - cost_of_asking*len(omega)
-#         if gain_for_asking > best_r_set_gain:
-#             best_r_set = omega; best_r_set_gain = gain_for_asking
-#     return best_r_set, best_r_set_gain
 
 
 def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, prior, inference, cost_of_asking = 0.01):
@@ -86,32 +72,91 @@ def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, p
             best_post_avg = post_avg
     return best_r_set, best_exp_exp_post_regret, best_regret_plus_cost, best_posterior, best_post_avg
 
+    query_chooser = Regret_Minimizing_Query_Chooser(inference, reward_space_proxy, cost_of_asking=0.)
+    set_of_queries = list(query_chooser.generate_set_of_queries(query_size))
+    print(len(set_of_queries))
+    best_query, best_regret, _ = query_chooser.find_regret_minimizing_query(set_of_queries)
+
+def experiment(inference_sim, reward_space_proxy, iterations_random=10, iterations_optimized=20):
+    regret_diff = [] # TODO: Randomize! Youre doing the same experiment with just a different random query! Why is the regret plus cost higher?
+    regret_gain = []
+    inference_sim = copy.deepcopy(inference_sim)
+    inference_eval = copy.deepcopy(inference_sim)
+    for i in range(iterations_optimized):
+        print('Experiment number:{i}/{iter}'.format(i=i,iter=iterations_optimized))
+        inference_sim.agent.mdp.populate_features(); print('Redrawn features')
+        inference_sim.feature_expectations_dict = {}
+        query_chooser = Regret_Minimizing_Query_Chooser(inference_sim, reward_space_proxy, cost_of_asking=0.)
+        set_of_queries = list(query_chooser.generate_set_of_queries(query_size))
+        # for _ in range(0):
+        #     set_of_queries += set_of_queries
+        # print('duplicates query set times 2^3')
+        random_query = choice(set_of_queries)
+        best_query, best_regret, _     = query_chooser.find_regret_minimizing_query(set_of_queries)
+        random_query, random_regret, _ = query_chooser.find_regret_minimizing_query([random_query])
+        _, prior_regret, _             = query_chooser.find_regret_minimizing_query([])
+        regret_diff.append(random_regret - best_regret)
+        regret_gain.append(prior_regret - best_regret)
+
+        # Do inference on chosen query, compare regret to that of random query and prior regret
+        
+        inference_eval.calc_and_save_posterior()
+
+    return regret_diff, np.array(regret_diff).mean(), np.array(regret_diff).std(), sum([np.array(regret_diff) < 0]), np.array(regret_gain).mean()
+
+def test_planning_speed(inference, reward_space_proxy):
+    print('testing planning speed')
+    for i, proxy in enumerate(reward_space_proxy):
+        inference.get_feature_expectations(proxy)
 
 
 if __name__=='__main__':
     # Define environment and agent
     SEED = 1
-    beta = 100.
-    num_states = 6
-    feature_dim = 4
-    proxy_given = np.array([0,0,1,0])
+    beta = 4.
+    num_states = 20; print('num states = 100')
+    feature_dim = 20; print('feature dim = 5')
+    # print('planning trivialized')
+    query_size = 3
+    size_reward_space_true = 500
+    size_reward_space_proxy = 20
+    proxy_given = np.zeros(feature_dim)
+    # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
+    #                                 feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
     mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
                                     feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
     env = GridworldEnvironment(mdp)
     agent = ImmediateRewardAgent()
     agent.set_mdp(mdp)
     # print(run_agent(agent, env, episode_length=6))
-    # print(mdp.get_feature_expectations([trajectory]))
 
 
     # Set up inference
     # true_reward_given = np.array([0,0,1,0])
-    reward_space_true = [np.array([1, 0, 0, 0]), np.array([0, 1, 0, 0]), np.array([0, 0, 1, 0]), np.array([0, 0, 0, 1])]
-    reward_space_proxy = reward_space_true
-    len_reward_space = len(reward_space_true)
+    # reward_space_true = [np.array([1, 0, 0, 0]), np.array([0, 1, 0, 0]), np.array([0, 0, 1, 0]), np.array([0, 0, 0, 1])]
+    from itertools import product
+    reward_space_true = list(product([0,1], repeat=feature_dim))
+    # reward_space_true.remove((0,0,0,0))
+    reward_space_true = [np.array(reward) for reward in reward_space_true]
+    reward_space_true = [choice(reward_space_true) for _ in range(size_reward_space_true)]
+    # reward_space_true = [np.array([0, 0, 0, 0]), np.array([0, 0, 0, 1]), np.array([0, 0, 1, 1]), np.array([1, 0, 1, 0])]
+    reward_space_proxy = [choice(reward_space_true) for _ in range(size_reward_space_proxy)]
+    # reward_space_proxy = reward_space_true
+    # len_reward_space = len(reward_space_true)
     # reward_space = [np.array([1,0]),np.array([0,1]), np.array([1,1])]
     inference = Inference(agent, env, beta=beta, reward_space_true=reward_space_true,
-                          num_traject=10, prior=None)
+                          num_traject=1, prior=None)
+
+    'Print derived parameters'
+    print('Size of reward_space_true:{size}'.format(size=size_reward_space_true))
+    print('Size of reward_space_proxy:{size}'.format(size=len(reward_space_proxy)))
+    print('Query size:{size}'.format(size=query_size))
+    num_queries = comb(len(reward_space_proxy), query_size)
+    print('Number of queries:{size}'.format(size=num_queries))
+    num_planning_problems = len(reward_space_proxy) + num_queries * query_size
+    print('Number of proxies to plan with:{size}'.format(size=num_planning_problems))
+    print('======================================================================================================')
+
 
 
     'Set up test environment (not used)'
@@ -130,29 +175,33 @@ if __name__=='__main__':
 
 
     'Calculate proposal set'
-    # cost_of_asking = 0.01
-    # best_r_set = []; best_r_set_gain = 0
-    set_of_proposal_sets = powerset(reward_space_proxy)
-    # for reward in set_of_proposal_sets:
-    #     print(reward)
-    # print(list(set_of_proposal_sets))
-    # TODO: Mind the +1!
-    uniform_prior = {tuple(reward): np.true_divide(1,len_reward_space+1) for reward in reward_space_true}
-    uniform_prior[(1,0,0,0)] = 0.5
-    best_r_set, best_r_set_regret, best_regret_plus_cost, best_posterior, best_post_avg = choose_regret_minimizing_proposal(set_of_proposal_sets,
-                                                                    reward_space_true, prior=uniform_prior, inference=inference)
+    # # set_of_proposal_sets = powerset(reward_space_proxy)
+    # # uniform_prior = {tuple(reward): np.true_divide(1,len_reward_space) for reward in reward_space_true}
+    # # best_r_set, best_r_set_regret, best_regret_plus_cost, best_posterior, best_post_avg = choose_regret_minimizing_proposal(set_of_proposal_sets,
+    # #                                                                 reward_space_true, prior=uniform_prior, inference=inference)
+    # query_chooser = Regret_Minimizing_Query_Chooser(inference, reward_space_proxy, cost_of_asking=0.)
+    # set_of_queries = list(query_chooser.generate_set_of_queries(query_size))
+    # print(len(set_of_queries))
+    # best_query, best_regret, _ = query_chooser.find_regret_minimizing_query(set_of_queries)
+
+
+    'Experiment'
+    # test_planning_speed(inference, reward_space_proxy); print('tested planning speed')
+    regret_diff, mean, std, failures, gain = experiment(inference, reward_space_proxy)
+    print mean, std, failures, gain
 
     'Print results'
-    print 'mdp_features:'
-    print np.array([np.concatenate([[state], mdp.features[state]]) for state in range(num_states)])
-    # # print('mdp features: {features}'.format(features=mdp_test.features))
-    # print(avg_weighted_reward)
-    # print(exp_reward_after_asking)
-    print(best_r_set_regret)
-    print(best_r_set)
-    print('Best post_avg:{post_avg}').format(post_avg=best_post_avg)
-    print('Best posterior:{posterior}').format(posterior=best_posterior)
-
+    # print 'mdp_features:'
+    # print np.array([np.concatenate([[state], mdp.features[state]]) for state in range(num_states)])
+    # print np.array([np.concatenate([[state], mdp.get_features(state)]) for state in range(num_states)])
+    # # # print('mdp features: {features}'.format(features=mdp_test.features))
+    # # print(avg_weighted_reward)
+    # # print(exp_reward_after_asking)
+    # print(best_regret)
+    # print(best_query)
+    # # print('Best post_avg:{post_avg}').format(post_avg=best_post_avg)
+    # # print('Best posterior:{posterior}').format(posterior=best_posterior)
+    print 'Total time:{deltat}'.format(deltat=time.clock() - start)
 
 
     'Create interface'
@@ -160,13 +209,24 @@ if __name__=='__main__':
     # interface = Interface(omega, agent, env_test, num_states=num_states)
     # interface.plot()
 
-
-
     """Todo:
-    # Two notes:
-        1) Companies may be the first major transformative AI applications that require agent-like AI. As Drexler has argued, many functions of AI could be implemented as AI services.
-        2) Oligopolistic tendencies in AI may be inherited from oligopolistic tendencies in tech sectors. Research startups and academic labs exist, so the barriers to entry for research appear low. Profitability may require more data and a large existing customer base if the profit per customer is small. But data-efficient machine learning seems likely to improve strongly prior to transformative AI due to advances in transfer learning, continual learning, model-based reinforcement learning and unsupervised learning.
 
+    # TODO: Third task: Make sure to only do planning for each proxy once. Maybe make this function get the feature expectations instead and cache it.
+        - Increase state space and feature_dim
+        - Compare minimizer against random query
+            -Randomize: Random features MDP; re-draw Mdp between experiments
+
+            -Test random MDP (why so slow?); test posterior=1.
+            -Why qubsequent experiments faster?
+                -Try with static features: 5x faster
+                -Why done planning for >32 proxies?: bc post_avg
+                -Try duplicating the query space
+                -See effect of trivializing planning
+                -Use debugger
+            -Run it!
+
+                -Draw a true reward each time!
+        - Try a problem where I know the answer?
     # TODO: Calculate joint of w, tilde(w)
         -P(w') = E_w P(w' | w)P(w)
         -Calculation of P(w' | w):
@@ -183,7 +243,7 @@ if __name__=='__main__':
     # TODO: line-by-line profiler: https://github.com/rkern/line_profiler or https://plugins.jetbrains.com/plugin/8525-python-profiler-experimental
         # Github has a python file to run my files
         # python
-    # TODO: Third task: Make sure to only do planning for each proxy once. Maybe make this function get the feature expectations instead and cache it.
+
     -Implement regret minimizer
         -Test inference first
         -Why stochasticity in choice and regret?
@@ -197,32 +257,4 @@ if __name__=='__main__':
     -Other approaches/features for tomorrow
             + outline code (and section?)
     -Implement Race car / Dorsa domain with between-track generalization
-    """
-
-
-    """
-    Proposal choosing:
-    Exploitation = rewards with high posterior
-    Exploration  = some sort of info gain in the set? Minimizing posterior-avg-reward?
-    """
-
-
-
-
-
-
-
-
-
-
-
-    """
-    Evaluation depends on tie sampling! That could cause the posterior to not add up to 1!
-
-    The agent can choose the preterminal state because it gives equal immediate reward, but then it'll
-    get less average reward because it has spent more relative time in the shitty start state.
-    Since the time where the terminal state is entered is random, so is the avg reward and the likelihood.
-
-    But if we choose best_actions[0], is there a problem? Apparently not (anymore?).
-    Also, on average the inference gives 1.0.
     """

@@ -81,6 +81,7 @@ class NStateMdp(Mdp):
     preterminal_states transition to a generic terminal state via a terminal action.
     '''
     def __init__(self,num_states, rewards, start_state, preterminal_states):
+        super(Mdp,self).__init__()
         self.num_states = num_states    # Or make a grid and add n actions
         self.terminal_state = 'Terminal State'
         self.preterminal_states = preterminal_states    # Preterminal states should include states with no available actions. Otherwise get_actions==>[]==>
@@ -272,7 +273,7 @@ class NStateMdpGaussianFeatures(NStateMdp):
         """
         self.feature_dim = feature_dict.copy()
 
-def NStateMdpRandomGaussianFeatures(NStateMdp):
+class NStateMdpRandomGaussianFeatures(NStateMdp):
     """
     Features for each state are drawn from a different Gaussian for each state. The map: state \mapsto features is stochastic.
 
@@ -281,8 +282,15 @@ def NStateMdpRandomGaussianFeatures(NStateMdp):
     -SEED
     """
     def __init__(self, num_states, rewards, start_state, preterminal_states, feature_dim, num_states_reachable, SEED=1):
+        # Superclass init:
+        # super(NStateMdp, self).__init__(num_states, rewards, start_state, preterminal_states)
+        self.num_states = num_states
+        self.terminal_state = 'Terminal State'
+        self.preterminal_states = preterminal_states    # Preterminal states should include states with no available actions. Otherwise get_actions==>[]==>
+        self.start_state = start_state
+        self.rewards = np.array(rewards)
+        # Additional for this class
         self.SEED = SEED
-        super(NStateMdpGaussianFeatures, self).__init__(num_states, rewards, start_state, preterminal_states)
         self.feature_dim = feature_dim
         self.num_states_reachable = num_states_reachable
         self.populate_features()
@@ -305,7 +313,7 @@ def NStateMdpRandomGaussianFeatures(NStateMdp):
         """Draws features(state) from the Gaussian corresponding to the state."""
         (mean, cov) = self.feature_params[state]
         features = multivariate_normal.rvs(mean, cov)
-
+        return features
 
     def add_feature_map(self, feature_dict):
         """Adds a feature map that overwrites the one from self.populate_features.
