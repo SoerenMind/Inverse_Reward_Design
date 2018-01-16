@@ -78,14 +78,15 @@ def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, p
     best_query, best_regret, _ = query_chooser.find_regret_minimizing_query(set_of_queries)
 
 def experiment(inference_sim, reward_space_proxy, iterations_random=10, iterations_optimized=20):
-    regret_diff = [] # TODO: Randomize! Youre doing the same experiment with just a different random query! Why is the regret plus cost higher?
-    regret_gain = []
+    exp_regret_diff = []
+    exp_regret_gain = []
+    regret_compare = []
     inference_sim = copy.deepcopy(inference_sim)
     inference_eval = copy.deepcopy(inference_sim)
     for i in range(iterations_optimized):
         print('Experiment number:{i}/{iter}'.format(i=i,iter=iterations_optimized))
-        inference_sim.agent.mdp.populate_features(); print('Redrawn features')
-        inference_sim.feature_expectations_dict = {}
+        inference_sim.agent.mdp.populate_features()
+        inference_sim.feature_expectations_dict = {}    # Replace these lines with inference.reset()
         query_chooser = Regret_Minimizing_Query_Chooser(inference_sim, reward_space_proxy, cost_of_asking=0.)
         set_of_queries = list(query_chooser.generate_set_of_queries(query_size))
         # for _ in range(0):
@@ -93,16 +94,42 @@ def experiment(inference_sim, reward_space_proxy, iterations_random=10, iteratio
         # print('duplicates query set times 2^3')
         random_query = choice(set_of_queries)
         best_query, best_regret, _     = query_chooser.find_regret_minimizing_query(set_of_queries)
-        random_query, random_regret, _ = query_chooser.find_regret_minimizing_query([random_query])
+        _, random_regret, _ = query_chooser.find_regret_minimizing_query([random_query]) # Sometimes finds lower regret for empty query
         _, prior_regret, _             = query_chooser.find_regret_minimizing_query([])
-        regret_diff.append(random_regret - best_regret)
-        regret_gain.append(prior_regret - best_regret)
+        exp_regret_diff.append(random_regret - best_regret) # This should match the actual regret diff on average
+        exp_regret_gain.append(prior_regret - best_regret)
 
         # Do inference on chosen query, compare regret to that of random query and prior regret
-        
-        inference_eval.calc_and_save_posterior()
+        true_reward = choice(reward_space_true) # Replace with sample from
+        regret_optimized = get_regret_from_query(inference_eval, best_query, true_reward)
+        regret_random_query = get_regret_from_query(inference_eval, random_query, true_reward)
+        regret_compare.append((regret_optimized, regret_random_query))
 
-    return regret_diff, np.array(regret_diff).mean(), np.array(regret_diff).std(), sum([np.array(regret_diff) < 0]), np.array(regret_gain).mean()
+    regret_diff_actual = np.array([x-y for x,y in regret_compare])
+    mean_std_regret_diff_actual = (regret_diff_actual.mean(), regret_diff_actual.std())
+    return np.array(exp_regret_diff).mean(), np.array(exp_regret_diff).std(), sum(sum([np.array(exp_regret_diff) < 0])), \
+           np.array(exp_regret_gain).mean(), mean_std_regret_diff_actual, regret_compare
+
+
+def get_regret_from_query(inference_eval, best_query, true_reward):
+    lhoods = []
+    for i, proxy in enumerate(best_query):
+        lhood = inference_eval.get_likelihood(true_reward, proxy, best_query)
+        lhoods.append(lhood)
+    if len(lhoods) == 0:
+        pass
+    try: chosen_proxy_number = np.array(lhoods).argmax()  # Replace argmax with sampling
+    except:
+        return 100
+    chosen_proxy = best_query[chosen_proxy_number]
+    inference_eval.calc_and_save_posterior(chosen_proxy, best_query)
+    post_avg = inference_eval.get_posterior_avg()
+    # TODO: Make a query_chooser / inference.function from query to regret or so
+    optimal_reward = inference_eval.get_avg_reward(true_reward, true_reward)
+    post_reward = inference_eval.get_avg_reward(post_avg, true_reward)
+    regret = optimal_reward - post_reward
+    return regret
+
 
 def test_planning_speed(inference, reward_space_proxy):
     print('testing planning speed')
@@ -117,9 +144,9 @@ if __name__=='__main__':
     num_states = 20; print('num states = 100')
     feature_dim = 20; print('feature dim = 5')
     # print('planning trivialized')
-    query_size = 3
-    size_reward_space_true = 500
-    size_reward_space_proxy = 20
+    query_size = 2
+    size_reward_space_true = 50
+    size_reward_space_proxy = 10
     proxy_given = np.zeros(feature_dim)
     # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
     #                                 feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
@@ -187,8 +214,9 @@ if __name__=='__main__':
 
     'Experiment'
     # test_planning_speed(inference, reward_space_proxy); print('tested planning speed')
-    regret_diff, mean, std, failures, gain = experiment(inference, reward_space_proxy)
-    print mean, std, failures, gain
+    mean, std, failures, gain, mean_std_actual, regret_compare = experiment(inference, reward_space_proxy)
+    print mean, std, failures, gain, mean_std_actual
+    print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
 
     'Print results'
     # print 'mdp_features:'

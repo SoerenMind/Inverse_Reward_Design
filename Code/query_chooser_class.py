@@ -82,6 +82,7 @@ class Regret_Minimizing_Query_Chooser(Query_Chooser):
                 exp_regret += regret * p_true_reward
             return exp_regret
 
+        # Get expected regret for query
         post_avg = self.inference.get_posterior_avg()   # uses cached posterior
         for true_reward in self.inference.reward_space_true:
             p_true_reward = self.inference.get_posterior(true_reward)

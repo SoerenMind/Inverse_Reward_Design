@@ -134,7 +134,9 @@ class NStateMdp(Mdp):
 
     def change_reward(self, rewards):
         '''Sets new reward function (for reward design).'''
-        assert self.rewards.shape == rewards.shape
+        try: assert self.rewards.shape == rewards.shape
+        except:
+            pass
         self.rewards = rewards
 
     # def get_reward_from_features(self, features, rewards=self.rewards):
@@ -144,7 +146,9 @@ class NStateMdp(Mdp):
         if len(args) == 2:
             rewards = args[1]
         else: rewards = self.rewards
-        assert features.shape == rewards.shape
+        try: assert features.shape == rewards.shape
+        except:
+            assert features.shape == rewards.shape
         return np.dot(features, rewards)
 
     def get_feature_expectations_from_trajectories(self, trajectories):

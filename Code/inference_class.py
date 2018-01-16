@@ -110,8 +110,9 @@ class Inference:
             feature_expectations = self.agent.mdp.get_feature_expectations_from_trajectories(trajectories)
             # feature_expectations = np.true_divide(np.ones(shape=proxy.shape), len(proxy))
             self.feature_expectations_dict[tuple(proxy)] = feature_expectations
-            # num_plannings_done = len(self.feature_expectations_dict.items())
-            # print('Done planning for {num} proxies'.format(num=num_plannings_done))
+            num_plannings_done = len(self.feature_expectations_dict.items())
+            if num_plannings_done % 20 == 0:
+                print('Done planning for {num} proxies'.format(num=num_plannings_done))
         return feature_expectations
 
 
