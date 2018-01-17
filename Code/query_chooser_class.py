@@ -1,4 +1,6 @@
 from itertools import combinations
+from random import choice
+
 
 class Query_Chooser(object):
     def __init__(self):
@@ -25,10 +27,10 @@ class Regret_Minimizing_Query_Chooser(Query_Chooser):
     def find_regret_minimizing_query(self, set_of_queries, test_before_query=True):
         """Calculates the expected posterior regret after asking for each query of size query_size. Returns the query
         that minimizes this quantity plus the cost for asking (which is constant for fixed-size queries).
-
         :param query_size: number of reward functions in each query considered
         :return: best query
         """
+        self.cache_feature_expectations()
         best_query = []
         if test_before_query:
             best_exp_exp_post_regret = self.get_exp_exp_post_regret([])
@@ -44,6 +46,41 @@ class Regret_Minimizing_Query_Chooser(Query_Chooser):
                 best_exp_exp_post_regret = exp_exp_post_regret
                 best_query = query
         return best_query, best_exp_exp_post_regret, best_regret_plus_cost
+
+    def find_best_query_greedy(self, query_size=4):
+        """Finds query of size query_size that minimizes expected regret by starting with a random proxy and greedily
+        adding more proxies to the query.
+        Not implemented: Query size could be chosen adaptively based on cost vs gain of bigger queries.
+        :param query_size: int
+        :return: best_query, corresponding regret and regret plus cost of asking (which grows with query size).
+        """
+        cost_of_asking = self.cost_of_asking    # could use this to decide query length
+        self.cache_feature_expectations()
+        best_exp_exp_post_regret = float("inf")
+        best_regret_plus_cost = best_exp_exp_post_regret
+        # set_of_size_2_queries = self.generate_set_of_queries(query_size=2)
+        # TODO: Compare with choosing from size 2 queries first
+        # Find query with minimal regret
+        best_query = [choice(self.reward_space_proxy)]  # Initialize randomly
+        while len(best_query) < query_size:
+            found_new = False
+            # TODO: Use a function for this
+            for proxy in self.reward_space_proxy:
+                query = best_query+[proxy]
+                exp_exp_post_regret = self.get_exp_exp_post_regret(query)
+                query_cost = self.cost_of_asking * len(query)
+                regret_plus_cost = exp_exp_post_regret + query_cost
+                if regret_plus_cost <= best_regret_plus_cost:
+                    best_regret_plus_cost = regret_plus_cost
+                    best_exp_exp_post_regret = exp_exp_post_regret
+                    best_query_new = query
+                    found_new = True
+            best_query = best_query_new
+            try: assert found_new # If no better query was found the while loop will go forever. Use <= instead.
+            except:
+                assert found_new
+        return best_query, best_exp_exp_post_regret, best_regret_plus_cost
+
 
     def get_exp_exp_post_regret(self, query):
         """Returns the expected regret after getting query answered. This measure should be minimized over queries.
@@ -84,9 +121,9 @@ class Regret_Minimizing_Query_Chooser(Query_Chooser):
 
         # Get expected regret for query
         post_avg = self.inference.get_posterior_avg()   # uses cached posterior
-        for true_reward in self.inference.reward_space_true:
+        for true_reward in self.inference.reward_space_true:    # Vectorize
             p_true_reward = self.inference.get_posterior(true_reward)
-            optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)
+            optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)    # Cache to save 9%
             # True reward for optimizing post_avg
             post_reward = self.inference.get_avg_reward(post_avg, true_reward)
             regret = optimal_reward - post_reward

@@ -28,9 +28,9 @@ class Inference:
 
     def get_prior(self, true_reward):
         if self.prior is None:
-            return np.true_divide(1, len(self.reward_space_true))
+            return np.true_divide(1, len(self.reward_space_true))   # TODO (efficiency): Cache this
         else: return self.prior[tuple(true_reward)]
-
+    # @profile
     def calc_and_save_posterior(self, proxy_given, reward_space_proxy):
         """
         Calculates and caches all likelihoods and the normalizer for a given reward space and proxy_given.
@@ -62,7 +62,7 @@ class Inference:
     def calc_and_save_feature_expectations(self,reward_space_proxy):
         for proxy in reward_space_proxy:
             self.get_feature_expectations(proxy)
-
+    # @profile
     def get_likelihood(self, true_reward, proxy, reward_space_proxy):
         """Calculates likelihood of proxy reward given true reward.
         Proxy selection is assumed to be Boltzman rational."""
@@ -80,9 +80,10 @@ class Inference:
             Z_normalization += self.get_likelihood(true_reward, np.array(proxy)) \
                                * self.get_prior(proxy)
         return Z_normalization
-
+    # @profile
     def get_posterior(self, true_reward):
         '''Just Bayes' rule'''
+        # TODO (efficiency): Cache to save up to 10% of the time in get_exp_regret
         lhood = self.likelihoods[tuple(true_reward)]
         # lhood = self.get_likelihood(true_reward, proxy)
         # Z = self.get_Z_constant(true_reward)
@@ -90,15 +91,16 @@ class Inference:
         if self.evidence == 0:
             print('Warning: evidence=0')
         return np.true_divide(lhood, self.evidence) * prior
-
+    # @profile
     def get_avg_reward(self, proxy, true_reward):
         """Calculates average true reward over num_runs trajectories when the agent optimizes the proxy reward."""
+        # TODO (efficiency): Cache result for pairs
         feature_expectations = self.get_feature_expectations(proxy)
         return self.agent.mdp.get_reward_from_features(feature_expectations, true_reward)
 
     def get_posterior_avg(self):
         return sum([true_reward * self.get_posterior(true_reward) for true_reward in self.reward_space_true])
-
+    # @profile
     def get_feature_expectations(self, proxy):
         """Given a proxy reward, calculates feature_expectations and returns them. Also stores them in a dictionary
         and reuses the result if it has previously been calculated.
@@ -115,7 +117,7 @@ class Inference:
                 print('Done planning for {num} proxies'.format(num=num_plannings_done))
         return feature_expectations
 
-
+    # @profile
     def get_prob_proxy_choice(self, proxy, reward_space_proxy):
         """Calculates P(proxy) for a query by integrating P(proxy | true_reward) * P(true_reward)
         over reward_space_true."""
