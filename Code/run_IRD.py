@@ -10,9 +10,9 @@ from inference_class import Inference, test_inference
 import itertools
 from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures, NStateMdpRandomGaussianFeatures
 from agents import ImmediateRewardAgent, DirectionalAgent
-from query_chooser_class import Regret_Minimizing_Query_Chooser
-# from interface_discrete import Interface
-from random import choice
+from query_chooser_class import Query_Chooser_Subclass, Experiment
+from interface_discrete import Interface
+from random import choice, seed
 from scipy.special import comb
 import copy
 from utils import Distribution
@@ -34,6 +34,9 @@ def powerset(s):
     for i in range(1, 1 << x):
         yield [ss for mask, ss in zip(masks, s) if i & mask]
 
+def pprint(y):
+    print(y)
+    return y
 
 def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, prior, inference, cost_of_asking = 0.01):
     '''Chooses a proposal reward sub space by minimizing the expected regret after asking.'''
@@ -74,42 +77,46 @@ def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, p
             best_post_avg = post_avg
     return best_r_set, best_exp_exp_post_regret, best_regret_plus_cost, best_posterior, best_post_avg
 
-    query_chooser = Regret_Minimizing_Query_Chooser(inference, reward_space_proxy, cost_of_asking=0.)
+    query_chooser = Query_Chooser_Subclass(inference, reward_space_proxy, cost_of_asking=0.)
     set_of_queries = list(query_chooser.generate_set_of_queries(query_size))
     print(len(set_of_queries))
     best_query, best_regret, _ = query_chooser.find_regret_minimizing_query(set_of_queries)
 
 # @profile
-def experiment(inference_sim, reward_space_proxy, query_size, num_queries_max=num_queries_max, iterations_random=10,
+def experiment(inference_sim, reward_space_proxy, query_size, num_queries_max, iterations_random=10,
                iterations_optimized=20, greedy=True):
     exp_regret_diff = []
     exp_regret_gain = []
     regret_compare = []
     regret_exp_vs_actual = []
     inference_sim = copy.deepcopy(inference_sim)
-    inference_eval = copy.deepcopy(inference_sim)
     for i in range(iterations_optimized):
         print('Experiment number:{i}/{iter}'.format(i=i,iter=iterations_optimized))
+
+        # Set up query chooser and inference
         inference_sim.agent.mdp.populate_features()
         inference_sim.feature_expectations_dict = {}    # Replace these lines with inference.reset()
-        query_chooser = Regret_Minimizing_Query_Chooser(inference_sim, reward_space_proxy, cost_of_asking=0.)
-        set_of_queries = list(query_chooser.generate_set_of_queries(query_size))
-        # for _ in range(0):
-        #     set_of_queries += set_of_queries
-        # print('duplicates query set times 2^3')
+        query_chooser = Query_Chooser_Subclass(inference_sim, reward_space_proxy, cost_of_asking=0.)
+        set_of_queries = list(query_chooser.generate_set_of_queries(query_size, max_num_queries=1000))
         random_query = choice(set_of_queries)
+
+        # Select query and record expected regrets
         if greedy == True:
             best_query, best_regret, _     = query_chooser.find_best_query_greedy(query_size)
-        else:
+        elif greedy == False:
             best_query, best_regret, _     = query_chooser.find_regret_minimizing_query(set_of_queries)
+        elif greedy == 'maxmin':
+            best_query, best_regret, _ = query_chooser.find_query_feature_diff(query_size)
         _, random_regret, _ = query_chooser.find_regret_minimizing_query([random_query]) # Sometimes finds lower regret for empty query
         _, prior_regret, _             = query_chooser.find_regret_minimizing_query([])
         exp_regret_diff.append(random_regret - best_regret) # This should match the actual regret diff on average
         exp_regret_gain.append(prior_regret - best_regret)
 
         # Do inference on chosen query, compare regret to that of random query and prior regret
-        regret_optimized = get_regret_from_query(inference_eval, best_query)
-        regret_random_query = get_regret_from_query(inference_eval, random_query)
+        regret_optimized, optimized_actual_std = get_regret_from_query(inference_sim, best_query)
+        regret_random_query, random_actual_std = get_regret_from_query(inference_sim, random_query)
+        print optimized_actual_std
+        print random_actual_std
         regret_compare.append((regret_optimized, regret_random_query))
         regret_exp_vs_actual.append((best_regret, regret_optimized))
 
@@ -119,10 +126,11 @@ def experiment(inference_sim, reward_space_proxy, query_size, num_queries_max=nu
            np.array(exp_regret_gain).mean(), mean_std_regret_diff_actual, regret_compare, regret_exp_vs_actual
 
 
-def get_regret_from_query(inference_eval, best_query, num_true_rewards=20):
+def get_regret_from_query(inference_eval, best_query, num_true_rewards=500):
     regrets = []
-    for j in range(num_true_rewards):
-        true_reward = choice(reward_space_true)  # Replace with sample from
+    # for j in range(num_true_rewards):
+    #     true_reward = choice(reward_space_true)  # Replace with sample from
+    for true_reward in reward_space_true:
         lhoods = []
         for i, proxy in enumerate(best_query):
             lhood = inference_eval.get_likelihood(true_reward, proxy, best_query)
@@ -141,7 +149,8 @@ def get_regret_from_query(inference_eval, best_query, num_true_rewards=20):
         regret = optimal_reward - post_reward
         regrets.append(regret)
     avg_regret = np.array(regrets).mean()
-    return avg_regret
+    std_regret = np.array(regrets).std()
+    return avg_regret, std_regret
 
 
 def test_planning_speed(inference, reward_space_proxy):
@@ -149,21 +158,25 @@ def test_planning_speed(inference, reward_space_proxy):
     for i, proxy in enumerate(reward_space_proxy):
         inference.get_feature_expectations(proxy)
 
-
+# ==================================================================================================== #
+# ==================================================================================================== #
 if __name__=='__main__':
-    # Define environment and agent
+    # Set parameters
     SEED = 2
+    seed(SEED)
     beta = 4.
     num_states = 20; print('num states: {s}').format(s=num_states)
     feature_dim = 20; print('feature dim: {f}').format(f=feature_dim)
-    # print('planning trivialized')
     query_size = 4
-    size_reward_space_true = 200
-    size_reward_space_proxy = 100    # Make bigger but exclude some queries
-    num_queries_max = 1000
+    size_reward_space_true = 20
+    size_reward_space_proxy = 15
+    num_queries_max = 1000; print('num_queries_max: {m}').format(m=num_queries_max)
     proxy_given = np.zeros(feature_dim)
-    num_experiments = 50
-    greedy = False
+    num_experiments = 3
+    num_iter_per_experiment = 5
+    choosers = ['greedy','maxmin']
+
+    # Define environment and agent
     # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
     #                                 feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
     mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
@@ -194,17 +207,19 @@ if __name__=='__main__':
     print('Size of reward_space_true:{size}'.format(size=size_reward_space_true))
     print('Size of reward_space_proxy:{size}'.format(size=len(reward_space_proxy)))
     print('Query size:{size}'.format(size=query_size))
-    if greedy == False:
-        num_queries = comb(len(reward_space_proxy), query_size)
-        num_post_avg_plans = num_queries * query_size
-    else:
-        num_queries = (query_size-1) * len(reward_space_proxy)
-        avg_query_size = (query_size+2)/2.
-        num_post_avg_plans = num_queries * avg_query_size
-    print('Number of queries:{size}'.format(size=num_queries))
-    num_planning_problems = len(reward_space_proxy) + num_post_avg_plans + size_reward_space_true
-    print('Number of rewards to plan with:{size}'.format(size=num_planning_problems))
-    print('Greedy: {g}').format(g=greedy)
+    print('Choosers: {c}').format(c=choosers)
+    # if greedy == False:
+    #     num_queries = min([comb(len(reward_space_proxy), query_size),    num_queries_max])
+    #     # num_queries = comb(len(reward_space_proxy), query_size)
+    #     num_post_avg_plans = num_queries * query_size
+    # else:
+    #     num_queries = (query_size-1) * len(reward_space_proxy)
+    #     avg_query_size = (query_size+2)/2.
+    #     num_post_avg_plans = num_queries * avg_query_size
+    # print('Number of queries: min({size},{max})'.format(size=num_queries,max=num_queries_max))
+    # num_planning_problems = len(reward_space_proxy) + num_post_avg_plans + size_reward_space_true
+    # print('Number of rewards to plan with:{size}'.format(size=num_planning_problems))
+    # print('Greedy: {g}').format(g=greedy)
     print('======================================================================================================')
 
 
@@ -224,37 +239,30 @@ if __name__=='__main__':
 
 
 
-    'Calculate proposal set'
-    # # set_of_proposal_sets = powerset(reward_space_proxy)
-    # # uniform_prior = {tuple(reward): np.true_divide(1,len_reward_space) for reward in reward_space_true}
-    # # best_r_set, best_r_set_regret, best_regret_plus_cost, best_posterior, best_post_avg = choose_regret_minimizing_proposal(set_of_proposal_sets,
-    # #                                                                 reward_space_true, prior=uniform_prior, inference=inference)
-    # query_chooser = Regret_Minimizing_Query_Chooser(inference, reward_space_proxy, cost_of_asking=0.)
-    # set_of_queries = list(query_chooser.generate_set_of_queries(query_size))
-    # print(len(set_of_queries))
-    # best_query, best_regret, _ = query_chooser.find_regret_minimizing_query(set_of_queries)
-
 
     'Experiment'
     # test_planning_speed(inference, reward_space_proxy); print('tested planning speed')
-    mean, std, failures, gain, mean_std_actual, regret_compare, regret_exp_vs_actual \
-        = experiment(inference, reward_space_proxy, query_size, iterations_optimized=num_experiments, greedy=greedy,
-                     num_queries_max=num_queries_max)
-    print mean, std, failures, gain, mean_std_actual
-    print 'Expected regret improvement over random query (mean): {r}'.format(r=mean)
-    print 'Expected regret improvement over no query (mean): {r}'.format(r=gain)
-    print 'Mean actual -reduction and std(mean) over random query: {r}'.format(r=mean_std_actual)
-    print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
-    print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
+    # mean, std, failures, gain, mean_std_actual, regret_compare, regret_exp_vs_actual \
+    #     = experiment(inference, reward_space_proxy, query_size, iterations_optimized=num_experiments, greedy=greedy,
+    #                  num_queries_max=num_queries_max)
+    # print mean, std, failures, gain, mean_std_actual
+    # print 'Expected regret improvement over random query (mean): {r}'.format(r=mean)
+    # print 'Expected regret improvement over no query (mean): {r}'.format(r=gain)
+    # print 'Mean actual -reduction and std(mean) over random query: {r}'.format(r=mean_std_actual)
+    # print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
+    # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
+    experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, choosers, SEED)
+    # experiment.run_experiment(num_iter_per_experiment)
+    avg_post_exp_regret, avg_post_regret, results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
+
 
     'Print results'
+    print "Avg post exp regret per chooser: {x}".format(x=avg_post_exp_regret)
+    print "Avg post regret per chooser: {x}".format(x=avg_post_regret)
     # print 'mdp_features:'
     # print np.array([np.concatenate([[state], mdp.features[state]]) for state in range(num_states)])
     # print np.array([np.concatenate([[state], mdp.get_features(state)]) for state in range(num_states)])
     # # # print('mdp features: {features}'.format(features=mdp_test.features))
-    # # print(avg_weighted_reward)
-    # # print(exp_reward_after_asking)
-    # print(best_regret)
     # print(best_query)
     # # print('Best post_avg:{post_avg}').format(post_avg=best_post_avg)
     # # print('Best posterior:{posterior}').format(posterior=best_posterior)
@@ -262,18 +270,39 @@ if __name__=='__main__':
 
 
     'Create interface'
-    # omega = best_r_set # replace with chosen omega
-    # interface = Interface(omega, agent, env_test, num_states=num_states)
+    # omega = [choice(reward_space_true) for _ in range(4)] # replace with chosen omega
+    # interface = Interface(omega, agent, env, num_states=num_states)
     # interface.plot()
 
     """Todo:
+        -Profile
+            -Do easiest / best optimization
+            -Total planning vs belief updating
+        -Test iterative procedure:
 
-    # TODO: Third task: Make sure to only do planning for each proxy once. Maybe make this function get the feature expectations instead and cache it.
-        - Increase state space and feature_dim
+            -Get experiment statistics
+
+                -Make sure greedy and exhaustive do well
+
+                    -Run through debugger; run without debugger
+
+                        -Make sure regrets match (by looping through proxy choice)
+                        -Done: Track regret through iterations
+            -Compare outcomes of choosers (and record in Sheets!)
+            -Compare runtime of choosers (and record)
+        -Implement new chooser
+        -Implement greedy with quadratic and compare
+        -Don't delete old posteriors
         - Compare minimizer against random query
+
+            -Compare greedy vs real exhaustive search with a smaller problem
+            -Random features
+            -Why does the random query do well?
             -Evaluate on more true rewards to get better data (and compare to expected regret)
             -Add Incremental query growing
             -Increase feature dim
+        -Measure effect of adjusting parameters
+        -Make experiment modular
 
 
     -Try not sampling actions - Change back!

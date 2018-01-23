@@ -253,6 +253,7 @@ class NStateMdpGaussianFeatures(NStateMdp):
         """Draws each state's features from a Gaussian and stores them in a dictionary."""
         self.features = {}
         np.random.seed(self.SEED)
+        self.SEED += 1  # Ensures different features for each new MDP
         mean = np.zeros(self.feature_dim)
         # cov = invwishart.rvs(df=self.feature_dim, scale=np.ones(self.feature_dim), size=1)
         cov = np.eye(self.feature_dim)
@@ -305,6 +306,7 @@ class NStateMdpRandomGaussianFeatures(NStateMdp):
         dictionary self.feature_params: state -> feature parameters."""
         self.feature_params = {}
         np.random.seed(self.SEED)
+        self.SEED += 1  # Ensures different features for each new MDP
         mean_hyperprior = np.zeros(self.feature_dim)
         cov_hyperprior = np.eye(self.feature_dim)
         # mean = np.zeros(self.feature_dim)
