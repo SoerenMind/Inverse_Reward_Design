@@ -16,10 +16,11 @@ from random import choice, seed
 from scipy.special import comb
 import copy
 from utils import Distribution
+from scipy.misc import logsumexp
 
 
 
-print('importing done')
+
 print 'Time to import: {deltat}'.format(deltat=time.clock() - start)
 
 """Time sinks:
@@ -82,7 +83,7 @@ def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, p
     print(len(set_of_queries))
     best_query, best_regret, _ = query_chooser.find_regret_minimizing_query(set_of_queries)
 
-# @profile
+# # @profile
 def experiment(inference_sim, reward_space_proxy, query_size, num_queries_max, iterations_random=10,
                iterations_optimized=20, greedy=True):
     exp_regret_diff = []
@@ -161,20 +162,24 @@ def test_planning_speed(inference, reward_space_proxy):
 # ==================================================================================================== #
 # ==================================================================================================== #
 if __name__=='__main__':
+    adapted_description = False
+    print "Adapted description: ", adapted_description
+    exp_description = "Testing results of OLD method with {nexp} experiments"
     # Set parameters
-    SEED = 2
+    SEED = 3
     seed(SEED)
-    beta = 4.
-    num_states = 20; print('num states: {s}').format(s=num_states)
+    beta = 2.
+    num_states = 50; print('num states: {s}').format(s=num_states)
     feature_dim = 20; print('feature dim: {f}').format(f=feature_dim)
     query_size = 4
-    size_reward_space_true = 20
-    size_reward_space_proxy = 15
-    num_queries_max = 1000; print('num_queries_max: {m}').format(m=num_queries_max)
+    size_reward_space_true = 500
+    size_reward_space_proxy = 50
+    num_queries_max = 400; print('num_queries_max: {m}').format(m=num_queries_max)
     proxy_given = np.zeros(feature_dim)
-    num_experiments = 3
+    num_experiments = 10
     num_iter_per_experiment = 5
-    choosers = ['greedy','maxmin']
+    choosers = ['greedy','maxmin', 'random', 'no_query']
+    # choosers = ['greedy']
 
     # Define environment and agent
     # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
@@ -200,7 +205,7 @@ if __name__=='__main__':
     # reward_space_proxy = reward_space_true
     # len_reward_space = len(reward_space_true)
     # reward_space = [np.array([1,0]),np.array([0,1]), np.array([1,1])]
-    inference = Inference(agent, env, beta=beta, reward_space_true=reward_space_true,
+    inference = Inference(agent, env, beta, reward_space_true, reward_space_proxy,
                           num_traject=1, prior=None)
 
     'Print derived parameters'
@@ -253,12 +258,18 @@ if __name__=='__main__':
     # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
     experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, choosers, SEED)
     # experiment.run_experiment(num_iter_per_experiment)
-    avg_post_exp_regret, avg_post_regret, results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
+    avg_post_exp_regrets, avg_post_regrets,     \
+        std_post_exp_regrets, std_post_regrets, \
+        results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
 
 
     'Print results'
-    print "Avg post exp regret per chooser: {x}".format(x=avg_post_exp_regret)
-    print "Avg post regret per chooser: {x}".format(x=avg_post_regret)
+    print "Choosers:                        {c}".format(c=choosers)
+    print "Avg post exp regret per chooser: {x}".format(x=avg_post_exp_regrets)
+    print "Avg post regret per chooser: {x}".format(x=avg_post_regrets)
+    print "Std post exp regret per chooser: {x}".format(x=std_post_exp_regrets)
+    print "Std post regret per chooser: {x}".format(x=std_post_regrets)
+
     # print 'mdp_features:'
     # print np.array([np.concatenate([[state], mdp.features[state]]) for state in range(num_states)])
     # print np.array([np.concatenate([[state], mdp.get_features(state)]) for state in range(num_states)])
@@ -267,6 +278,7 @@ if __name__=='__main__':
     # # print('Best post_avg:{post_avg}').format(post_avg=best_post_avg)
     # # print('Best posterior:{posterior}').format(posterior=best_posterior)
     print 'Total time:{deltat}'.format(deltat=time.clock() - start)
+    print 'Finished experiment: ', exp_description.format(nexp=num_experiments), adapted_description
 
 
     'Create interface'
@@ -275,19 +287,26 @@ if __name__=='__main__':
     # interface.plot()
 
     """Todo:
+
+        -Compare results of old and new method
+            -Why 0 std??
+                -SEED for MDP not changing? Nope.
+
+                -Note: Only for no_query
+                -
+            -Check if they are stable within the same method (SEED)
+        -Profile new experiment
+        -TODOs in run_experiment (finish posterior vectorization)
+        -Efficiency: Do planning only once per trajectory
         -Profile
             -Do easiest / best optimization
             -Total planning vs belief updating
+        -ssh run the whole thing from now on
         -Test iterative procedure:
-
-            -Get experiment statistics
-
-                -Make sure greedy and exhaustive do well
-
-                    -Run through debugger; run without debugger
-
-                        -Make sure regrets match (by looping through proxy choice)
-                        -Done: Track regret through iterations
+                -How many iterations till post_regret is zero?: 5 for greedy
+                -Visualize how many of the states get picked by the many true / proxy rewards
+                    -In-/decrease states or spaces?
+                    -Try different rewards - normally distributed weights?
             -Compare outcomes of choosers (and record in Sheets!)
             -Compare runtime of choosers (and record)
         -Implement new chooser

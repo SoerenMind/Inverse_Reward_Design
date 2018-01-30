@@ -1,7 +1,7 @@
 from agents import DirectionalAgent, ImmediateRewardAgent
 from gridworld import GridworldMdp , GridworldEnvironment, Direction, NStateMdp
 
-
+# @profile
 def run_agent(agent, env, episode_length=20):
     """Runs the agent on the environment for one episode.
 

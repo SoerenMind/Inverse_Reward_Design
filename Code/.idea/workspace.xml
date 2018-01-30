@@ -13,7 +13,7 @@
     <SUITE FILE_PATH="coverage/Code$IRD_0.coverage" NAME="IRD_0 Coverage Results" MODIFIED="1511476528506" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Code$Nosetests_in_TestAgents__2_.coverage" NAME="Nosetests in TestAgents (2) Coverage Results" MODIFIED="1512595619150" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Code$interface_sandbox.coverage" NAME="interface_sandbox Coverage Results" MODIFIED="1514403393316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/Code$run_IRD.coverage" NAME="run_IRD Coverage Results" MODIFIED="1516746295537" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Code$run_IRD.coverage" NAME="run_IRD Coverage Results" MODIFIED="1517296904870" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Code$Nosetests_in_TestAgents.coverage" NAME="Nosetests in TestAgents Coverage Results" MODIFIED="1512075671547" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Code$Nosetests_in_TestAgents__1_.coverage" NAME="Nosetests in TestAgents (1) Coverage Results" MODIFIED="1512504340798" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Code$Nosetest_TestAgents_test_NStateMdp.coverage" NAME="Nosetest TestAgents.test_NStateMdp Coverage Results" MODIFIED="1512594646524" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
@@ -32,15 +32,15 @@
     <option name="AUTO_SCROLL_FROM_SOURCE" value="false" />
   </component>
   <component name="DockManager">
-    <window id="1">
+    <window id="2">
       <content type="file-editors">
         <state>
-          <leaf>
+          <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
             <file leaf-file-name="query_chooser_class.py" pinned="false" current-in-tab="true">
               <entry file="file://$PROJECT_DIR$/query_chooser_class.py">
                 <provider selected="true" editor-type-id="text-editor">
-                  <state relative-caret-position="449">
-                    <caret line="281" column="0" lean-forward="false" selection-start-line="281" selection-start-column="0" selection-end-line="281" selection-end-column="0" />
+                  <state relative-caret-position="444">
+                    <caret line="319" column="71" lean-forward="false" selection-start-line="319" selection-start-column="71" selection-end-line="319" selection-end-column="71" />
                     <folding>
                       <element signature="e#0#34#0" expanded="true" />
                     </folding>
@@ -56,28 +56,26 @@
       <content type="file-editors">
         <state>
           <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-            <file leaf-file-name="inference_class.py" pinned="false" current-in-tab="true">
+            <file leaf-file-name="inference_class.py" pinned="false" current-in-tab="false">
               <entry file="file://$PROJECT_DIR$/inference_class.py">
                 <provider selected="true" editor-type-id="text-editor">
-                  <state relative-caret-position="302">
-                    <caret line="65" column="56" lean-forward="false" selection-start-line="65" selection-start-column="56" selection-end-line="65" selection-end-column="56" />
+                  <state relative-caret-position="3330">
+                    <caret line="254" column="18" lean-forward="false" selection-start-line="254" selection-start-column="18" selection-end-line="254" selection-end-column="18" />
                     <folding>
                       <element signature="e#0#18#0" expanded="true" />
+                      <element signature="e#6890#8993#1" expanded="false" />
                     </folding>
                   </state>
                 </provider>
               </entry>
             </file>
-            <file leaf-file-name="run_IRD.py" pinned="false" current-in-tab="false">
+            <file leaf-file-name="run_IRD.py" pinned="false" current-in-tab="true">
               <entry file="file://$PROJECT_DIR$/run_IRD.py">
                 <provider selected="true" editor-type-id="text-editor">
-                  <state relative-caret-position="272">
-                    <caret line="288" column="82" lean-forward="false" selection-start-line="288" selection-start-column="82" selection-end-line="288" selection-end-column="82" />
+                  <state relative-caret-position="302">
+                    <caret line="292" column="41" lean-forward="false" selection-start-line="292" selection-start-column="41" selection-end-line="292" selection-end-column="41" />
                     <folding>
-                      <element signature="e#1210#3846#0" expanded="false" />
-                      <element signature="e#10725#10746#0" expanded="false" />
-                      <element signature="e#11639#11679#0" expanded="false" />
-                      <element signature="e#12492#12576#0" expanded="false" />
+                      <element signature="e#1220#3856#0" expanded="false" />
                     </folding>
                   </state>
                 </provider>
@@ -87,9 +85,21 @@
               <entry file="file://$PROJECT_DIR$/interface_discrete.py">
                 <provider selected="true" editor-type-id="text-editor">
                   <state relative-caret-position="315">
-                    <caret line="21" column="69" lean-forward="true" selection-start-line="21" selection-start-column="69" selection-end-line="21" selection-end-column="69" />
+                    <caret line="21" column="69" lean-forward="false" selection-start-line="21" selection-start-column="69" selection-end-line="21" selection-end-column="69" />
                     <folding>
                       <element signature="e#0#18#0" expanded="true" />
+                    </folding>
+                  </state>
+                </provider>
+              </entry>
+            </file>
+            <file leaf-file-name="agent_runner.py" pinned="false" current-in-tab="false">
+              <entry file="file://$PROJECT_DIR$/agent_runner.py">
+                <provider selected="true" editor-type-id="text-editor">
+                  <state relative-caret-position="45">
+                    <caret line="3" column="0" lean-forward="false" selection-start-line="3" selection-start-column="0" selection-end-line="4" selection-end-column="0" />
+                    <folding>
+                      <element signature="e#0#57#0" expanded="true" />
                     </folding>
                   </state>
                 </provider>
@@ -111,22 +121,22 @@
           <file leaf-file-name="agents.py" pinned="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/agents.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="45">
-                  <caret line="3" column="31" lean-forward="true" selection-start-line="3" selection-start-column="31" selection-end-line="3" selection-end-column="31" />
-                  <folding />
+                <state relative-caret-position="1005">
+                  <caret line="72" column="0" lean-forward="false" selection-start-line="72" selection-start-column="0" selection-end-line="72" selection-end-column="0" />
+                  <folding>
+                    <element signature="e#0#33#0" expanded="true" />
+                  </folding>
                 </state>
               </provider>
             </entry>
           </file>
-          <file leaf-file-name="run_IRD.py" pinned="false" current-in-tab="false">
+          <file leaf-file-name="run_IRD.py" pinned="false" current-in-tab="true">
             <entry file="file://$PROJECT_DIR$/run_IRD.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="505">
-                  <caret line="284" column="17" lean-forward="false" selection-start-line="284" selection-start-column="17" selection-end-line="284" selection-end-column="17" />
+                <state relative-caret-position="107">
+                  <caret line="167" column="20" lean-forward="true" selection-start-line="167" selection-start-column="20" selection-end-line="167" selection-end-column="20" />
                   <folding>
-                    <element signature="e#1210#3846#0" expanded="false" />
-                    <marker date="1516746565000" expanded="true" signature="10746:10963" ph="..." />
-                    <marker date="1516746565000" expanded="true" signature="10975:11145" ph="..." />
+                    <element signature="e#1220#3856#0" expanded="false" />
                   </folding>
                 </state>
               </provider>
@@ -135,20 +145,21 @@
           <file leaf-file-name="environment.py" pinned="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/environment.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="450">
+                <state relative-caret-position="840">
                   <caret line="57" column="8" lean-forward="false" selection-start-line="57" selection-start-column="8" selection-end-line="57" selection-end-column="8" />
                   <folding />
                 </state>
               </provider>
             </entry>
           </file>
-          <file leaf-file-name="inference_class.py" pinned="false" current-in-tab="true">
+          <file leaf-file-name="inference_class.py" pinned="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/inference_class.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="286">
-                  <caret line="39" column="0" lean-forward="false" selection-start-line="39" selection-start-column="0" selection-end-line="39" selection-end-column="0" />
+                <state relative-caret-position="2520">
+                  <caret line="200" column="30" lean-forward="false" selection-start-line="200" selection-start-column="30" selection-end-line="200" selection-end-column="30" />
                   <folding>
                     <element signature="e#0#18#0" expanded="true" />
+                    <element signature="e#6890#8993#1" expanded="false" />
                   </folding>
                 </state>
               </provider>
@@ -166,6 +177,16 @@
               </provider>
             </entry>
           </file>
+          <file leaf-file-name="agent_interface.py" pinned="false" current-in-tab="false">
+            <entry file="file://$PROJECT_DIR$/agent_interface.py">
+              <provider selected="true" editor-type-id="text-editor">
+                <state relative-caret-position="465">
+                  <caret line="31" column="54" lean-forward="false" selection-start-line="31" selection-start-column="54" selection-end-line="31" selection-end-column="54" />
+                  <folding />
+                </state>
+              </provider>
+            </entry>
+          </file>
         </leaf>
       </split-first>
       <split-second>
@@ -173,28 +194,16 @@
           <file leaf-file-name="gridworld.py" pinned="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/gridworld.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="126">
-                  <caret line="131" column="52" lean-forward="false" selection-start-line="131" selection-start-column="52" selection-end-line="131" selection-end-column="52" />
+                <state relative-caret-position="2535">
+                  <caret line="169" column="72" lean-forward="false" selection-start-line="169" selection-start-column="72" selection-end-line="169" selection-end-column="72" />
                   <folding>
                     <element signature="e#0#35#0" expanded="true" />
-                    <marker date="1516223620000" expanded="true" signature="2696:3070" ph="..." />
-                    <marker date="1516223620000" expanded="true" signature="3171:3832" ph="..." />
-                    <marker date="1516223620000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
-                    <marker date="1516223620000" expanded="true" signature="3487:3832" ph="..." />
-                    <marker date="1516223620000" expanded="true" signature="3657:3832" ph="..." />
-                    <marker date="1516223620000" expanded="true" signature="3903:3919" ph="..." />
-                  </folding>
-                </state>
-              </provider>
-            </entry>
-          </file>
-          <file leaf-file-name="query_chooser_class.py" pinned="false" current-in-tab="true">
-            <entry file="file://$PROJECT_DIR$/query_chooser_class.py">
-              <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="397">
-                  <caret line="266" column="31" lean-forward="false" selection-start-line="266" selection-start-column="31" selection-end-line="266" selection-end-column="31" />
-                  <folding>
-                    <element signature="e#0#34#0" expanded="true" />
+                    <marker date="1516836371000" expanded="true" signature="2696:3070" ph="..." />
+                    <marker date="1516836371000" expanded="true" signature="3171:3832" ph="..." />
+                    <marker date="1516836371000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
+                    <marker date="1516836371000" expanded="true" signature="3487:3832" ph="..." />
+                    <marker date="1516836371000" expanded="true" signature="3657:3832" ph="..." />
+                    <marker date="1516836371000" expanded="true" signature="3903:3919" ph="..." />
                   </folding>
                 </state>
               </provider>
@@ -203,7 +212,7 @@
           <file leaf-file-name="interface_discrete.py" pinned="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/interface_discrete.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="495">
+                <state relative-caret-position="450">
                   <caret line="33" column="0" lean-forward="false" selection-start-line="33" selection-start-column="0" selection-end-line="33" selection-end-column="0" />
                   <folding>
                     <element signature="e#0#18#0" expanded="true" />
@@ -215,10 +224,22 @@
           <file leaf-file-name="agent_runner.py" pinned="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/agent_runner.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="210">
-                  <caret line="14" column="21" lean-forward="true" selection-start-line="14" selection-start-column="21" selection-end-line="14" selection-end-column="21" />
+                <state relative-caret-position="45">
+                  <caret line="4" column="43" lean-forward="false" selection-start-line="4" selection-start-column="43" selection-end-line="4" selection-end-column="43" />
                   <folding>
                     <element signature="e#0#57#0" expanded="true" />
+                  </folding>
+                </state>
+              </provider>
+            </entry>
+          </file>
+          <file leaf-file-name="query_chooser_class.py" pinned="false" current-in-tab="true">
+            <entry file="file://$PROJECT_DIR$/query_chooser_class.py">
+              <provider selected="true" editor-type-id="text-editor">
+                <state relative-caret-position="210">
+                  <caret line="167" column="21" lean-forward="false" selection-start-line="167" selection-start-column="21" selection-end-line="167" selection-end-column="21" />
+                  <folding>
+                    <element signature="e#0#34#0" expanded="true" />
                   </folding>
                 </state>
               </provider>
@@ -237,23 +258,11 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>sampl</find>
-      <find>_proxy</find>
-      <find>immediate_reward</find>
-      <find>get_feature_ex</find>
-      <find>immediate</find>
-      <find>random</find>
-      <find>mdp features</find>
-      <find>calc_and</find>
-      <find>NState</find>
-      <find>get_feature_</find>
-      <find>format</find>
       <find>beta</find>
       <find>run_ag</find>
       <find>distribu</find>
       <find>get_featu</find>
       <find>dict</find>
-      <find>@profile</find>
       <find>get_post</find>
       <find>found_new</find>
       <find>run_agent</find>
@@ -262,18 +271,34 @@
       <find>index</find>
       <find>regret</find>
       <find>prior</find>
-      <find>assert</find>
-      <find>seed</find>
       <find>comb</find>
       <find>20</find>
       <find>greedy</find>
+      <find>random</find>
+      <find>choice</find>
+      <find>seed</find>
+      <find>assert</find>
+      <find># @profile</find>
+      <find>§</find>
+      <find>profile</find>
+      <find>get_reward_from</find>
+      <find>@profile</find>
+      <find>post_avg</find>
+      <find>Inference</find>
+      <find>get_like</find>
+      <find>distribution</find>
+      <find>done planning</find>
     </findStrings>
     <replaceStrings>
       <replace>rfunc</replace>
       <replace>get_feature_expectations</replace>
       <replace>get_trajectory</replace>
+      <replace>@profile</replace>
       <replace># @profile</replace>
     </replaceStrings>
+    <dirStrings>
+      <dir>$PROJECT_DIR$</dir>
+    </dirStrings>
   </component>
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
@@ -286,11 +311,11 @@
         <option value="$PROJECT_DIR$/agents_test.py" />
         <option value="$PROJECT_DIR$/interface_sandbox.py" />
         <option value="$PROJECT_DIR$/Query_Chooser.py" />
-        <option value="$PROJECT_DIR$/agent_runner.py" />
+        <option value="$PROJECT_DIR$/interface_discrete.py" />
         <option value="$PROJECT_DIR$/agent_interface.py" />
         <option value="$PROJECT_DIR$/agents.py" />
         <option value="$PROJECT_DIR$/gridworld.py" />
-        <option value="$PROJECT_DIR$/interface_discrete.py" />
+        <option value="$PROJECT_DIR$/agent_runner.py" />
         <option value="$PROJECT_DIR$/inference_class.py" />
         <option value="$PROJECT_DIR$/run_IRD.py" />
         <option value="$PROJECT_DIR$/query_chooser_class.py" />
@@ -304,10 +329,9 @@
     <sorting>DEFINITION_ORDER</sorting>
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="-322" />
-    <option name="y" value="-1057" />
-    <option name="width" value="1920" />
-    <option name="height" value="1053" />
+    <option name="y" value="23" />
+    <option name="width" value="1280" />
+    <option name="height" value="773" />
   </component>
   <component name="ProjectView">
     <navigator currentView="ProjectPane" proportions="" version="1">
@@ -324,7 +348,6 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
-      <pane id="Scratches" />
       <pane id="ProjectPane">
         <subPane>
           <PATH>
@@ -340,6 +363,7 @@
         </subPane>
       </pane>
       <pane id="Scope" />
+      <pane id="Scratches" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -746,27 +770,27 @@
     </todo-panel>
   </component>
   <component name="ToolWindowManager">
-    <frame x="-322" y="-1057" width="1920" height="1053" extended-state="6" />
+    <frame x="0" y="23" width="1280" height="773" extended-state="6" />
     <editor active="true" />
     <layout>
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.14701131" sideWeight="0.5" order="1" side_tool="false" content_ui="combo" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32830188" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
-      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3208502" sideWeight="0.50208336" order="0" side_tool="true" content_ui="tabs" />
-      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="false" weight="0.33" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
-      <window_info id="Python Console" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.16891192" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.22164412" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
-      <window_info id="Coverage" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="true" content_ui="tabs" />
-      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32953367" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.095846646" sideWeight="0.5" order="1" side_tool="false" content_ui="combo" />
+      <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.18181819" sideWeight="0.5095314" order="0" side_tool="true" content_ui="tabs" />
       <window_info id="Database" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32956383" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
-      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32929292" sideWeight="0.5" order="5" side_tool="false" content_ui="tabs" />
+      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="false" weight="0.33" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
+      <window_info id="Python Console" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.2041116" sideWeight="0.4940429" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.31277534" sideWeight="0.7225772" order="6" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.15495208" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.8929293" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="true" content_ui="tabs" />
-      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.28095734" sideWeight="0.49791667" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.5535976" sideWeight="0.49046862" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="8" side_tool="false" content_ui="tabs" />
       <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
       <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="9" side_tool="false" content_ui="tabs" />
+      <window_info id="Coverage" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="true" content_ui="tabs" />
       <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="3" side_tool="false" content_ui="combo" />
+      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3284974" sideWeight="0.49574015" order="5" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
     </layout>
   </component>
@@ -805,34 +829,24 @@
           <option name="timeStamp" value="107" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/query_chooser_class.py</url>
-          <line>105</line>
-          <option name="timeStamp" value="130" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/inference_class.py</url>
-          <line>159</line>
+          <line>282</line>
           <option name="timeStamp" value="147" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/query_chooser_class.py</url>
-          <line>206</line>
-          <option name="timeStamp" value="150" />
+          <line>118</line>
+          <option name="timeStamp" value="174" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/query_chooser_class.py</url>
-          <line>198</line>
-          <option name="timeStamp" value="151" />
+          <line>283</line>
+          <option name="timeStamp" value="175" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/query_chooser_class.py</url>
-          <line>237</line>
-          <option name="timeStamp" value="152" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/query_chooser_class.py</url>
-          <line>281</line>
-          <option name="timeStamp" value="154" />
+          <line>321</line>
+          <option name="timeStamp" value="177" />
         </line-breakpoint>
       </breakpoints>
       <breakpoints-dialog>
@@ -845,7 +859,7 @@
           </properties>
         </breakpoint>
       </default-breakpoints>
-      <option name="time" value="159" />
+      <option name="time" value="178" />
     </breakpoint-manager>
     <watches-manager />
   </component>
@@ -864,12 +878,12 @@
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
             <element signature="e#0#35#0" expanded="true" />
-            <marker date="1516223620000" expanded="true" signature="2696:3070" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3171:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
-            <marker date="1516223620000" expanded="true" signature="3487:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3657:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3903:3919" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="2696:3070" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3171:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
+            <marker date="1516836371000" expanded="true" signature="3487:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3657:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3903:3919" ph="..." />
           </folding>
         </state>
       </provider>
@@ -888,12 +902,12 @@
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
             <element signature="e#0#35#0" expanded="true" />
-            <marker date="1516223620000" expanded="true" signature="2696:3070" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3171:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
-            <marker date="1516223620000" expanded="true" signature="3487:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3657:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3903:3919" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="2696:3070" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3171:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
+            <marker date="1516836371000" expanded="true" signature="3487:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3657:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3903:3919" ph="..." />
           </folding>
         </state>
       </provider>
@@ -912,12 +926,12 @@
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
             <element signature="e#0#35#0" expanded="true" />
-            <marker date="1516223620000" expanded="true" signature="2696:3070" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3171:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
-            <marker date="1516223620000" expanded="true" signature="3487:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3657:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3903:3919" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="2696:3070" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3171:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
+            <marker date="1516836371000" expanded="true" signature="3487:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3657:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3903:3919" ph="..." />
           </folding>
         </state>
       </provider>
@@ -935,10 +949,7 @@
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1210#3846#0" expanded="false" />
-            <element signature="e#10725#10746#0" expanded="false" />
-            <element signature="e#11639#11679#0" expanded="false" />
-            <element signature="e#12492#12576#0" expanded="false" />
+            <element signature="e#1220#3856#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -949,12 +960,12 @@
           <caret line="378" column="0" lean-forward="false" selection-start-line="378" selection-start-column="0" selection-end-line="378" selection-end-column="0" />
           <folding>
             <element signature="e#0#35#0" expanded="true" />
-            <marker date="1516223620000" expanded="true" signature="2696:3070" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3171:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
-            <marker date="1516223620000" expanded="true" signature="3487:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3657:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3903:3919" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="2696:3070" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3171:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
+            <marker date="1516836371000" expanded="true" signature="3487:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3657:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3903:3919" ph="..." />
           </folding>
         </state>
       </provider>
@@ -975,6 +986,7 @@
           <caret line="41" column="99" lean-forward="false" selection-start-line="41" selection-start-column="99" selection-end-line="41" selection-end-column="99" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
+            <element signature="e#6890#8993#1" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -1007,7 +1019,9 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="75">
           <caret line="5" column="0" lean-forward="false" selection-start-line="5" selection-start-column="0" selection-end-line="5" selection-end-column="0" />
-          <folding />
+          <folding>
+            <element signature="e#0#33#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -1017,12 +1031,12 @@
           <caret line="239" column="8" lean-forward="false" selection-start-line="239" selection-start-column="8" selection-end-line="247" selection-end-column="18" />
           <folding>
             <element signature="e#0#35#0" expanded="true" />
-            <marker date="1516223620000" expanded="true" signature="2696:3070" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3171:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
-            <marker date="1516223620000" expanded="true" signature="3487:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3657:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3903:3919" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="2696:3070" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3171:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
+            <marker date="1516836371000" expanded="true" signature="3487:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3657:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3903:3919" ph="..." />
           </folding>
         </state>
       </provider>
@@ -1032,10 +1046,7 @@
         <state relative-caret-position="390">
           <caret line="26" column="28" lean-forward="false" selection-start-line="26" selection-start-column="28" selection-end-line="26" selection-end-column="28" />
           <folding>
-            <element signature="e#1210#3846#0" expanded="false" />
-            <element signature="e#10725#10746#0" expanded="false" />
-            <element signature="e#11639#11679#0" expanded="false" />
-            <element signature="e#12492#12576#0" expanded="false" />
+            <element signature="e#1220#3856#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -1070,10 +1081,7 @@
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#1210#3846#0" expanded="false" />
-            <element signature="e#10725#10746#0" expanded="false" />
-            <element signature="e#11639#11679#0" expanded="false" />
-            <element signature="e#12492#12576#0" expanded="false" />
+            <element signature="e#1220#3856#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -1094,6 +1102,7 @@
           <caret line="41" column="99" lean-forward="false" selection-start-line="41" selection-start-column="99" selection-end-line="41" selection-end-column="99" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
+            <element signature="e#6890#8993#1" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -1114,6 +1123,7 @@
           <caret line="41" column="99" lean-forward="true" selection-start-line="41" selection-start-column="99" selection-end-line="41" selection-end-column="99" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
+            <element signature="e#6890#8993#1" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -1123,10 +1133,7 @@
         <state relative-caret-position="45">
           <caret line="7" column="22" lean-forward="false" selection-start-line="7" selection-start-column="22" selection-end-line="7" selection-end-column="22" />
           <folding>
-            <element signature="e#1210#3846#0" expanded="false" />
-            <element signature="e#10725#10746#0" expanded="false" />
-            <element signature="e#11639#11679#0" expanded="false" />
-            <element signature="e#12492#12576#0" expanded="false" />
+            <element signature="e#1220#3856#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -1213,7 +1220,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="2385">
           <caret line="161" column="0" lean-forward="false" selection-start-line="161" selection-start-column="0" selection-end-line="161" selection-end-column="0" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -1238,30 +1244,13 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="15">
           <caret line="973" column="0" lean-forward="false" selection-start-line="973" selection-start-column="0" selection-end-line="973" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/agents.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="45">
-          <caret line="3" column="31" lean-forward="true" selection-start-line="3" selection-start-column="31" selection-end-line="3" selection-end-column="31" />
-          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/environment.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="450">
+        <state relative-caret-position="840">
           <caret line="57" column="8" lean-forward="false" selection-start-line="57" selection-start-column="8" selection-end-line="57" selection-end-column="8" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/agent_interface.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="420">
-          <caret line="28" column="53" lean-forward="false" selection-start-line="28" selection-start-column="53" selection-end-line="28" selection-end-column="53" />
           <folding />
         </state>
       </provider>
@@ -1276,10 +1265,55 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/agents.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1005">
+          <caret line="72" column="0" lean-forward="false" selection-start-line="72" selection-start-column="0" selection-end-line="72" selection-end-column="0" />
+          <folding>
+            <element signature="e#0#33#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/agent_interface.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="465">
+          <caret line="31" column="54" lean-forward="false" selection-start-line="31" selection-start-column="54" selection-end-line="31" selection-end-column="54" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/gridworld.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2535">
+          <caret line="169" column="72" lean-forward="false" selection-start-line="169" selection-start-column="72" selection-end-line="169" selection-end-column="72" />
+          <folding>
+            <element signature="e#0#35#0" expanded="true" />
+            <marker date="1516836371000" expanded="true" signature="2696:3070" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3171:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
+            <marker date="1516836371000" expanded="true" signature="3487:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3657:3832" ph="..." />
+            <marker date="1516836371000" expanded="true" signature="3903:3919" ph="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/inference_class.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2520">
+          <caret line="200" column="30" lean-forward="false" selection-start-line="200" selection-start-column="30" selection-end-line="200" selection-end-column="30" />
+          <folding>
+            <element signature="e#0#18#0" expanded="true" />
+            <element signature="e#6890#8993#1" expanded="false" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/interface_discrete.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="315">
-          <caret line="21" column="69" lean-forward="true" selection-start-line="21" selection-start-column="69" selection-end-line="21" selection-end-column="69" />
+        <state relative-caret-position="450">
+          <caret line="33" column="0" lean-forward="false" selection-start-line="33" selection-start-column="0" selection-end-line="33" selection-end-column="0" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
           </folding>
@@ -1288,59 +1322,30 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/agent_runner.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="210">
-          <caret line="14" column="21" lean-forward="true" selection-start-line="14" selection-start-column="21" selection-end-line="14" selection-end-column="21" />
+        <state relative-caret-position="45">
+          <caret line="4" column="43" lean-forward="false" selection-start-line="4" selection-start-column="43" selection-end-line="4" selection-end-column="43" />
           <folding>
             <element signature="e#0#57#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/gridworld.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="126">
-          <caret line="131" column="52" lean-forward="false" selection-start-line="131" selection-start-column="52" selection-end-line="131" selection-end-column="52" />
-          <folding>
-            <element signature="e#0#35#0" expanded="true" />
-            <marker date="1516223620000" expanded="true" signature="2696:3070" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3171:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3182:3367" ph="&quot;&quot;&quot;:param rewards: list or array of rewards. rewards[i] is the reward for state i....&quot;&quot;&quot;" />
-            <marker date="1516223620000" expanded="true" signature="3487:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3657:3832" ph="..." />
-            <marker date="1516223620000" expanded="true" signature="3903:3919" ph="..." />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/run_IRD.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="272">
-          <caret line="288" column="82" lean-forward="false" selection-start-line="288" selection-start-column="82" selection-end-line="288" selection-end-column="82" />
+        <state relative-caret-position="107">
+          <caret line="167" column="20" lean-forward="true" selection-start-line="167" selection-start-column="20" selection-end-line="167" selection-end-column="20" />
           <folding>
-            <element signature="e#1210#3846#0" expanded="false" />
-            <element signature="e#10725#10746#0" expanded="false" />
-            <element signature="e#11639#11679#0" expanded="false" />
-            <element signature="e#12492#12576#0" expanded="false" />
+            <element signature="e#1220#3856#0" expanded="false" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/query_chooser_class.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="397">
-          <caret line="266" column="31" lean-forward="false" selection-start-line="266" selection-start-column="31" selection-end-line="266" selection-end-column="31" />
+        <state relative-caret-position="210">
+          <caret line="167" column="21" lean-forward="false" selection-start-line="167" selection-start-column="21" selection-end-line="167" selection-end-column="21" />
           <folding>
             <element signature="e#0#34#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/inference_class.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="302">
-          <caret line="65" column="56" lean-forward="false" selection-start-line="65" selection-start-column="56" selection-end-line="65" selection-end-column="56" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
           </folding>
         </state>
       </provider>

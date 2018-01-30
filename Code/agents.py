@@ -27,7 +27,7 @@ class ImmediateRewardAgent(Agent):
     """
     def __init__(self, gamma=1.0):
         Agent.__init__(self, gamma)
-
+    # @profile
     def qvalue(self, state, action):
         """Estimates Q(state,a) by sampling the reward off the next state"""
         results = self.mdp.get_transition_states_and_probs(state, action)
@@ -44,7 +44,7 @@ class ImmediateRewardAgent(Agent):
                 return action_value
         raise ValueError("Total transition probability less than one")
 
-
+    # @profile
     def get_action_distribution(self, state):
         """Returns uniform distribution over actions of highest q-value.
         Note that the q-value is approximated by sampling the next state and and next reward.

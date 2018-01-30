@@ -10,7 +10,7 @@ class Agent(object):
     def set_mdp(self, mdp):
         """Sets the MDP that the agent will be playing."""
         self.mdp = mdp
-
+    # @profile
     def get_action(self, state):
         """Returns the action that the agent takes in the given state.
 

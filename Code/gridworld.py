@@ -139,7 +139,7 @@ class NStateMdp(Mdp):
             pass
         self.rewards = rewards
 
-    # def get_reward_from_features(self, features, rewards=self.rewards):
+    # @profile
     def get_reward_from_features(self, *args):
         """Returns dot product of features with reward weights. Uses self.rewards unless extra argument is given."""
         features = args[0]
@@ -149,8 +149,9 @@ class NStateMdp(Mdp):
         try: assert features.shape == rewards.shape
         except:
             assert features.shape == rewards.shape
-        return np.dot(features, rewards)
-
+        reward = np.dot(features, rewards)  # Minimize lines in this function by returning this directly.
+        return reward
+    # @profile
     def get_feature_expectations_from_trajectories(self, trajectories):
         '''
         Modify run_agent to do learning and then produce trajectories. Call this in run_agent after learning is done and trajectories can be made.
