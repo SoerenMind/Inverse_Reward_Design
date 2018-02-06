@@ -1,6 +1,6 @@
 from agent_interface import Agent
 from collections import defaultdict
-# from utils import Distribution
+from utils import Distribution
 from gridworld import Direction
 import numpy as np
 import random
@@ -10,8 +10,9 @@ class DirectionalAgent(Agent):
 
     This agent only plays grid worlds.
     """
-    def __init__(self, direction, gamma=1.0):
+    def __init__(self, direction, mdp, gamma=1.0):
         Agent.__init__(self, gamma)
+        self.mdp = mdp
         self.default_action = direction
 
     def get_action(self, state):
@@ -69,6 +70,22 @@ class ImmediateRewardAgent(Agent):
         # return Distribution({a: 1 for a in best_actions})
         # return Distribution({best_actions[0]: 1})
         return best_actions
+
+    def compute_policy(self):
+        """Stores the optimal action for each state"""
+        states = self.mdp.get_states()
+        states.remove(self.mdp.terminal_state)
+        rewards = np.empty(len(states))
+        for i, state in enumerate(states):
+            features = self.mdp.get_features(state)
+            reward = self.mdp.get_reward_from_features(features)
+            rewards[i] = reward
+        self.best_action = int(np.argmax(rewards))
+
+    def quick_get_action(self, state):
+        return self.best_action
+
+
 
 
 class ValueIterationLikeAgent(Agent):

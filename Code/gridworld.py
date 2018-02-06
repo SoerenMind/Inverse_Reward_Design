@@ -7,6 +7,7 @@ import random
 from scipy.stats import invwishart, multivariate_normal
 from random import normalvariate
 from scipy.stats import itemfreq
+from copy import deepcopy
 
 
 class Mdp(object):
@@ -140,16 +141,9 @@ class NStateMdp(Mdp):
         self.rewards = rewards
 
     # @profile
-    def get_reward_from_features(self, *args):
+    def get_reward_from_features(self, features):
         """Returns dot product of features with reward weights. Uses self.rewards unless extra argument is given."""
-        features = args[0]
-        if len(args) == 2:
-            rewards = args[1]
-        else: rewards = self.rewards
-        try: assert features.shape == rewards.shape
-        except:
-            assert features.shape == rewards.shape
-        reward = np.dot(features, rewards)  # Minimize lines in this function by returning this directly.
+        reward = np.dot(features, self.rewards)  # Minimize lines in this function by returning this directly.
         return reward
     # @profile
     def get_feature_expectations_from_trajectories(self, trajectories):
@@ -459,7 +453,7 @@ class GridworldMdp(Mdp):
 
 
     @staticmethod
-    def generate_random(height, width, pr_wall, pr_reward):
+    def generate_random(height, width, pr_wall, pr_reward, living_reward=0, noise=0):
         """Generates a random instance of a Gridworld.
 
         Note that based on the generated walls and start position, it may be
@@ -486,10 +480,16 @@ class GridworldMdp(Mdp):
 
         set_random_position_to(3)
         set_random_position_to('A')
-        return GridworldMdp(grid)
+        for row in grid:
+            row_new = []
+            for place in row:
+                place = str(place)
+                row_new.append(place)
+            print str(row_new)
+        return GridworldMdp(grid, living_reward, noise)
 
     @staticmethod
-    def generate_random_connected(height, width, pr_reward):
+    def generate_random_connected(height, width, pr_reward, living_reward=0, noise=0):
         """Generates a random instance of a Gridworld.
 
         Unlike with generate_random, it is guaranteed that the agent
@@ -542,8 +542,9 @@ class GridworldMdp(Mdp):
             while reward == 0:
                 reward = random.randint(-9, 9)
             set_random_position_to(reward)
-
-        return GridworldMdp(grid)
+        for row in grid:
+            print row
+        return GridworldMdp(grid, living_reward, noise)
 
     def get_start_state(self):
         """Returns the start state."""
@@ -661,6 +662,16 @@ class GridworldMdp(Mdp):
 
 
 
+class GridWorldMdpWithFeatures(GridworldMdp):
+    """
+    Same as GridWorldMdp, but there is a feature map and the reward is a linear function of the features.
+    """
+    def __init__(self, *args):
+        super(GridworldMdp, self).__init__(*args)
+
+
+if __name__ == '__main__':
+    mdp = GridWorldMdpWithFeatures()
 
 
 

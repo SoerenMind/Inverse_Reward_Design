@@ -23,8 +23,9 @@ class Inference:
         self.env = env
         self.beta = beta
         # self.reward_space_proxy = reward_space_proxy
-        self.reward_space_true = reward_space_true
         self.reward_space_proxy = reward_space_proxy
+        self.reward_space_true = reward_space_true
+        self.true_reward_matrix = np.array(self.reward_space_true)
         self.num_traject = num_traject
         self.reset_prior()
         self.feature_expectations_dict = {}
@@ -76,8 +77,9 @@ class Inference:
         for proxy in reward_space_proxy:
             self.get_feature_expectations(proxy)
 
+    # @profile
     def get_avg_reward_for_post_averages(self,post_averages):
-        """AAAAAQAAAAAA"""
+        """Write description"""
         N = post_averages.shape[0]
         feature_dim = len(self.reward_space_true[0])
 
@@ -86,8 +88,7 @@ class Inference:
         for n, proxy in enumerate(post_averages):
             feature_exp_matrix[n,:] = self.get_feature_expectations(proxy)
 
-        true_reward_matrix = np.array(self.reward_space_true)
-        avg_reward_matrix = np.matmul(feature_exp_matrix, true_reward_matrix.T)
+        avg_reward_matrix = np.matmul(feature_exp_matrix, self.true_reward_matrix.T)
 
         return avg_reward_matrix
 
@@ -102,8 +103,7 @@ class Inference:
         for n, proxy in enumerate(self.reward_space_proxy):
             self.feature_exp_matrix[n,:] = self.get_feature_expectations(proxy)
 
-        true_reward_matrix = np.array(self.reward_space_true)
-        self.avg_reward_matrix = np.matmul(self.feature_exp_matrix, true_reward_matrix.T)
+        self.avg_reward_matrix = np.matmul(self.feature_exp_matrix, self.true_reward_matrix.T)
         self.lhood_numerator_matrix = np.exp(self.beta * self.avg_reward_matrix)
         self.log_lhood_numerator_matrix = np.log(self.lhood_numerator_matrix)   # This just removes the exponential
 
@@ -112,10 +112,11 @@ class Inference:
         self.feature_exp_matrix_true_rewards = np.zeros([num_true_rewards,feature_dim])
         for n, proxy in enumerate(self.reward_space_true):
             self.feature_exp_matrix_true_rewards[n,:] = self.get_feature_expectations(proxy)
-        self.true_reward_avg_reward_matrix = np.matmul(self.feature_exp_matrix_true_rewards, true_reward_matrix.T)
+        self.true_reward_avg_reward_matrix = np.matmul(self.feature_exp_matrix_true_rewards, self.true_reward_matrix.T)
         self.true_reward_avg_reward_vec = self.true_reward_avg_reward_matrix.diagonal()
 
-    def calc_posterior(self, query):
+    # @profile
+    def calc_posterior(self, query, get_entropy=False):
         """Returns a K x N array of posteriors and K x M array of posterior averages, where
         K is the query_size, N is the size of reward_space_true and M the number of features.
 
@@ -131,10 +132,22 @@ class Inference:
         posteriors = probs * self.prior / evidence.reshape([-1, 1])
         assert posteriors.sum(axis=1).round(3).all()    # Sum to 1?
 
+        # Calculate entropies and return
+        if get_entropy:
+            ent_q = -np.dot(evidence, np.log2(evidence))
+            ent_w = -np.dot(self.prior, np.log2(self.prior))
+            # Conditional entropies
+            # cond_ent_per_w = - np.dot(probs * self.prior, np.log(probs))
+            cond_ent_per_w = - (probs * self.prior * np.log2(probs)).sum(-1)
+            cond_ent = cond_ent_per_w.sum()
+            ent_w_given_q = cond_ent - ent_q + ent_w
+            if ent_w_given_q < 0:
+                pass
+            return posteriors, ent_w_given_q, evidence
+
         # Calculate posterior averages
         # Do outside this function with returned posterior?
-        true_reward_matrix = np.array(self.reward_space_true)
-        post_averages = np.matmul(posteriors, true_reward_matrix)
+        post_averages = np.matmul(posteriors, self.true_reward_matrix)
 
         return posteriors, post_averages, evidence
 
@@ -236,7 +249,7 @@ class Inference:
                                   for true_reward in self.reward_space_true]))
             return self.prior_avg
 
-    # # @profile
+    # @profile
     def get_feature_expectations(self, proxy):
         """Given a proxy reward, calculates feature_expectations and returns them. Also stores them in a dictionary
         and reuses the result if it has previously been calculated.
@@ -296,11 +309,11 @@ class Inference:
         self.true_reward_avg_reward_vec = None
         # Reset vars from old posterior calculation
         self.feature_expectations_dict = {}
+        self.avg_reward_dict = {}
         self.likelihoods = {}
         self.reset_prior()
         if reset_mdp: self.agent.mdp.populate_features()
         # Reset other cached variables if new ones added!
-
 
     def make_reward_to_index_dict(self):
         """This dictionary is used to find the cached posterior or prior of a reward function."""
@@ -323,40 +336,6 @@ def test_inference(inference, rfunc_proxy_given, reward_space):
 
 
 
-# class InferenceOld:
-# def __init__(self,agent,beta,reward_space):
-#         # Or input env_type+s_terminal+etc
-#         # self.env = env
-#         self.agent = agent
-#         self.beta = beta
-#         self.reward_space = reward_space
-#     def get_prior(self, true_reward):
-#         return np.true_divide(1, len(self.reward_space))
-#     def get_likelihood(self, true_reward, rfunc_proxy):
-#         self.agent.add_rfunc(rfunc_proxy)
-#         expected_avg_reward = self.agent.get_avg_true_reward(true_reward)
-#         return np.exp(self.beta*expected_avg_reward)
-#     def get_Z_constant(self, true_reward):
-#         Z_normalization = 0
-#         for rfunc_proxy in self.reward_space:
-#             Z_normalization += self.get_likelihood(true_reward, np.array(rfunc_proxy)) \
-#                                * self.get_prior(rfunc_proxy)
-#         return Z_normalization
-#     def get_posterior(self, true_reward, rfunc_proxy):
-#         '''Just Bayes' rule'''
-#         lhood = self.get_likelihood(true_reward, rfunc_proxy)
-#         Z = self.get_Z_constant(true_reward)
-#         prior = self.get_prior(true_reward)
-#         if Z == 0: print('Warning: Z=0')
-#         return np.true_divide(lhood,Z) * prior
-#
-# class Determ_Inference(InferenceOld):
-#     '''for testing purposes'''
-#     def get_likelihood(self, true_reward, rfunc_proxy):
-#         self.agent.add_rfunc(rfunc_proxy)
-#         expected_avg_reward = self.agent.get_avg_true_reward(true_reward)
-#
-#
 #
 #
 # if __name__=='__main__':

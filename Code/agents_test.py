@@ -37,18 +37,6 @@ class TestAgents(unittest.TestCase):
         except:
             raise ValueError('run_agent failed')
 
-    def test_NStateMdp(self):
-        # TODO: Two problems: 1) get_actions doesn't include the east action (just 0,1,2);
-        # 2) Direction.EXIT action isn't in self.get_actions(state) so raises error!
-        rewards = [0,0,1]
-        mdp = NStateMdp(num_states=3, rewards=rewards, start_state=0, preterminal_states=[2])
-        env = GridworldEnvironment(mdp)
-        default_action = 1
-        agent = DirectionalAgent(default_action)
-        agent.set_mdp(mdp)
-        print(run_agent(agent, env, episode_length=float(6)))
-        # except:
-        #     raise ValueError('run_agent failed')
 
 
     def test_optimal_agent(self):

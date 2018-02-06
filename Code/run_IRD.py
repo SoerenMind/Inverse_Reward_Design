@@ -164,22 +164,25 @@ def test_planning_speed(inference, reward_space_proxy):
 if __name__=='__main__':
     adapted_description = False
     print "Adapted description: ", adapted_description
-    exp_description = "Testing results of OLD method with {nexp} experiments"
+    exp_description = pprint("Comparing to entropy with many states and few true rewards. {nexp} experiments.")
     # Set parameters
     SEED = 3
     seed(SEED)
     beta = 2.
-    num_states = 50; print('num states: {s}').format(s=num_states)
-    feature_dim = 20; print('feature dim: {f}').format(f=feature_dim)
+    num_states = 3000; print('num states: {s}').format(s=num_states)
+    feature_dim = 18; print('feature dim: {f}').format(f=feature_dim)
     query_size = 4
-    size_reward_space_true = 500
-    size_reward_space_proxy = 50
+    size_reward_space_true = 200
+    size_reward_space_proxy = 100
     num_queries_max = 400; print('num_queries_max: {m}').format(m=num_queries_max)
     proxy_given = np.zeros(feature_dim)
     num_experiments = 10
     num_iter_per_experiment = 5
-    choosers = ['greedy','maxmin', 'random', 'no_query']
+    # choosers = ['greedy','maxmin', 'random', 'no_query']
     # choosers = ['greedy']
+    # choosers = ['greedy', 'greedy_exp_reward']
+    choosers = ['greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
+
 
     # Define environment and agent
     # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
@@ -269,6 +272,17 @@ if __name__=='__main__':
     print "Avg post regret per chooser: {x}".format(x=avg_post_regrets)
     print "Std post exp regret per chooser: {x}".format(x=std_post_exp_regrets)
     print "Std post regret per chooser: {x}".format(x=std_post_regrets)
+    print [-results['greedy_exp_reward','perf_measure',4, n] for n in range(num_experiments)]
+    print [results['greedy_exp_reward','post_exp_regret',4, n] for n in range(num_experiments)]
+    print [results['greedy','perf_measure',4, n] for n in range(num_experiments)]
+    print [results['greedy_entropy','perf_measure',4, n] for n in range(num_experiments)]
+    print [results['greedy_entropy','post_exp_regret',4, n] for n in range(num_experiments)]
+
+    print "Entropy per iteration for greedy_entropy:"
+    print [[results['greedy_entropy','perf_measure',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
+    print "Entropy per iteration for greedy:"
+    print [[results['greedy','post_entropy',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
+
 
     # print 'mdp_features:'
     # print np.array([np.concatenate([[state], mdp.features[state]]) for state in range(num_states)])
@@ -287,41 +301,55 @@ if __name__=='__main__':
     # interface.plot()
 
     """Todo:
-
-        -Compare results of old and new method
-            -Why 0 std??
-                -SEED for MDP not changing? Nope.
-
-                -Note: Only for no_query
+        -Implement new choosing methods
+            -Combineable with sliders / interface
+                -Feature weights
                 -
-            -Check if they are stable within the same method (SEED)
-        -Profile new experiment
-        -TODOs in run_experiment (finish posterior vectorization)
-        -Efficiency: Do planning only once per trajectory
-        -Profile
-            -Do easiest / best optimization
-            -Total planning vs belief updating
-        -ssh run the whole thing from now on
-        -Test iterative procedure:
-                -How many iterations till post_regret is zero?: 5 for greedy
-                -Visualize how many of the states get picked by the many true / proxy rewards
-                    -In-/decrease states or spaces?
-                    -Try different rewards - normally distributed weights?
-            -Compare outcomes of choosers (and record in Sheets!)
-            -Compare runtime of choosers (and record)
-        -Implement new chooser
-        -Implement greedy with quadratic and compare
-        -Don't delete old posteriors
-        - Compare minimizer against random query
 
-            -Compare greedy vs real exhaustive search with a smaller problem
-            -Random features
-            -Why does the random query do well?
-            -Evaluate on more true rewards to get better data (and compare to expected regret)
-            -Add Incremental query growing
-            -Increase feature dim
+            -Entropy
+
+                -Non-greedy entropy - cheap!
+                -Why don't other methods reduce entropy?
+                    -Do they?
+                -Results:
+                    -Random:0.6, regret/reward: ca 0.2, entropy: 0.36
+                    -Hard mode: Entropy: .86, regret: .5, reward: .73, random:. 1.6 (5 iter, 5 exp)
+                -Try on hard problem. Maybe entropy tries too hard to distinguish between weights that lead to the same behavior once other options are sufficiently unlikely (p=0.01
+                    -More states to make same behavior unlikely
+                        -Hypothesis: Entropy works better to reduce the search space, regret better to exclude remaining choices that are merely somewhat unlikely.
+                    -Optimize with regret at the end?
+                        -Check if post_regret drops equally fast initially for entropy
+                    -
+                -Compare to only H(Q) or H(Q|W)
+        -New environment:
+            -Desiderata:
+            -Features = distance from different (weighted) locations
+                -Incentivize a path rather than directly finding location (sq distance?)
+            -Ask Rohin/Daniel
+            -Dorsa: Too slow to plan?
+            -Racecar: Same?
+            -With test env:
+        -Idea: Use queries to reduce entropy to perform do well in test environment.
+            -Keep asking queries which won't improve our optimal behavior in the training env but might in test.
+                -Maybe entropy performs worse because it wastes time on this!
+                -This is kind of like the 'lookahead' provided by entropy over classification error in RF.
+                -Idea: Try getting regret from max likelihood r_true to save time. Or weighted feature exp from top r_true's.
+            -Is this the right approach for that problem? Is this an interesting problem?
+            -Could also do multiple iterations through multiple environments for transfer or lifelong reward-learning.
+                -Pro: Better generalization.
+
+        -TODOs in run_experiment (finish posterior vectorization)
+            -Replace old methods completely (making inference much smaller)
+        -ssh run the whole thing from now on
+
+        -Measure: Total planning vs belief updating
+            ==> Both ca 1.5s with quick planning, greedy only, 500/50 spaces
+        -Implement greedy with quadratic and compare
+        -Efficiency: Vectorize chooser all the way across queries
+        -Note: Don't delete old posteriors if needed again (across choosers)
+        -Random features
+        - Compare minimizer against random query
         -Measure effect of adjusting parameters
-        -Make experiment modular
 
 
     -Try not sampling actions - Change back!
