@@ -1,0 +1,5 @@
+Code/.idea/
+*.swap
+*~
+*.pyc
+*.prof
