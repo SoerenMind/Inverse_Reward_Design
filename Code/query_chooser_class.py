@@ -3,6 +3,12 @@ from scipy.special import comb
 from random import choice, sample, seed
 import numpy as np
 import time
+# for test environment
+from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
+    NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
+from agents import ImmediateRewardAgent, DirectionalAgent, ValueIterationLikeAgent
+from inference_class import Inference
+
 
 def random_combination(iterable, r):
     """Random selection from itertools.combinations(iterable, r)"""
@@ -25,7 +31,7 @@ class Query_Chooser(object):
 
 class Query_Chooser_Subclass(Query_Chooser):
     def __init__(self, inference, reward_space_proxy, num_queries_max, prior=None, cost_of_asking=0):
-        super(Query_Chooser, self).__init__()
+        super(Query_Chooser_Subclass, self).__init__()
         self.inference = inference
         self.reward_space_proxy = reward_space_proxy
         # self.prior = prior
@@ -57,7 +63,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         elif chooser == 'random':
             return self.find_random_query(query_size)
         elif chooser == 'no_query':
-            return [], self.get_exp_regret_from_query([]),
+            return [], self.get_exp_regret_from_query([]), None
         elif chooser == 'greedy_exp_reward':
             return self.find_best_query_greedy(query_size, total_reward=True)
         elif chooser == 'greedy_entropy':
@@ -102,6 +108,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         # Find query with minimal regret
         best_query = [choice(self.reward_space_proxy)]  # Initialize randomly
         while len(best_query) < query_size:
+            # TODO: Could it be bad to have certain weights included because they WILL be chosen?
             found_new = False
             best_objective = float("inf")
             best_objective_plus_cost = best_objective
@@ -273,9 +280,6 @@ class Experiment(object):
             post_exp_regret_measurements.append(post_exp_regrets)
             post_regret_measurements.append(post_regrets)
 
-        """What we need:
-
-        """
         avg_post_exp_regret_per_chooser = np.array(post_exp_regret_measurements).mean(axis=0)
         std_post_exp_regret_per_chooser = np.array(post_exp_regret_measurements).std(axis=0)
         avg_post_regret_per_chooser = np.array(post_regret_measurements).mean(axis=0)
@@ -294,16 +298,18 @@ class Experiment(object):
         seed(self.seed)
         self.seed += 1
         true_reward = choice(self.inference.reward_space_true)
+        self.results['true_reward', exp_num] = true_reward
         post_exp_regret_per_chooser = []
         post_regret_per_chooser = []
 
         # Cache feature exp and lhoods
-        function = self.inference.calc_and_save_feature_expectations
-        input = self.reward_space_proxy
+        # function = self.inference.calc_and_save_feature_expectations
+        # input = self.reward_space_proxy
         print('caching feature exp for proxies...')
         self.inference.calc_and_save_feature_expectations(self.reward_space_proxy)
         print('caching feature exp for true rewards...')
-        self.inference.calc_and_save_feature_expectations(self.inference.reward_space_true)
+        # self.inference.calc_and_save_feature_expectations(self.inference.reward_space_true)
+        print 'NOT CACHING FEATURES FOR TRUE REWARDS!'
         print('caching likelihoods...')
         self.inference.cache_lhoods()
         print('done caching')
@@ -322,7 +328,7 @@ class Experiment(object):
                 print "Iteration: {i}/{m}. Total time: {t}".format(i=i+1,m=num_iter,t=time.clock()-self.t_0)
                 query, perf_measure, _ \
                     = self.query_chooser.find_query(self.query_size, chooser)
-                _, post_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)
+                _, post_cond_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)
                 # TODO: replace use of get_likelihood here
                 proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
                 # TODO: replace use of calc_and_save_posterior here
@@ -331,12 +337,17 @@ class Experiment(object):
                 # Outcome measures
                 post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
                 post_regret = self.query_chooser.get_regret_from_query_and_true_reward([], true_reward) # TODO: Still uses old get_regret, get_avg_reward, get_feature_exp
+                post_avg = self.inference.get_prior_avg()
+                test_reward = self.test_post_avg(post_avg, true_reward)
 
                 # TODO: Negative regrets; exp doesn't match post_regret
                 # Save results
                 self.results[chooser, 'query', i, exp_num], self.results[chooser,'perf_measure', i, exp_num], \
                 self.results[chooser, 'post_exp_regret', i, exp_num], self.results[chooser, 'post_regret', i, exp_num], \
-                self.results[chooser, 'post_entropy', i, exp_num] = query, perf_measure, post_exp_regret, post_regret, post_entropy
+                self.results[chooser, 'post_entropy', i, exp_num], self.results[chooser, 'post_avg', i, exp_num],   \
+                self.results[chooser, 'test_reward', i, exp_num] \
+                    = query, perf_measure, post_exp_regret, post_regret, post_cond_entropy, post_avg, test_reward
+
 
             print('post_exp_regret: {p}'.format(p=post_exp_regret))
             post_exp_regret_per_chooser.append(post_exp_regret)
@@ -344,13 +355,39 @@ class Experiment(object):
 
         return post_exp_regret_per_chooser, post_regret_per_chooser
 
-        # # TODO: Saving time on later choosers because of cached feature_exp and likelihoods. Change for profiling.
-        # if 'greedy' in self.choosers:   # Could loop through choosers instead and store outputs in dict/list
-        #     greedy_query, greedy_exp_regret, _ = self.query_chooser.find_best_query_greedy(self.query_size)
-        # if 'exhaustive' in self.choosers:
-        #     exhaustive_query, exhaustive_exp_regret, _ = self.query_chooser.find_regret_minimizing_query(self.query_size)
-        # if 'maxmin' in self.choosers:
-        #     maxmin_query, maxmin_exp_regret, _ = self.query_chooser.find_query_feature_diff(self.query_size)
-        #     maxmin_proxy_choice = self.inference.choose_proxy_from_query(maxmin_query, true_reward)
-        #     maxmin_true_regret = self.inference.get_regret_from_query(maxmin_query)
+
+    def test_post_avg(self, post_avg, true_reward):
+        dist_scale = 0.5
+        gamma = 0.8
+        # goals = [(1, 1), (2, 6), (3, 3), (3, 4), (4, 5), (6, 4), (6, 6)]
+        goals = [(1, 5), (1, 2), (3, 6), (2, 3), (6, 1), (3, 5), (4, 2)]
+        num_traject = 1
+        beta = 2.
+        reps = 4
+        post_reward_avg = 0
+
+
+        print true_reward
+        print post_avg
+        print true_reward - post_avg
+
+        # TODO: Randomize goal positions for repetitions
+        # TODO: Why not pass on full posterior?
+
+        for _ in range(reps):
+            # Set environment and agent
+            grid = GridworldMdp.generate_random(8, 8, 0.1, 0.2, goals, living_reward=-0.01)
+            mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=post_avg)
+            agent = ValueIterationLikeAgent(gamma, num_iters=50)
+            super(ValueIterationLikeAgent, agent).set_mdp(mdp)
+
+            # Set up inference
+            env = GridworldEnvironment(mdp)
+            inference = Inference(agent, env, beta, self.inference.reward_space_true, self.inference.reward_space_proxy,
+                                  num_traject=num_traject, prior=None)
+
+            post_reward = inference.get_avg_reward(post_avg, true_reward)
+            post_reward_avg += 1/float(reps) * post_reward
+
+        return post_reward_avg
 

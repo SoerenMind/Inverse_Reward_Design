@@ -28,6 +28,7 @@ class ImmediateRewardAgent(Agent):
     """
     def __init__(self, gamma=1.0):
         Agent.__init__(self, gamma)
+
     # @profile
     def qvalue(self, state, action):
         """Estimates Q(state,a) by sampling the reward off the next state"""
@@ -151,8 +152,11 @@ class ValueIterationLikeAgent(Agent):
         values: The values from the previous iteration of value iteration.
         new_values: The new value computed during this iteration.
         """
+        max_return = self.mdp.rewards.max() * np.true_divide(1,1 - self.gamma + 0.001)
+        min_return = self.mdp.rewards.min() * np.true_divide(1,1 - self.gamma + 0.001)
+        max_regret = max_return - min_return
         for mu in new_values.keys():
-            if abs(values[mu] - new_values[mu]) > 1e-3:
+            if abs(values[mu] - new_values[mu]) > 1e-2 * max_regret:
                 return False
         return True
 

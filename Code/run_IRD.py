@@ -8,8 +8,9 @@ import environment
 import agent_class
 from inference_class import Inference, test_inference
 import itertools
-from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures, NStateMdpRandomGaussianFeatures
-from agents import ImmediateRewardAgent, DirectionalAgent
+from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
+    NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
+from agents import ImmediateRewardAgent, DirectionalAgent, ValueIterationLikeAgent
 from query_chooser_class import Query_Chooser_Subclass, Experiment
 from interface_discrete import Interface
 from random import choice, seed
@@ -170,46 +171,70 @@ if __name__=='__main__':
     seed(SEED)
     beta = 2.
     num_states = 3000; print('num states: {s}').format(s=num_states)
-    feature_dim = 18; print('feature dim: {f}').format(f=feature_dim)
+    feature_dim = 7; print('feature dim: {f}').format(f=feature_dim)
     query_size = 4
     size_reward_space_true = 200
-    size_reward_space_proxy = 100
+    size_reward_space_proxy = 38    # Too small to converge?
     num_queries_max = 400; print('num_queries_max: {m}').format(m=num_queries_max)
     proxy_given = np.zeros(feature_dim)
-    num_experiments = 10
-    num_iter_per_experiment = 5
-    # choosers = ['greedy','maxmin', 'random', 'no_query']
-    # choosers = ['greedy']
+    num_traject = 1
+    num_experiments = 4
+    num_iter_per_experiment = 10
+    # Params for Gridworld
+    gamma = 0.8
+    goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
+    rewards = np.zeros(6)
+    dist_scale = 0.5
+    proxy_subspace = True
     # choosers = ['greedy', 'greedy_exp_reward']
-    choosers = ['greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
+    # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
+    choosers = ['no_query','greedy_entropy', 'greedy', 'random']
 
 
-    # Define environment and agent
-    # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
+    # # Define env and agent for NStateMdp
+    # # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
+    # #                                 feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
+    # mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
     #                                 feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
-    mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
-                                    feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
+    # agent = ImmediateRewardAgent()
+    # agent.set_mdp(mdp)
+
+    # Set up env and agent for gridworld
+    grid = GridworldMdp.generate_random(8,8,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
+    mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=rewards)
+    agent = ValueIterationLikeAgent(gamma, num_iters=50)
+    super(ValueIterationLikeAgent, agent).set_mdp(mdp)
+
     env = GridworldEnvironment(mdp)
-    agent = ImmediateRewardAgent()
-    agent.set_mdp(mdp)
     # print(run_agent(agent, env, episode_length=6))
 
 
+    # Reward spaces for gridworld
+    # reward_space_true = [np.random.multinomial(18, np.ones(feature_dim)/18) for _ in xrange(size_reward_space_true)]
+    # TODO: See if making proxy space a subset changes things
+    # reward_space_proxy = [np.random.multinomial(18, np.ones(feature_dim)) for _ in xrange(size_reward_space_proxy)]
+    reward_space_true = [np.random.randint(-9, 9, size=[feature_dim])   for _ in xrange(size_reward_space_true)]
+    reward_space_proxy = [np.random.randint(-9, 9, size=[feature_dim])   for _ in xrange(size_reward_space_proxy)]
+    if proxy_subspace:
+        reward_space_proxy = [choice(reward_space_true) for _ in xrange(size_reward_space_proxy)]
+    # reward_space_true = [np.random.dirichlet(np.ones(feature_dim)) * feature_dim - 1 for _ in xrange(size_reward_space_true)]
+    # reward_space_proxy = [np.random.dirichlet(np.ones(feature_dim)) * feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
+
+    # Reward spaces for N-State-Mdp
+    # from itertools import product
+    # reward_space_true = list(product([0,1], repeat=feature_dim))
+    # # reward_space_true.remove((0,0,0,0))
+    # reward_space_true = [np.array(reward) for reward in reward_space_true]
+    # reward_space_true = [choice(reward_space_true) for _ in range(size_reward_space_true)]
+    # # reward_space_true = [np.array([0, 0, 0, 0]), np.array([0, 0, 0, 1]), np.array([0, 0, 1, 1]), np.array([1, 0, 1, 0])]
+    # reward_space_proxy = [choice(reward_space_true) for _ in range(size_reward_space_proxy)]
+    # # reward_space_proxy = reward_space_true
+    # # len_reward_space = len(reward_space_true)
+    # # reward_space = [np.array([1,0]),np.array([0,1]), np.array([1,1])]
+
     # Set up inference
-    # true_reward_given = np.array([0,0,1,0])
-    # reward_space_true = [np.array([1, 0, 0, 0]), np.array([0, 1, 0, 0]), np.array([0, 0, 1, 0]), np.array([0, 0, 0, 1])]
-    from itertools import product
-    reward_space_true = list(product([0,1], repeat=feature_dim))
-    # reward_space_true.remove((0,0,0,0))
-    reward_space_true = [np.array(reward) for reward in reward_space_true]
-    reward_space_true = [choice(reward_space_true) for _ in range(size_reward_space_true)]
-    # reward_space_true = [np.array([0, 0, 0, 0]), np.array([0, 0, 0, 1]), np.array([0, 0, 1, 1]), np.array([1, 0, 1, 0])]
-    reward_space_proxy = [choice(reward_space_true) for _ in range(size_reward_space_proxy)]
-    # reward_space_proxy = reward_space_true
-    # len_reward_space = len(reward_space_true)
-    # reward_space = [np.array([1,0]),np.array([0,1]), np.array([1,1])]
     inference = Inference(agent, env, beta, reward_space_true, reward_space_proxy,
-                          num_traject=1, prior=None)
+                          num_traject=num_traject, prior=None)
 
     'Print derived parameters'
     print('Size of reward_space_true:{size}'.format(size=size_reward_space_true))
@@ -272,16 +297,26 @@ if __name__=='__main__':
     print "Avg post regret per chooser: {x}".format(x=avg_post_regrets)
     print "Std post exp regret per chooser: {x}".format(x=std_post_exp_regrets)
     print "Std post regret per chooser: {x}".format(x=std_post_regrets)
-    print [-results['greedy_exp_reward','perf_measure',4, n] for n in range(num_experiments)]
-    print [results['greedy_exp_reward','post_exp_regret',4, n] for n in range(num_experiments)]
-    print [results['greedy','perf_measure',4, n] for n in range(num_experiments)]
-    print [results['greedy_entropy','perf_measure',4, n] for n in range(num_experiments)]
-    print [results['greedy_entropy','post_exp_regret',4, n] for n in range(num_experiments)]
+    # print [-results['greedy_exp_reward','perf_measure',4, n] for n in range(num_experiments)]
+    # print [results['greedy_exp_reward','post_exp_regret',4, n] for n in range(num_experiments)]
+    print [results['greedy_entropy','post_exp_regret',num_iter_per_experiment-1, n] for n in range(num_experiments)]
+    print [results['greedy_entropy','perf_measure',num_iter_per_experiment-1, n] for n in range(num_experiments)]
+    # print [results['greedy','perf_measure',4, n] for n in range(num_experiments)]
 
     print "Entropy per iteration for greedy_entropy:"
     print [[results['greedy_entropy','perf_measure',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
     print "Entropy per iteration for greedy:"
     print [[results['greedy','post_entropy',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
+
+    print("Test environment reward for greedy:")
+    print [results['greedy','test_reward',num_iter_per_experiment-1,n] for n in range(num_experiments)]
+    print("Test environment reward for greedy_entropy:")
+    print [results['greedy_entropy','test_reward',num_iter_per_experiment-1,n] for n in range(num_experiments)]
+
+    print "Exp regret per iteration for greedy:"
+    print [[results['greedy','post_exp_regret',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
+    print "Exp regret per iteration for greedy_entropy:"
+    print [[results['greedy_entropy','post_exp_regret',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
 
 
     # print 'mdp_features:'
@@ -309,7 +344,7 @@ if __name__=='__main__':
             -Entropy
 
                 -Non-greedy entropy - cheap!
-                -Why don't other methods reduce entropy?
+                -Why don't other methods reduce entropy? Focus on regret.
                     -Do they?
                 -Results:
                     -Random:0.6, regret/reward: ca 0.2, entropy: 0.36
@@ -328,7 +363,52 @@ if __name__=='__main__':
             -Ask Rohin/Daniel
             -Dorsa: Too slow to plan?
             -Racecar: Same?
-            -With test env:
+            -With test env...
+            -Distance to goals gridworld
+                -Run a test, e.g. with Value iteration (first by caching reward and not using features)
+
+        -List parameters and sensitivity to them (remember: messed up last time!)
+        -Test new environment
+            -Initial test
+
+                -Test final post avg on different environment
+                -Why is entropy increasing?
+                    -Try bigger proxy space
+                        -Result: Helps to have >50-60 but high variance.
+                    -Try uniform weights (not right-skewed)
+                        -Beta = 2.
+                        -Result: Entropy goes 7, then 14 if dividing by 9! Repeats with different seed.
+                            -0/-1 rewards due to int division. So trajectories are similar.
+                                -But why the huge entropy?
+                            -Check w/ float division
+                                -Familiar slow decline of ent
+                            -WHICH BETA IS REASONABLE?
+                                -Check probabilities
+                        -Result: Entropy way down when not dividing by 9!
+
+                    -What does the (small) posterior look like?
+
+                    -!!!!!!!!!!!!!! WHY NEGATIVE REGRET?
+                        -subspace and convergence for VI don't help
+                        -find out what feature_exp for proxy are better than for true reward
+                    -Why does entropy go back up sometimes? Maybe bad proxy choice.
+                    -Why tiny differences in entropy?
+                        -INCREASE BETA! - Check effect for really high in computations
+                        -Compare avg_reward_matrix for NStateMdp
+                        -There are so many true rewards that maybe a pairwise query
+                            -Try exhaustive search (cheap for entropy!)
+                        -Maybe a slight change in behavior changes feature exp a lot?
+                -Adapt reward space
+                    -Constrain vector L1-norm by sampling multinomial sum vector, or Dir(1,1,1,1,1) (may slow planning).
+                        -Not the same as independent draws but it's about the ratios.
+
+                -Think about 'discrete' measure from Dorsa paper
+                -Change map between experiments
+            -Notes:
+                -Query mostly just tells you which of the 4 rewards leads to the true final goal. That's easy to
+                replicate with an algorithm that asks about final goals. Decrease dist_scale, increase #goals & size to
+                make it about path selection.
+
         -Idea: Use queries to reduce entropy to perform do well in test environment.
             -Keep asking queries which won't improve our optimal behavior in the training env but might in test.
                 -Maybe entropy performs worse because it wastes time on this!
@@ -336,7 +416,7 @@ if __name__=='__main__':
                 -Idea: Try getting regret from max likelihood r_true to save time. Or weighted feature exp from top r_true's.
             -Is this the right approach for that problem? Is this an interesting problem?
             -Could also do multiple iterations through multiple environments for transfer or lifelong reward-learning.
-                -Pro: Better generalization.
+                -Pro: Better generalization. Like repeated IRL paper.
 
         -TODOs in run_experiment (finish posterior vectorization)
             -Replace old methods completely (making inference much smaller)

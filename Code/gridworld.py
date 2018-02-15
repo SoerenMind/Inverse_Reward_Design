@@ -37,15 +37,29 @@ class Mdp(object):
 
     def get_features(self,state):
         """Returns feature vector for state"""
-        raise NotImplementedError
+        return self.features[state]
 
     def get_feature_expectations_from_trajectories(self, trajectories):
-        """
-        Returns a vector of feature expectations.
-        -trajectories: List of trajectories of transitions of the form (state, next_state, action, reward),
-         as created by agent_runner.run_agent.
-        """
-        raise NotImplementedError
+        '''
+        Modify run_agent to do learning and then produce trajectories. Call this in run_agent after learning is done and trajectories can be made.
+        Problem: Trajectories should maybe be generated one by one not all at once.
+
+        Reward:
+            - Either mdp.get_avg_reward(trajectories)
+            - Or    mdp.get_avg_reward( (get_feature_expectations(trajectories)))
+            - Latter goes trajectories ==> feature exp ==> self.rewards[feature_exp] (which has to be remade)
+            - Need a linear function features => reward (and a function state => features => reward which saves time with a dictionary)
+
+        Option: make agent.run_agent ?
+        '''
+        # Decompose trajectories into list of all visited feature vectors
+        # TODO: Deleted the first state here!
+        state_feature_list = [[self.get_features(tup[0]) for tup in trajectory[1:]] for trajectory in trajectories]
+        state_feature_list = list(itertools.chain(*state_feature_list))     # flatten list of lists
+        feature_sum = np.array(state_feature_list).sum(axis=0)
+        feature_expectations = np.true_divide(feature_sum, len(state_feature_list))
+        # assert feature_expectations.max() <= 1    # only if features are max 1
+        return np.array(feature_expectations)
 
     def get_reward(self, state, action):
         """Get reward for state, action transition.
@@ -53,8 +67,13 @@ class Mdp(object):
         This is the living reward, except when we take EXIT, in which case we
         return the reward for the current state.
         """
-        raise NotImplementedError
+        features = self.get_features(state)
+        return self.get_reward_from_features(features)
 
+    def get_reward_from_features(self, features):
+        """Returns dot product of features with reward weights. Uses self.rewards unless extra argument is given."""
+        reward = np.dot(features, self.rewards)  # Minimize lines in this function by returning this directly.
+        return reward
 
     def is_terminal(self, state):
         """Returns True if the current state is terminal, False otherwise.
@@ -73,6 +92,13 @@ class Mdp(object):
         """
         raise NotImplementedError
 
+    def change_reward(self, rewards):
+        '''Sets new reward function (for reward design).'''
+        self.rewards = rewards
+
+
+
+
 
 
 
@@ -82,7 +108,7 @@ class NStateMdp(Mdp):
     preterminal_states transition to a generic terminal state via a terminal action.
     '''
     def __init__(self,num_states, rewards, start_state, preterminal_states):
-        super(Mdp,self).__init__()
+        super(NStateMdp,self).__init__()
         self.num_states = num_states    # Or make a grid and add n actions
         self.terminal_state = 'Terminal State'
         self.preterminal_states = preterminal_states    # Preterminal states should include states with no available actions. Otherwise get_actions==>[]==>
@@ -145,28 +171,7 @@ class NStateMdp(Mdp):
         """Returns dot product of features with reward weights. Uses self.rewards unless extra argument is given."""
         reward = np.dot(features, self.rewards)  # Minimize lines in this function by returning this directly.
         return reward
-    # @profile
-    def get_feature_expectations_from_trajectories(self, trajectories):
-        '''
-        Modify run_agent to do learning and then produce trajectories. Call this in run_agent after learning is done and trajectories can be made.
-        Problem: Trajectories should maybe be generated one by one not all at once.
 
-        Reward:
-            - Either mdp.get_avg_reward(trajectories)
-            - Or    mdp.get_avg_reward( (get_feature_expectations(trajectories)))
-            - Latter goes trajectories ==> feature exp ==> self.rewards[feature_exp] (which has to be remade)
-            - Need a linear function features => reward (and a function state => features => reward which saves time with a dictionary)
-
-        Option: make agent.run_agent ?
-        '''
-        # Decompose trajectories into list of all visited feature vectors
-        # TODO: Deleted the first state here!
-        state_feature_list = [[self.get_features(tup[0]) for tup in trajectory[1:]] for trajectory in trajectories]
-        state_feature_list = list(itertools.chain(*state_feature_list))     # flatten list of lists
-        feature_sum = np.array(state_feature_list).sum(axis=0)
-        feature_expectations = np.true_divide(feature_sum, len(state_feature_list))
-        # assert feature_expectations.max() <= 1    # only if features are max 1
-        return np.array(feature_expectations)
 
     def get_state_list(self, trajectories):
         """Returns list of states in 'trajectories'."""
@@ -359,7 +364,7 @@ class GridworldMdp(Mdp):
         self.terminal_state = 'Terminal State'
 
         self.walls = [[space == 'X' for space in row] for row in grid]
-        self.populate_rewards_and_start_state(grid)
+        # self.populate_rewards_and_start_state(grid)
 
 
     def assert_valid_grid(self, grid):
@@ -453,22 +458,30 @@ class GridworldMdp(Mdp):
 
 
     @staticmethod
-    def generate_random(height, width, pr_wall, pr_reward, living_reward=0, noise=0):
+    def generate_random(height, width, pr_wall, pr_reward, goals=None, living_reward=0, noise=0, print_grid = False):
         """Generates a random instance of a Gridworld.
 
         Note that based on the generated walls and start position, it may be
         impossible for the agent to ever reach a reward.
         """
         grid = [['X'] * width for _ in range(height)]
+
+        # Set rewarded states and walls
         for y in range(1, height - 1):
             for x in range(1, width - 1):
-                if random.random() < pr_reward:
-                    grid[y][x] = random.randint(-9, 9)
-                    # Don't allow 0 rewards
-                    while grid[y][x] == 0:
+                if goals is not None:
+                    if (x,y) in goals:
                         grid[y][x] = random.randint(-9, 9)
-                elif random.random() >= pr_wall:
-                    grid[y][x] = ' '
+                    elif random.random() >= pr_wall:
+                        grid[y][x] = ' '
+                else:
+                    if random.random() < pr_reward:
+                        grid[y][x] = random.randint(-9, 9)
+                        # Don't allow 0 rewards
+                        while grid[y][x] == 0:
+                            grid[y][x] = random.randint(-9, 9)
+                    elif random.random() >= pr_wall:
+                        grid[y][x] = ' '
 
         def set_random_position_to(token):
             current_val = None
@@ -478,15 +491,20 @@ class GridworldMdp(Mdp):
                 current_val = grid[y][x]
             grid[y][x] = token
 
-        set_random_position_to(3)
-        set_random_position_to('A')
-        for row in grid:
-            row_new = []
-            for place in row:
-                place = str(place)
-                row_new.append(place)
-            print str(row_new)
-        return GridworldMdp(grid, living_reward, noise)
+        # set_random_position_to(3)
+        # set_random_position_to('A')
+        grid[2][2] = 'A'
+
+        # Print grid
+        if print_grid:
+            for row in grid:
+                row_new = []
+                for place in row:
+                    place = str(place)
+                    row_new.append(place)
+                print str(row_new)
+        return grid
+        # return GridworldMdp(grid, living_reward, noise)
 
     @staticmethod
     def generate_random_connected(height, width, pr_reward, living_reward=0, noise=0):
@@ -544,7 +562,8 @@ class GridworldMdp(Mdp):
             set_random_position_to(reward)
         for row in grid:
             print row
-        return GridworldMdp(grid, living_reward, noise)
+        return grid
+        # return GridworldMdp(grid, living_reward, noise)
 
     def get_start_state(self):
         """Returns the start state."""
@@ -662,16 +681,107 @@ class GridworldMdp(Mdp):
 
 
 
-class GridWorldMdpWithFeatures(GridworldMdp):
+class GridworldMdpWithFeatures(GridworldMdp):
     """
     Same as GridWorldMdp, but there is a feature map and the reward is a linear function of the features.
     """
-    def __init__(self, *args):
-        super(GridworldMdp, self).__init__(*args)
+    def __init__(self, grid, living_reward=-0.01, noise=0):
+        super(GridworldMdpWithFeatures, self).__init__(grid, living_reward, noise)
+        self.grid = grid
+        self.populate_features()
+
+    def populate_features(self):
+        raise NotImplementedError
+
+    def get_reward(self, state, action):
+        features = self.features[state]
+        return np.dot(features, self.rewards)
+
+    def get_actions(self, state):
+        """Returns the list of valid actions for 'state'.
+
+        Note that you can request moves into walls. The order in which actions
+        are returned is guaranteed to be deterministic, in order to allow agents
+        to implement deterministic behavior.
+        """
+        if self.is_terminal(state):
+            return []
+        x, y = state
+        if self.walls[y][x]:
+            return []
+        # TODO (soerenmind): Decide when to end episodes if it saves time
+        # if state in self.rewards:
+        #     return [Direction.EXIT]
+        act = [Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]
+        return act
+
+class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
+    """Features are based on distance to places with reward."""
+    def __init__(self, grid, dist_scale=-1, living_reward=-0.01, noise=0, rewards=None):
+        self.dist_scale = dist_scale
+        super(GridworldMdpWithDistanceFeatures, self).__init__(grid, living_reward=-0.01, noise=0)
+
+    def populate_features(self):
+        self.populate_features_and_start_state()
+
+    def populate_features_and_start_state(self):
+        """Sets self.features and self.start_state based on grid.
+
+        Features are saved in self.features dictionary. They represent the distances**distance_exponent to the
+        fixed number of goal locations. Distances are euclidean and the exponent is -1 by default.
+
+        Assumes that grid is a valid grid.
+
+        grid: A sequence of sequences of spaces, representing a grid of a
+        certain height and width. See assert_valid_grid for details on the grid
+        format.
+        """
+        self.goal_weights = {}
+        self.features = {}
+        self.goals = []
+        self.start_state = None
+
+        # Save goal positions and start state
+        for y in range(len(self.grid)):
+            for x in range(len(self.grid[0])):
+                if self.grid[y][x] not in ['X', ' ', 'A']:
+                    self.goal_weights[x, y] = float(self.grid[y][x])
+                    self.goals.append((x,y))
+                elif self.grid[y][x] == 'A':
+                    self.start_state = (x, y)
+
+        # # Save self.rewards vector (replace this for IRD)
+        # self.rewards = np.zeros(len(self.goals))
+        # for n, goal in enumerate(self.goals):
+        #     weight = self.goal_weights[goal]
+        #     self.rewards[n] = weight
+
+        # Save features for each state based on distance to goals
+        for y in range(len(self.grid)):
+            for x in range(len(self.grid[0])):
+                features = []
+                reward = 0
+                for i,j in self.goals:
+                    weight = self.goal_weights[(i, j)]
+                    distance = np.linalg.norm(np.array((x,y)) - np.array((i,j)))
+                    nearness = np.exp(- self.dist_scale * distance)
+                    features.append(nearness)
+                    # reward += weight / (distance ** distance_exponent)
+                self.features[x,y] = np.array(features)
+
+        '''We have the distance to each goal as a feature. But we could be unsure where the goals are. I.e. we could
+        have zero weight for most possible goals.
+        -Have a long reward vector with all goals instead and amend the feature vector to be the distance to all
+            possible goals.
+        -Stay with fixed goals but unknown weights for now (could be fine without training/test split)
+            -Pre-program goals, randomize weights
+        '''
+
 
 
 if __name__ == '__main__':
-    mdp = GridWorldMdpWithFeatures()
+    grid = GridworldMdp.generate_random(8,8,0.1,0.1,0,0)
+    mdp = GridWorldMdpWithFeatures(grid)
 
 
 

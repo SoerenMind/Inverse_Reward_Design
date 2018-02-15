@@ -110,8 +110,8 @@ class Inference:
         # Cache results for true rewards
         num_true_rewards = len(self.reward_space_true)
         self.feature_exp_matrix_true_rewards = np.zeros([num_true_rewards,feature_dim])
-        for n, proxy in enumerate(self.reward_space_true):
-            self.feature_exp_matrix_true_rewards[n,:] = self.get_feature_expectations(proxy)
+        for n, true_reward in enumerate(self.reward_space_true):
+            self.feature_exp_matrix_true_rewards[n,:] = self.get_feature_expectations(true_reward)
         self.true_reward_avg_reward_matrix = np.matmul(self.feature_exp_matrix_true_rewards, self.true_reward_matrix.T)
         self.true_reward_avg_reward_vec = self.true_reward_avg_reward_matrix.diagonal()
 
@@ -122,6 +122,11 @@ class Inference:
 
         :return: posteriors, posterior_averages
         """
+
+        if len(query) == 0:
+            ent_w = -np.dot(self.prior, np.log2(self.prior))
+            return self.prior, ent_w, None
+
         idx = [self.reward_index_proxy[tuple(reward)] for reward in query]   # indexes of rewards in query
         log_Z = logsumexp(self.beta * self.avg_reward_matrix[idx, :], axis=0)   # log normalizer of likelihood
         log_numerators = self.log_lhood_numerator_matrix[idx, :]
@@ -258,7 +263,12 @@ class Inference:
             feature_expectations = self.feature_expectations_dict[tuple(proxy)]
         except:
             self.agent.mdp.change_reward(proxy)
+            self.agent.set_mdp(self.agent.mdp)  # Does value iteration
             trajectories = [run_agent(self.agent, self.env) for _ in range(self.num_traject)]
+            # trajectory = [trajectories[0][t][0] for t in range(20)]
+            # print trajectory
+            # print(run_agent(self.agent, self.env, episode_length=10))
+
             feature_expectations = self.agent.mdp.get_feature_expectations_from_trajectories(trajectories)
             # feature_expectations = np.true_divide(np.ones(shape=proxy.shape), len(proxy))
             self.feature_expectations_dict[tuple(proxy)] = feature_expectations
