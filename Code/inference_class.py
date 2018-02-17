@@ -268,7 +268,9 @@ class Inference:
             # trajectory = [trajectories[0][t][0] for t in range(20)]
             # print trajectory
             # print(run_agent(self.agent, self.env, episode_length=10))
-
+            for traject in trajectories:
+                for t, tup in enumerate(traject):
+                    traject[t] = tuple(list(tup)+[self.agent.gamma**t])
             feature_expectations = self.agent.mdp.get_feature_expectations_from_trajectories(trajectories)
             # feature_expectations = np.true_divide(np.ones(shape=proxy.shape), len(proxy))
             self.feature_expectations_dict[tuple(proxy)] = feature_expectations

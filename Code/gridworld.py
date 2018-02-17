@@ -54,7 +54,7 @@ class Mdp(object):
         '''
         # Decompose trajectories into list of all visited feature vectors
         # TODO: Deleted the first state here!
-        state_feature_list = [[self.get_features(tup[0]) for tup in trajectory[1:]] for trajectory in trajectories]
+        state_feature_list = [[self.get_features(tup[0]) * tup[4] for tup in trajectory] for trajectory in trajectories]
         state_feature_list = list(itertools.chain(*state_feature_list))     # flatten list of lists
         feature_sum = np.array(state_feature_list).sum(axis=0)
         feature_expectations = np.true_divide(feature_sum, len(state_feature_list))

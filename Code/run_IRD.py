@@ -18,6 +18,7 @@ from scipy.special import comb
 import copy
 from utils import Distribution
 from scipy.misc import logsumexp
+import sys
 
 
 
@@ -172,7 +173,6 @@ if __name__=='__main__':
     beta = 2.
     num_states = 3000; print('num states: {s}').format(s=num_states)
     feature_dim = 7; print('feature dim: {f}').format(f=feature_dim)
-    query_size = 4
     size_reward_space_true = 200
     size_reward_space_proxy = 38    # Too small to converge?
     num_queries_max = 400; print('num_queries_max: {m}').format(m=num_queries_max)
@@ -181,14 +181,19 @@ if __name__=='__main__':
     num_experiments = 4
     num_iter_per_experiment = 10
     # Params for Gridworld
-    gamma = 0.8
+    try:
+        gamma = float(sys.argv[1])
+        query_size = int(sys.argv[2])
+    except:
+        gamma = 1.  # Decreasing causes worse entropy and regret
+        query_size = 4
     goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
     rewards = np.zeros(6)
     dist_scale = 0.5
     proxy_subspace = True
     # choosers = ['greedy', 'greedy_exp_reward']
     # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
-    choosers = ['no_query','greedy_entropy', 'greedy', 'random']
+    choosers = ['greedy_entropy', 'random', 'no_query']
 
 
     # # Define env and agent for NStateMdp
@@ -305,16 +310,16 @@ if __name__=='__main__':
 
     print "Entropy per iteration for greedy_entropy:"
     print [[results['greedy_entropy','perf_measure',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
-    print "Entropy per iteration for greedy:"
-    print [[results['greedy','post_entropy',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
+    # print "Entropy per iteration for greedy:"
+    # print [[results['greedy','post_entropy',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
 
-    print("Test environment reward for greedy:")
-    print [results['greedy','test_reward',num_iter_per_experiment-1,n] for n in range(num_experiments)]
+    # print("Test environment reward for greedy:")
+    # print [results['greedy','test_reward',num_iter_per_experiment-1,n] for n in range(num_experiments)]
     print("Test environment reward for greedy_entropy:")
     print [results['greedy_entropy','test_reward',num_iter_per_experiment-1,n] for n in range(num_experiments)]
 
-    print "Exp regret per iteration for greedy:"
-    print [[results['greedy','post_exp_regret',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
+    # print "Exp regret per iteration for greedy:"
+    # print [[results['greedy','post_exp_regret',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
     print "Exp regret per iteration for greedy_entropy:"
     print [[results['greedy_entropy','post_exp_regret',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
 

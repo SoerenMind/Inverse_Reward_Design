@@ -132,26 +132,26 @@ class Query_Chooser_Subclass(Query_Chooser):
                 assert found_new
         return best_query, best_objective, best_objective_plus_cost
 
-    def find_query_feature_diff(self, query_size=4):
-        cost_of_asking = self.cost_of_asking    # could use this to decide query length
-        prior_avg = np.array(sum([self.inference.get_prior(true_reward) * true_reward
-                         for true_reward in self.inference.reward_space_true]))
-        # Find query with minimal regret
-        best_query = [choice(self.reward_space_proxy)]  # Initialize randomly
-        while len(best_query) < query_size:
-            max_min_diff = -float('inf')
-            for proxy in self.reward_space_proxy:
-                feature_exp_new = self.inference.get_feature_expectations(proxy)
-                feature_exp_query = np.array([self.inference.get_feature_expectations(proxy2) for proxy2 in best_query])
-                feature_exp_diffs = feature_exp_new - feature_exp_query
-                feature_exp_diffs = feature_exp_diffs * prior_avg    # weighted diffs by prior. Doesn't make sense, try prior variance.
-                feature_exp_diffs_norm = np.linalg.norm(feature_exp_diffs, 1, axis=1)
-                min_diff = feature_exp_diffs_norm.min()
-                if min_diff > max_min_diff:
-                    max_min_diff = min_diff
-                    best_new_proxy = proxy
-            best_query = best_query + [best_new_proxy]
-        return best_query, max_min_diff, None
+    # def find_query_feature_diff(self, query_size=4):
+    #     cost_of_asking = self.cost_of_asking    # could use this to decide query length
+    #     prior_avg = np.array(sum([self.inference.get_prior(true_reward) * true_reward
+    #                      for true_reward in self.inference.reward_space_true]))
+    #     # Find query with minimal regret
+    #     best_query = [choice(self.reward_space_proxy)]  # Initialize randomly
+    #     while len(best_query) < query_size:
+    #         max_min_diff = -float('inf')
+    #         for proxy in self.reward_space_proxy:
+    #             feature_exp_new = self.inference.get_feature_expectations(proxy)
+    #             feature_exp_query = np.array([self.inference.get_feature_expectations(proxy2) for proxy2 in best_query])
+    #             feature_exp_diffs = feature_exp_new - feature_exp_query
+    #             feature_exp_diffs = feature_exp_diffs * prior_avg    # weighted diffs by prior. Doesn't make sense, try prior variance.
+    #             feature_exp_diffs_norm = np.linalg.norm(feature_exp_diffs, 1, axis=1)
+    #             min_diff = feature_exp_diffs_norm.min()
+    #             if min_diff > max_min_diff:
+    #                 max_min_diff = min_diff
+    #                 best_new_proxy = proxy
+    #         best_query = best_query + [best_new_proxy]
+    #     return best_query, max_min_diff, None
 
     def find_random_query(self, query_size):
         query = [choice(self.reward_space_proxy) for _ in range(query_size)]
@@ -173,6 +173,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         else:
             optimal_rewards = self.inference.true_reward_avg_reward_vec
             regrets = optimal_rewards.reshape(1,-1) - avg_reward_matrix
+
         exp_regrets = np.dot(regrets * posterior, np.ones(posterior.shape[1]))  # Make sure there's no broadcasting
         exp_exp_regret = np.dot(probs_proxy_choice, exp_regrets)
 
@@ -367,8 +368,8 @@ class Experiment(object):
         post_reward_avg = 0
 
 
-        print true_reward
-        print post_avg
+        # print true_reward
+        # print post_avg
         print true_reward - post_avg
 
         # TODO: Randomize goal positions for repetitions
