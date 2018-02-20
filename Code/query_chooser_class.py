@@ -96,7 +96,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         return best_query, best_exp_exp_post_regret, best_regret_plus_cost
 
     # @profile
-    def find_best_query_greedy(self, query_size=4, total_reward=False, entropy=False):
+    def find_best_query_greedy(self, query_size, total_reward=False, entropy=False):
         """Finds query of size query_size that minimizes expected regret by starting with a random proxy and greedily
         adding more proxies to the query.
         Not implemented: Query size could be chosen adaptively based on cost vs gain of bigger queries.
@@ -104,11 +104,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         :return: best_query, corresponding regret and regret plus cost of asking (which grows with query size).
         """
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
-        # self.cache_feature_expectations()
-        # Find query with minimal regret
         best_query = [choice(self.reward_space_proxy)]  # Initialize randomly
         while len(best_query) < query_size:
-            # TODO: Could it be bad to have certain weights included because they WILL be chosen?
             found_new = False
             best_objective = float("inf")
             best_objective_plus_cost = best_objective
@@ -121,7 +118,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                     objective = self.get_exp_exp_post_regret(query, total_reward)
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
-                if objective_plus_cost <= best_objective_plus_cost + 0.00000001:
+                if objective_plus_cost <= best_objective_plus_cost + 1e-15:
                     best_objective_plus_cost = objective_plus_cost
                     best_objective = objective
                     best_query_new = query
@@ -152,6 +149,50 @@ class Query_Chooser_Subclass(Query_Chooser):
     #                 best_new_proxy = proxy
     #         best_query = best_query + [best_new_proxy]
     #     return best_query, max_min_diff, None
+
+    def find_feature_query_greedy(self, query_size):
+        """Finds"""
+        cost_of_asking = self.cost_of_asking    # could use this to decide query length
+        previous_query = []
+        feature_dim = len(self.inference.reward_space_true[0])
+        while len(best_query) < query_size:
+            best_objective = float("inf")
+            best_objective_plus_cost = best_objective
+            # TODO: Replace this loop with TF code and after convergence do forward pass for each feature. Could even be sped up with a (soft) max operation over features.
+            # TODO: Could also add pairs of features - squared complexity but only need to make tf graph half as often
+            # TODO: Could also make whole process differentiable with a MV-Bernoulli  distribution over included features
+            for feature in range(feature_dim):
+                query = best_query+[feature]
+                objective = self.calc_objective(query, True)
+                query_cost = self.cost_of_asking * len(query)
+                objective_plus_cost = objective + query_cost
+                if objective_plus_cost <= best_objective_plus_cost + 1e-15:
+                    best_objective_plus_cost = objective_plus_cost
+                    best_objective = objective
+                    best_query_new = query
+                    found_new = True
+                best_query = best_query_new
+            try:
+                assert found_new  # If no better query was found the while loop will go forever. Use <= instead.
+            except:
+                assert found_new
+        return best_query, best_objective, best_objective_plus_cost
+
+    def calc_objective(self,query,gradient_optim):
+        """
+        Returns the objective minimized over settings of fixed features.
+        :param previous_query: List of integers. Specifies free features in previous query.
+        :param feature: int. New feature considered for adding to the previous query.
+        :param gradient_optim: Bool Whether to optimize values of fixed features.
+        :return: objective (float)
+        """
+        self.graph.make_graph(query)
+        if gradient_optim:
+            while not self.graph.converged:
+                gradient = self.graph.optimizer.get_gradient()
+                self.graph.take_step(gradient)
+        objective = self.graph.get_objective(query)
+        return objective
 
     def find_random_query(self, query_size):
         query = [choice(self.reward_space_proxy) for _ in range(query_size)]
@@ -326,7 +367,7 @@ class Experiment(object):
             self.inference.reset_prior()
 
             for i in range(num_iter):
-                print "Iteration: {i}/{m}. Total time: {t}".format(i=i+1,m=num_iter,t=time.clock()-self.t_0)
+                # print "Iteration: {i}/{m}. Total time: {t}".format(i=i+1,m=num_iter,t=time.clock()-self.t_0)
                 query, perf_measure, _ \
                     = self.query_chooser.find_query(self.query_size, chooser)
                 _, post_cond_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)
@@ -339,15 +380,15 @@ class Experiment(object):
                 post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
                 post_regret = self.query_chooser.get_regret_from_query_and_true_reward([], true_reward) # TODO: Still uses old get_regret, get_avg_reward, get_feature_exp
                 post_avg = self.inference.get_prior_avg()
-                test_reward = self.test_post_avg(post_avg, true_reward)
+                test_regret = self.test_post_avg(post_avg, true_reward)
 
                 # TODO: Negative regrets; exp doesn't match post_regret
                 # Save results
                 self.results[chooser, 'query', i, exp_num], self.results[chooser,'perf_measure', i, exp_num], \
                 self.results[chooser, 'post_exp_regret', i, exp_num], self.results[chooser, 'post_regret', i, exp_num], \
                 self.results[chooser, 'post_entropy', i, exp_num], self.results[chooser, 'post_avg', i, exp_num],   \
-                self.results[chooser, 'test_reward', i, exp_num] \
-                    = query, perf_measure, post_exp_regret, post_regret, post_cond_entropy, post_avg, test_reward
+                self.results[chooser, 'test_regret', i, exp_num] \
+                    = query, perf_measure, post_exp_regret, post_regret, post_cond_entropy, post_avg, test_regret
 
 
             print('post_exp_regret: {p}'.format(p=post_exp_regret))
@@ -366,11 +407,12 @@ class Experiment(object):
         beta = 2.
         reps = 4
         post_reward_avg = 0
+        post_regret_avg = 0
 
 
         # print true_reward
         # print post_avg
-        print true_reward - post_avg
+        # print true_reward - post_avg
 
         # TODO: Randomize goal positions for repetitions
         # TODO: Why not pass on full posterior?
@@ -388,7 +430,10 @@ class Experiment(object):
                                   num_traject=num_traject, prior=None)
 
             post_reward = inference.get_avg_reward(post_avg, true_reward)
+            optimal_reward = inference.get_avg_reward(true_reward, true_reward)
+            regret = optimal_reward - post_reward
             post_reward_avg += 1/float(reps) * post_reward
+            post_regret_avg += 1/float(reps) * regret
 
-        return post_reward_avg
+        return post_regret_avg
 
