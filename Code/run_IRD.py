@@ -171,15 +171,16 @@ if __name__=='__main__':
     parser.add_argument('--num_experiments',type=int,default=2)
     parser.add_argument('--num_iter',type=int,default=5)
     parser.add_argument('--gamma',type=float,default=0.99)
-    parser.add_argument('--size_r_space_true',type=int,default=200)
+    parser.add_argument('--size_r_space_true',type=int,default=50)
     parser.add_argument('--size_proxy_space',type=int,default=50)
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=float,default=1.)
     parser.add_argument('--beta',type=float,default=2.)
     parser.add_argument('--feature_dim',type=int,default=7)
     parser.add_argument('--num_states',type=int,default=100)
-    parser.add_argument('--gamma',type=int,default=1)
     parser.add_argument('--dist_scale',type=float,default=0.5)
+    parser.add_argument('--num_traject',type=int,default=1)
+    parser.add_argument('--num_queries_max',type=int,default=500)
 
 
 
@@ -205,17 +206,18 @@ if __name__=='__main__':
 
     # Set parameters
     dummy_rewards = np.zeros(6)
+    # TODO: Randomize goal positions per experiment
     goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
     # Set parameters
+    choosers = args.c
     SEED = args.seed
     seed(SEED)
     beta = args.beta
     num_states = args.num_states
     feature_dim = args.feature_dim
     size_reward_space_true = args.size_r_space_true
-    assert 0
     size_reward_space_proxy = args.size_proxy_space
-    # num_queries_max = 400; print('num_queries_max: {m}').format(m=num_queries_max)
+    num_queries_max = args.num_queries_max
     num_traject = args.num_traject
     num_experiments = args.num_experiments
     num_iter_per_experiment = args.num_iter #; print('num iter = {i}'.format(i=num_iter_per_experiment))
@@ -228,8 +230,12 @@ if __name__=='__main__':
     # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
     # choosers = ['greedy_entropy', 'random', 'no_query']
 
+    exp_params = 'qsize'+str(query_size) + '-' + 'expnum' + str(num_experiments)
+    exp_name = 'compare-choosers'
 
-    # # Define env and agent for NStateMdp
+
+    # # Set up env and agent for NStateMdp
+
     # # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
     # #                                 feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
     # mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
@@ -239,17 +245,15 @@ if __name__=='__main__':
 
     # Set up env and agent for gridworld
     grid = GridworldMdp.generate_random(8,8,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
-    mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=rewards)
+    mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
     agent = ValueIterationLikeAgent(gamma, num_iters=50)
     super(ValueIterationLikeAgent, agent).set_mdp(mdp)
 
     env = GridworldEnvironment(mdp)
-    # print(run_agent(agent, env, episode_length=6))
 
 
-    # Reward spaces for gridworld
+    # Create reward spaces for gridworld
     # reward_space_true = [np.random.multinomial(18, np.ones(feature_dim)/18) for _ in xrange(size_reward_space_true)]
-    # TODO: See if making proxy space a subset changes things
     # reward_space_proxy = [np.random.multinomial(18, np.ones(feature_dim)) for _ in xrange(size_reward_space_proxy)]
     reward_space_true = [np.random.randint(-9, 9, size=[feature_dim])   for _ in xrange(size_reward_space_true)]
     reward_space_proxy = [np.random.randint(-9, 9, size=[feature_dim])   for _ in xrange(size_reward_space_proxy)]
@@ -275,10 +279,10 @@ if __name__=='__main__':
                           num_traject=num_traject, prior=None)
 
     'Print derived parameters'
-    print('Size of reward_space_true:{size}'.format(size=size_reward_space_true))
-    print('Size of reward_space_proxy:{size}'.format(size=len(reward_space_proxy)))
-    print('Query size:{size}'.format(size=query_size))
-    print('Choosers: {c}').format(c=choosers)
+    # print('Size of reward_space_true:{size}'.format(size=size_reward_space_true))
+    # print('Size of reward_space_proxy:{size}'.format(size=len(reward_space_proxy)))
+    # print('Query size:{size}'.format(size=query_size))
+    # print('Choosers: {c}').format(c=choosers)
     # if greedy == False:
     #     num_queries = min([comb(len(reward_space_proxy), query_size),    num_queries_max])
     #     # num_queries = comb(len(reward_space_proxy), query_size)
@@ -323,7 +327,7 @@ if __name__=='__main__':
         # print 'Mean actual -reduction and std(mean) over random query: {r}'.format(r=mean_std_actual)
         # print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
         # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
-        experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, choosers, SEED)
+        experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, choosers, SEED, exp_params, exp_name)
         # experiment.run_experiment(num_iter_per_experiment)
         avg_post_exp_regrets, avg_post_regrets, \
         std_post_exp_regrets, std_post_regrets, \
@@ -368,9 +372,10 @@ if __name__=='__main__':
         print 'Total time:{deltat}'.format(deltat=time.clock() - start)
         print 'Finished experiment: ', exp_description.format(nexp=num_experiments), adapted_description
 
-    for q_size in range(2,50):
-        if q_size % 4 == 0:
-            experiment(q_size)
+    # for q_size in range(2,50):
+    #     if q_size % 4 == 0:
+    #         experiment(q_size)
+    experiment(query_size)
 
 
     'Create interface'

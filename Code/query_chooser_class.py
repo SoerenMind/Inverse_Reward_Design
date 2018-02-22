@@ -8,7 +8,9 @@ from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardc
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
 from agents import ImmediateRewardAgent, DirectionalAgent, ValueIterationLikeAgent
 from inference_class import Inference
-
+import csv
+import os
+import datetime
 
 def random_combination(iterable, r):
     """Random selection from itertools.combinations(iterable, r)"""
@@ -151,7 +153,7 @@ class Query_Chooser_Subclass(Query_Chooser):
     #     return best_query, max_min_diff, None
 
     def find_feature_query_greedy(self, query_size):
-        """Finds"""
+        """Returns feature query of size query_size that minimizes the objective (e.g. posterior entropy)."""
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
         previous_query = []
         feature_dim = len(self.inference.reward_space_true[0])
@@ -186,6 +188,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         :param gradient_optim: Bool Whether to optimize values of fixed features.
         :return: objective (float)
         """
+        mdp = self.inference.agent.mdp
         self.graph.make_graph(query)
         if gradient_optim:
             while not self.graph.converged:
@@ -301,9 +304,8 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 class Experiment(object):
     """"""
-    def __init__(self, inference, reward_space_proxy, query_size, num_queries_max, choosers, SEED):
+    def __init__(self, inference, reward_space_proxy, query_size, num_queries_max, choosers, SEED, exp_params, exp_name):
         self.inference = inference  # TODO: Possibly create inference here and maybe input params as a dict
-        # self.reward_space_true = inference.reward_space_true
         self.reward_space_proxy = reward_space_proxy
         self.query_size = query_size
         self.num_queries_max = num_queries_max
@@ -311,16 +313,23 @@ class Experiment(object):
         self.seed = SEED
         self.query_chooser = Query_Chooser_Subclass(inference, reward_space_proxy, num_queries_max)
         self.results = {}
+        # Add variance
+        self.measures = ['post_exp_regret','post_entropy','test_regret','norm post_avg-true','post_regret','perf_measure']
+        self.exp_params = exp_params
+        self.exp_name = exp_name
+
     # @profile
     def get_experiment_stats(self, num_iter, num_experiments):
-        """Returns """
         self.results = {}
         self.t_0 = time.clock()
         post_exp_regret_measurements = []; post_regret_measurements = []
-        for i in range(num_experiments):
-            post_exp_regrets, post_regrets = self.run_experiment(num_iter, i, num_experiments)
+        for exp_num in range(num_experiments):
+            post_exp_regrets, post_regrets = self.run_experiment(num_iter, exp_num, num_experiments)
             post_exp_regret_measurements.append(post_exp_regrets)
             post_regret_measurements.append(post_regrets)
+            self.write_experiment_results_to_csv(exp_num, num_iter)
+
+        self.write_mean_and_median_results_to_csv(num_experiments, num_iter)
 
         avg_post_exp_regret_per_chooser = np.array(post_exp_regret_measurements).mean(axis=0)
         std_post_exp_regret_per_chooser = np.array(post_exp_regret_measurements).std(axis=0)
@@ -328,9 +337,82 @@ class Experiment(object):
         std_post_regret_per_chooser = np.array(post_regret_measurements).std(axis=0)
 
 
+
+
         return avg_post_exp_regret_per_chooser, avg_post_regret_per_chooser, \
                std_post_exp_regret_per_chooser, std_post_regret_per_chooser, \
                self.results
+
+    def write_experiment_results_to_csv(self, exp_num, num_iter):
+        """Writes a CSV for every chooser for every experiment. The CSV's columns are 'iteration' and all measures in
+        self.measures."""
+        time = str(datetime.datetime.now())[:-13]
+        folder_name = time + ' ' + self.exp_name + '--'  + ' ' + self.exp_params
+        if not os.path.exists('data/'+folder_name):
+            os.mkdir('data/'+folder_name)
+        else:
+            Warning('Existing experiment stats overwritten')
+        for chooser in self.choosers:
+            f = open('data/'+folder_name+'/'+chooser+str(exp_num)+'.csv','w')  # Open CSV in folder with name exp_params
+            writer = csv.DictWriter(f, fieldnames=['iteration']+self.measures)
+            writer.writeheader()
+            rows = []
+            for i in range(num_iter):
+                csvdict = {}
+                csvdict['iteration'] = i
+                for measure in self.measures:
+                    entry = self.results[chooser, measure, i, exp_num]
+                    csvdict[measure] = entry
+                rows.append(csvdict)
+            writer.writerows(rows)
+
+
+    def write_mean_and_median_results_to_csv(self, num_experiments, num_iter):
+        """Writes a CSV for every chooser averaged (and median-ed) across experiments. Saves in the same folder as
+        CSVs per experiment. Columns are 'iteration' and all measures in self.measures."""
+        time = str(datetime.datetime.now())[:-13]
+        folder_name = time + ' ' + self.exp_name + '--'  + ' ' + self.exp_params
+        if not os.path.exists('data/'+folder_name):
+            os.mkdir('data/'+folder_name)
+        else:
+            Warning('Existing experiment stats overwritten')
+
+        f_mean_all = open('data/'+folder_name+'/'+'all choosers'+'-means-'+'.csv','w')
+        writer_mean_all_choosers = csv.DictWriter(f_mean_all, fieldnames=['iteration']+self.measures)
+
+        for chooser in self.choosers:
+            f_mean = open('data/'+folder_name+'/'+chooser+'-means-'+'.csv','w')
+            f_median = open('data/'+folder_name+'/'+chooser+'-medians-'+'.csv','w')
+            writer_mean = csv.DictWriter(f_mean, fieldnames=['iteration']+self.measures)
+            writer_median = csv.DictWriter(f_median, fieldnames=['iteration']+self.measures)
+            writer_mean.writeheader()
+            writer_median.writeheader()
+            rows_mean = []
+            rows_median = []
+            for i in range(num_iter):
+                csvdict_mean = {}
+                csvdict_median = {}
+                csvdict_mean['iteration'] = i
+                csvdict_median['iteration'] = i
+                for measure in self.measures:
+                    entries = np.zeros(num_experiments)
+                    for exp_num in range(num_experiments):
+                        entry = self.results[chooser, measure, i, exp_num]
+                        entries[exp_num] = entry
+                    csvdict_mean[measure] = np.mean(entries)
+                    csvdict_median[measure] = np.median(entries)
+                rows_mean.append(csvdict_mean)
+                rows_median.append(csvdict_mean)
+            writer_mean.writerows(rows_mean)
+            writer_median.writerows(rows_median)
+
+            # Also append statistics for this chooser to CSV with all choosers
+            writer_mean_all_choosers.writerow({measure: chooser for measure in self.measures})
+            writer_mean_all_choosers.writeheader()
+            writer_mean_all_choosers.writerows(rows_mean)
+
+        'Also compare choosers: '
+        'Also get std'
 
     # @profile
     def run_experiment(self, num_iter, exp_num, num_experiments):
@@ -386,9 +468,10 @@ class Experiment(object):
                 # Save results
                 self.results[chooser, 'query', i, exp_num], self.results[chooser,'perf_measure', i, exp_num], \
                 self.results[chooser, 'post_exp_regret', i, exp_num], self.results[chooser, 'post_regret', i, exp_num], \
-                self.results[chooser, 'post_entropy', i, exp_num], self.results[chooser, 'post_avg', i, exp_num],   \
+                self.results[chooser, 'post_entropy', i, exp_num], self.results[chooser, 'norm post_avg-true', i, exp_num],   \
                 self.results[chooser, 'test_regret', i, exp_num] \
-                    = query, perf_measure, post_exp_regret, post_regret, post_cond_entropy, post_avg, test_regret
+                    = query, perf_measure, post_exp_regret, post_regret, post_cond_entropy, np.linalg.norm(post_avg-true_reward,1), test_regret
+
 
 
             print('post_exp_regret: {p}'.format(p=post_exp_regret))
