@@ -442,21 +442,6 @@ class GridworldMdp(Mdp):
             x = random.randint(1, self.width - 2)
         return (x, y)
 
-    def convert_to_numpy_input(self):
-        """Encodes this MDP in a format well-suited for deep models.
-
-        Returns three things -- a grid of indicators for whether or not a wall
-        is present, a grid of reward values (not including living reward), and
-        the start state (a tuple in the format x, y).
-        """
-        walls = np.array(self.walls, dtype=int)
-        start_state = self.start_state
-        rewards = np.zeros([self.height, self.width], dtype=float)
-        for x, y in self.rewards:
-            rewards[y, x] = self.rewards[(x, y)]
-        return walls, rewards, start_state
-
-
     @staticmethod
     def generate_random(height, width, pr_wall, pr_reward, goals=None, living_reward=0, noise=0, print_grid = False):
         """Generates a random instance of a Gridworld.
@@ -582,19 +567,24 @@ class GridworldMdp(Mdp):
     def get_actions(self, state):
         """Returns the list of valid actions for 'state'.
 
-        Note that you can request moves into walls. The order in which actions
-        are returned is guaranteed to be deterministic, in order to allow agents
-        to implement deterministic behavior.
+        Note that you cannot request moves into walls. The order in which
+        actions are returned is guaranteed to be deterministic, in order to
+        allow agents to implement deterministic behavior.
         """
         if self.is_terminal(state):
             return []
         x, y = state
         if self.walls[y][x]:
             return []
-        if state in self.rewards:
-            return [Direction.EXIT]
-        act = [Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]
-        return act
+        # TODO (soerenmind): Decide when to end episodes if it saves time
+        # if state in self.rewards:
+        #     return [Direction.EXIT]
+        result = []
+        for act in [Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]:
+            next_state = self.attempt_to_move_in_direction(state, act)
+            if next_state != state:
+                result.append(act)
+        return result
 
     def get_reward(self, state, action):
         """Get reward for state, action transition.
@@ -662,7 +652,7 @@ class GridworldMdp(Mdp):
         def get_char(x, y):
             if self.walls[y][x]:
                 return 'X'
-            elif (x, y) in self.rewards:
+            elif type(self.rewards) == type({}) and (x, y) in self.rewards:
                 reward = self.rewards[(x, y)]
                 # Convert to an int if it would not lose information
                 reward = int(reward) if int(reward) == reward else reward
@@ -688,46 +678,39 @@ class GridworldMdpWithFeatures(GridworldMdp):
     def __init__(self, grid, living_reward=-0.01, noise=0):
         super(GridworldMdpWithFeatures, self).__init__(grid, living_reward, noise)
         self.grid = grid
+        self.feature_weights = None
         self.populate_features()
+
+    def set_feature_weights(self, weights):
+        self.feature_weights = weights
+
+    def get_features(self,state):
+        """Returns feature vector for state"""
+        x, y = state
+        return self.feature_matrix[y,x,:]
 
     def populate_features(self):
         raise NotImplementedError
 
     def get_reward(self, state, action):
-        features = self.features[state]
-        return np.dot(features, self.rewards)
-
-    def get_actions(self, state):
-        """Returns the list of valid actions for 'state'.
-
-        Note that you can request moves into walls. The order in which actions
-        are returned is guaranteed to be deterministic, in order to allow agents
-        to implement deterministic behavior.
-        """
-        if self.is_terminal(state):
-            return []
-        x, y = state
-        if self.walls[y][x]:
-            return []
-        # TODO (soerenmind): Decide when to end episodes if it saves time
-        # if state in self.rewards:
-        #     return [Direction.EXIT]
-        act = [Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]
-        return act
+        features = self.get_features(state)
+        return np.dot(features, self.feature_weights)
 
 class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
     """Features are based on distance to places with reward."""
     def __init__(self, grid, dist_scale=-1, living_reward=-0.01, noise=0, rewards=None):
         self.dist_scale = dist_scale
-        super(GridworldMdpWithDistanceFeatures, self).__init__(grid, living_reward=-0.01, noise=0)
+        self.feature_weights = None
+        super(GridworldMdpWithDistanceFeatures, self).__init__(
+            grid, living_reward=-0.01, noise=0)
 
     def populate_features(self):
         self.populate_features_and_start_state()
 
     def populate_features_and_start_state(self):
-        """Sets self.features and self.start_state based on grid.
+        """Sets self.feature_matrix and self.start_state based on grid.
 
-        Features are saved in self.features dictionary. They represent the distances**distance_exponent to the
+        Features are saved in self.feature_matrix, which is a 3D Numpy array. They represent the distances**distance_exponent to the
         fixed number of goal locations. Distances are euclidean and the exponent is -1 by default.
 
         Assumes that grid is a valid grid.
@@ -736,8 +719,7 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
         certain height and width. See assert_valid_grid for details on the grid
         format.
         """
-        self.goal_weights = {}
-        self.features = {}
+        self.feature_weights = []
         self.goals = []
         self.start_state = None
 
@@ -745,7 +727,7 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
         for y in range(len(self.grid)):
             for x in range(len(self.grid[0])):
                 if self.grid[y][x] not in ['X', ' ', 'A']:
-                    self.goal_weights[x, y] = float(self.grid[y][x])
+                    self.feature_weights.append(float(self.grid[y][x]))
                     self.goals.append((x,y))
                 elif self.grid[y][x] == 'A':
                     self.start_state = (x, y)
@@ -756,18 +738,20 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
         #     weight = self.goal_weights[goal]
         #     self.rewards[n] = weight
 
+        height, width = len(self.grid), len(self.grid[0])
+        self.feature_matrix = np.zeros([height, width, len(self.goals)])
         # Save features for each state based on distance to goals
-        for y in range(len(self.grid)):
-            for x in range(len(self.grid[0])):
+        for y in range(height):
+            for x in range(width):
                 features = []
-                reward = 0
+                # reward = 0
                 for i,j in self.goals:
-                    weight = self.goal_weights[(i, j)]
+                    # weight = self.goal_weights[(i, j)]
                     distance = np.linalg.norm(np.array((x,y)) - np.array((i,j)))
                     nearness = np.exp(- self.dist_scale * distance)
                     features.append(nearness)
                     # reward += weight / (distance ** distance_exponent)
-                self.features[x,y] = np.array(features)
+                self.feature_matrix[y,x,:] = np.array(features)
 
         '''We have the distance to each goal as a feature. But we could be unsure where the goals are. I.e. we could
         have zero weight for most possible goals.
@@ -777,11 +761,21 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
             -Pre-program goals, randomize weights
         '''
 
+    def convert_to_numpy_input(self):
+        """Encodes this MDP in a format well-suited for deep models.
+
+        Returns three things -- a grid of indicators for whether or not a wall
+        is present, a Numpy array of features, and the start state (a tuple in
+        the format x, y).
+        """
+        walls = np.array(self.walls, dtype=int)
+        return walls, self.feature_matrix, self.start_state
+
 
 
 if __name__ == '__main__':
-    grid = GridworldMdp.generate_random(8,8,0.1,0.1,0,0)
-    mdp = GridWorldMdpWithFeatures(grid)
+    grid = GridworldMdp.generate_random(8,8,0.1,0.1)
+    mdp = GridworldMdpWithDistanceFeatures(grid)
 
 
 
