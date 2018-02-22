@@ -2,7 +2,7 @@ import numpy as np
 from agent_runner import run_agent
 from utils import Distribution
 from scipy.misc import logsumexp
-
+from gradient_descent_test import get_likelihoods_from_feature_expectations
 
 
 
@@ -105,7 +105,7 @@ class Inference:
 
         self.avg_reward_matrix = np.matmul(self.feature_exp_matrix, self.true_reward_matrix.T)
         self.lhood_numerator_matrix = np.exp(self.beta * self.avg_reward_matrix)
-        self.log_lhood_numerator_matrix = np.log(self.lhood_numerator_matrix)   # This just removes the exponential
+        self.log_lhood_numerator_matrix = np.log(self.lhood_numerator_matrix)   # TODO: This just removes the exponential but can lead to overflow
 
         # Cache results for true rewards
         num_true_rewards = len(self.reward_space_true)
@@ -114,6 +114,15 @@ class Inference:
             self.feature_exp_matrix_true_rewards[n,:] = self.get_feature_expectations(true_reward)
         self.true_reward_avg_reward_matrix = np.matmul(self.feature_exp_matrix_true_rewards, self.true_reward_matrix.T)
         self.true_reward_avg_reward_vec = self.true_reward_avg_reward_matrix.diagonal()
+
+        # likelihoods, log_likelihoods, log_likelihoods_new, true_reward_avg_reward_vec = \
+        #     get_likelihoods_from_feature_expectations(self.feature_exp_matrix, self.true_reward_matrix,
+        #                                               self.beta, self.feature_exp_matrix_true_rewards)
+
+        log_Z_w, log_P_q_z, P_q_z, sum_to_1, Z_q, posterior, log_Z_q, post_ent, post_sum_to_1, log_post_ent, log_posterior \
+            = get_likelihoods_from_feature_expectations(self.feature_exp_matrix, self.true_reward_matrix,
+                                                      self.beta, self.prior, self.feature_exp_matrix_true_rewards)
+
 
     # @profile
     def calc_posterior(self, query, get_entropy=False):
@@ -139,11 +148,11 @@ class Inference:
 
         # Calculate entropies and return
         if get_entropy:
-            ent_q = -np.dot(evidence, np.log2(evidence))
-            ent_w = -np.dot(self.prior, np.log2(self.prior))
+            ent_q = -np.dot(evidence, np.log(evidence))
+            ent_w = -np.dot(self.prior, np.log(self.prior))
             # Conditional entropies
             # cond_ent_per_w = - np.dot(probs * self.prior, np.log(probs))
-            cond_ent_per_w = - (probs * self.prior * np.log2(probs)).sum(-1)
+            cond_ent_per_w = - (probs * self.prior * np.log(probs)).sum(-1)
             cond_ent = cond_ent_per_w.sum()
             ent_w_given_q = cond_ent - ent_q + ent_w
             if ent_w_given_q < 0:

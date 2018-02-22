@@ -42,22 +42,25 @@ def get_likelihoods_from_feature_expectations(feature_exp_matrix,
     log_Z_w = tf.reduce_logsumexp(log_likelihoods_new, axis=0, name='log_Z_q')
     log_P_q_z = log_likelihoods_new - log_Z_w
 
-    # Not fully in log space:
+    # Alternative 1: Not fully in log space
     P_q_z = tf.exp(log_P_q_z, name='probs')
     sum_to_1 = tf.reduce_sum(P_q_z, axis=0, name='prob_sum_to_1')
     prior = tf.constant(prior, dtype=precision, name='prior')
     prior_expand = tf.expand_dims(prior,1)
     Z_q = tf.matmul(P_q_z, prior_expand, name='Z_q')
-    # Z_q = tf.einsum('n,nm->m',prior,P_q_z)
     posterior = tf.multiply(P_q_z, prior, name='posterior')
     posterior = posterior / Z_q # reshape Z_q back to vector
-    post_ent = tf.reduce_sum(- posterior * tf.log(posterior), axis=1, name='post_ent')   # check summing correct
+    # post_ent = tf.reduce_sum(- posterior * tf.log(posterior), axis=1, name='post_ent')   # Need to sum the right axis and sum twice
+    # exp_post_ent = tf.reduce_sum(tf.multiply(post_ent, Z_q), axis=1, keepdims=True)
 
-    # In log space:
+    # Alternative 2: In log space
     log_Z_q, max_a, max_b = logdot(log_P_q_z, tf.log(prior))
-    log_posterior = log_P_q_z + tf.log(prior) - tf.expand_dims(log_Z_q, 1) # check broadcasting correct
+    log_posterior = log_P_q_z + tf.log(prior) - log_Z_q
+
     post_sum_to_1 = tf.reduce_sum(tf.exp(log_posterior), axis=1, name='post_sum_to_1')
-    log_post_ent = logdot(log_posterior, tf.log(log_posterior))
+    # log_post_ent, max_a, max_b = logdot(- log_posterior, tf.log(log_posterior))
+    post_ent = - tf.reduce_sum(tf.multiply(tf.exp(log_posterior), log_posterior), axis=1, keepdims=True, name='post_ent')
+    exp_post_ent = tf.reduce_sum(tf.multiply(post_ent, tf.exp(log_Z_q)), axis=0, keepdims=True)
 
 
 
@@ -66,7 +69,8 @@ def get_likelihoods_from_feature_expectations(feature_exp_matrix,
     # Run graph in session
     with tf.Session() as sess:
         # var_list = [likelihoods, log_likelihoods, log_likelihoods_new, true_reward_avg_reward_vec]
-        var_list = [log_Z_w, log_P_q_z, P_q_z, sum_to_1, Z_q, posterior, log_Z_q, post_ent, post_sum_to_1, log_post_ent]
+        var_list = [log_Z_w, log_P_q_z, P_q_z, sum_to_1, Z_q, posterior, log_Z_q, post_ent, post_sum_to_1,
+                    log_posterior, post_ent, exp_post_ent]
         return sess.run(var_list, feed_dict={feature_exp: feature_exp_matrix,
                                     true_rewards: true_reward_matrix, true_feature_exp: feature_exp_matrix_true})
 
@@ -78,5 +82,26 @@ if __name__=='__main__':
     fe_true = np.eye(n_true,20)
     r_space_true = np.eye(n_true, 20)
     prior = np.ones(n_true)
-    avg_reward_matrix = get_likelihoods_from_feature_expectations(fe, r_space_true, 2, prior, feature_exp_matrix_true=fe_true)
-    print avg_reward_matrix.round(1)
+    log_Z_w, log_P_q_z, P_q_z, sum_to_1, Z_q, posterior, log_Z_q, post_ent, post_sum_to_1, log_posterior, \
+    post_ent_log, exp_post_ent     \
+            = get_likelihoods_from_feature_expectations(fe, r_space_true, 2, prior, feature_exp_matrix_true=fe_true)
+
+    print log_P_q_z
+    print np.log(prior)
+    print log_Z_q
+    print log_P_q_z + np.log(prior) - log_Z_q
+    print np.exp(log_Z_q)
+
+    print 'logposterior:'
+    print log_posterior
+
+    print 'post_ent_log:'
+    print post_ent_log
+
+    print 'exp_post_ent:'
+    print exp_post_ent
+
+    # print max_a, max_b
+
+    # print sum_to_1
+    # print post_sum_to_1

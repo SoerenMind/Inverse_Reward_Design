@@ -172,7 +172,7 @@ if __name__=='__main__':
     parser.add_argument('--num_iter',type=int,default=5)
     parser.add_argument('--gamma',type=float,default=0.99)
     parser.add_argument('--size_r_space_true',type=int,default=50)
-    parser.add_argument('--size_proxy_space',type=int,default=50)
+    parser.add_argument('--size_proxy_space',type=int,default=30)
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=float,default=1.)
     parser.add_argument('--beta',type=float,default=2.)
