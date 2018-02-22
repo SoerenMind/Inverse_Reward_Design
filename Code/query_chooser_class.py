@@ -153,7 +153,7 @@ class Query_Chooser_Subclass(Query_Chooser):
     def find_feature_query_greedy(self, query_size):
         """Finds"""
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
-        previous_query = []
+        best_query = []
         feature_dim = len(self.inference.reward_space_true[0])
         while len(best_query) < query_size:
             best_objective = float("inf")
