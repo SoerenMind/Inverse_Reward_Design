@@ -19,7 +19,7 @@ import copy
 from utils import Distribution
 from scipy.misc import logsumexp
 import sys
-
+import argparse
 
 
 
@@ -164,36 +164,69 @@ def test_planning_speed(inference, reward_space_proxy):
 # ==================================================================================================== #
 # ==================================================================================================== #
 if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('q_size',type=int,default=2)
+    # parser.add_argument('choosers',type=list,default='[greedy_entropy]')
+    parser.add_argument('-c','--c', action='append', required=True) # c for choosers
+    parser.add_argument('--num_experiments',type=int,default=2)
+    parser.add_argument('--num_iter',type=int,default=5)
+    parser.add_argument('--gamma',type=float,default=0.99)
+    parser.add_argument('--size_r_space_true',type=int,default=200)
+    parser.add_argument('--size_proxy_space',type=int,default=50)
+    parser.add_argument('--num_trajectories',type=int,default=1)
+    parser.add_argument('--seed',type=float,default=1.)
+    parser.add_argument('--beta',type=float,default=2.)
+    parser.add_argument('--feature_dim',type=int,default=7)
+    parser.add_argument('--num_states',type=int,default=100)
+    parser.add_argument('--gamma',type=int,default=1)
+    parser.add_argument('--dist_scale',type=float,default=0.5)
+
+
+
+    '''List of dictionaries is the data for one experiment and one chooser.
+    There's a new list of dictionaries (thus a new CSV) started as the chooser changes.
+        So multiple (num choosers) CSVs are created after an experiment run.
+    But all lists/CSVs are kept as the next experiment starts.
+    At the end of all experiments we have num_choosers x num_experiments lists.
+        We compute the average of each field over experiments. (We'll probably just need the last row).
+        That's separate averages for each chooser.
+
+    What if we want to test the query size?
+    '''
+    args = parser.parse_args()
+    print args.c
+    # assert 0
+
+
+    # Experiment description
     adapted_description = False
     print "Adapted description: ", adapted_description
     exp_description = pprint("Comparing to entropy with many states and few true rewards. {nexp} experiments.")
+
     # Set parameters
-    SEED = 3
-    seed(SEED)
-    beta = 2.
-    # num_states = 3000; print('num states: {s}').format(s=num_states)
-    feature_dim = 7; print('feature dim: {f}').format(f=feature_dim)
-    size_reward_space_true = 10
-    size_reward_space_proxy = 3    # Too small to converge?
-    num_queries_max = 400; print('num_queries_max: {m}').format(m=num_queries_max)
-    proxy_given = np.zeros(feature_dim)
-    num_traject = 1
-    num_experiments = 1
-    num_iter_per_experiment = 10; print('num iter = {i}'.format(i=num_iter_per_experiment))
-    # Params for Gridworld
-    try:
-        gamma = float(sys.argv[1])
-        query_size = int(sys.argv[2])
-    except:
-        gamma = 1.  # Decreasing causes worse entropy and regret
-        query_size = 4
+    dummy_rewards = np.zeros(6)
     goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
-    rewards = np.zeros(6)
-    dist_scale = 0.5
+    # Set parameters
+    SEED = args.seed
+    seed(SEED)
+    beta = args.beta
+    num_states = args.num_states
+    feature_dim = args.feature_dim
+    size_reward_space_true = args.size_r_space_true
+    assert 0
+    size_reward_space_proxy = args.size_proxy_space
+    # num_queries_max = 400; print('num_queries_max: {m}').format(m=num_queries_max)
+    num_traject = args.num_traject
+    num_experiments = args.num_experiments
+    num_iter_per_experiment = args.num_iter #; print('num iter = {i}'.format(i=num_iter_per_experiment))
+    # Params for Gridworld
+    gamma = args.gamma
+    query_size = args.q_size
+    dist_scale = args.dist_scale
     proxy_subspace = True
     # choosers = ['greedy', 'greedy_exp_reward']
     # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
-    choosers = ['greedy_entropy', 'random', 'no_query']
+    # choosers = ['greedy_entropy', 'random', 'no_query']
 
 
     # # Define env and agent for NStateMdp
@@ -292,9 +325,9 @@ if __name__=='__main__':
         # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
         experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, choosers, SEED)
         # experiment.run_experiment(num_iter_per_experiment)
-        avg_post_exp_regrets, avg_post_regrets,     \
-            std_post_exp_regrets, std_post_regrets, \
-            results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
+        avg_post_exp_regrets, avg_post_regrets, \
+        std_post_exp_regrets, std_post_regrets, \
+        results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
 
 
         'Print results'
