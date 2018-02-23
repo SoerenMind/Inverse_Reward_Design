@@ -13,10 +13,10 @@ class TestPlanner(unittest.TestCase):
         mdp = GridworldMdpWithDistanceFeatures(grid)
         # Hack because agents.py expects mdp.rewards to exist
         mdp.rewards = np.array([1, -1])
-        agent = OptimalAgent(gamma=0.9, num_iters=20)
+        agent = OptimalAgent(gamma=0.9, num_iters=10)
         agent.set_mdp(mdp)
         feature_dim = len(mdp.goals)
-        model = Model(feature_dim, 8, 8, 0.9, 21)
+        model = Model(feature_dim, 8, 8, 0.9, 10)
 
         with tf.Session() as sess:
             sess.run(model.initialize_op)
