@@ -19,39 +19,38 @@ def get_likelihoods_from_feature_expectations(feature_exp_matrix,
                                               prior,
                                               feature_exp_matrix_true=None,
                                               precision=tf.float64):
-    # Get shape parameters
-    num_true_rewards = true_reward_matrix.shape[0]
 
 
     # Build graph
-    # TODO: Make sure every tensor starts with a dimension for the batch size (number of features)
 
-    # Get proxy-true likelihood matrix
-    feature_exp = tf.placeholder(precision, name='feature_exp')    # shape=(2,20)
-    true_rewards = tf.placeholder(precision, name='true_rewards')  # shape=(10,20)
+    # Get proxy-true log likelihood matrix
+    feature_exp = tf.placeholder(precision, name='feature_exp')
+    true_rewards = tf.placeholder(precision, name='true_rewards')
     avg_reward_matrix = tf.matmul(feature_exp, tf.transpose(true_rewards), name='avg_reward_matrix')
     # likelihoods = tf.exp(beta * avg_reward_matrix, name='likelihoods')
     log_likelihoods_new = beta * avg_reward_matrix
 
-    # Get true-true avg rewards
+    # # Get true-true avg rewards
+    # # Get shape parameters
+    # num_true_rewards = true_reward_matrix.shape[0]
     true_feature_exp = tf.constant(feature_exp_matrix_true, dtype=precision)
-    true_reward_avg_reward_matrix = tf.matmul(true_feature_exp, tf.transpose(true_rewards))
-    true_reward_avg_reward_vec = tf.diag_part(true_reward_avg_reward_matrix,name='true_reward_avg_reward_vec')
+    # true_reward_avg_reward_matrix = tf.matmul(true_feature_exp, tf.transpose(true_rewards))
+    # true_reward_avg_reward_vec = tf.diag_part(true_reward_avg_reward_matrix,name='true_reward_avg_reward_vec')
 
     # Calculate posterior
     log_Z_w = tf.reduce_logsumexp(log_likelihoods_new, axis=0, name='log_Z_q')
     log_P_q_z = log_likelihoods_new - log_Z_w
 
-    # Alternative 1: Not fully in log space
-    P_q_z = tf.exp(log_P_q_z, name='probs')
-    sum_to_1 = tf.reduce_sum(P_q_z, axis=0, name='prob_sum_to_1')
-    prior = tf.constant(prior, dtype=precision, name='prior')
-    prior_expand = tf.expand_dims(prior,1)
-    Z_q = tf.matmul(P_q_z, prior_expand, name='Z_q')
-    posterior = tf.multiply(P_q_z, prior, name='posterior')
-    posterior = posterior / Z_q # reshape Z_q back to vector
-    # post_ent = tf.reduce_sum(- posterior * tf.log(posterior), axis=1, name='post_ent')   # Need to sum the right axis and sum twice
-    # exp_post_ent = tf.reduce_sum(tf.multiply(post_ent, Z_q), axis=1, keepdims=True)
+    # # Alternative 1: Not fully in log space
+    # P_q_z = tf.exp(log_P_q_z, name='probs')
+    # sum_to_1 = tf.reduce_sum(P_q_z, axis=0, name='prob_sum_to_1')
+    # prior = tf.constant(prior, dtype=precision, name='prior')
+    # prior_expand = tf.expand_dims(prior,1)
+    # Z_q = tf.matmul(P_q_z, prior_expand, name='Z_q')
+    # posterior = tf.multiply(P_q_z, prior, name='posterior')
+    # posterior = posterior / Z_q # reshape Z_q back to vector
+    # # post_ent = tf.reduce_sum(- posterior * tf.log(posterior), axis=1, name='post_ent')   # Need to sum the right axis and sum twice
+    # # exp_post_ent = tf.reduce_sum(tf.multiply(post_ent, Z_q), axis=1, keepdims=True)
 
     # Alternative 2: In log space
     log_Z_q, max_a, max_b = logdot(log_P_q_z, tf.log(prior))

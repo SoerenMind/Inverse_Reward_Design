@@ -176,12 +176,13 @@ if __name__=='__main__':
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=float,default=1.)
     parser.add_argument('--beta',type=float,default=2.)
-    parser.add_argument('--feature_dim',type=int,default=7)
     parser.add_argument('--num_states',type=int,default=100)
     parser.add_argument('--dist_scale',type=float,default=0.5)
     parser.add_argument('--num_traject',type=int,default=1)
     parser.add_argument('--num_queries_max',type=int,default=500)
-
+    parser.add_argument('--height',type=int,default=8)
+    parser.add_argument('--width',type=int,default=8)
+    parser.add_argument('--num_iters_optim',type=int,default=5)
 
 
     '''List of dictionaries is the data for one experiment and one chooser.
@@ -208,13 +209,14 @@ if __name__=='__main__':
     dummy_rewards = np.zeros(6)
     # TODO: Randomize goal positions per experiment
     goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
+    # feature_dim = args.feature_dim
+    args.feature_dim = len(goals)   # Overwriting arg input
     # Set parameters
     choosers = args.c
     SEED = args.seed
     seed(SEED)
     beta = args.beta
     num_states = args.num_states
-    feature_dim = args.feature_dim
     size_reward_space_true = args.size_r_space_true
     size_reward_space_proxy = args.size_proxy_space
     num_queries_max = args.num_queries_max
@@ -225,6 +227,9 @@ if __name__=='__main__':
     gamma = args.gamma
     query_size = args.q_size
     dist_scale = args.dist_scale
+    height = args.height
+    width = args.width
+    num_iters_optim = args.num_iters_optim
     proxy_subspace = True
     # choosers = ['greedy', 'greedy_exp_reward']
     # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
@@ -237,14 +242,14 @@ if __name__=='__main__':
     # # Set up env and agent for NStateMdp
 
     # # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
-    # #                                 feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
+    # #                                 feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
     # mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
-    #                                 feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
+    #                                 feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
     # agent = ImmediateRewardAgent()
     # agent.set_mdp(mdp)
 
     # Set up env and agent for gridworld
-    grid = GridworldMdp.generate_random(8,8,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
+    grid = GridworldMdp.generate_random(height,width,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
     mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
     agent = ValueIterationLikeAgent(gamma, num_iters=50)
     super(ValueIterationLikeAgent, agent).set_mdp(mdp)
@@ -253,18 +258,18 @@ if __name__=='__main__':
 
 
     # Create reward spaces for gridworld
-    # reward_space_true = [np.random.multinomial(18, np.ones(feature_dim)/18) for _ in xrange(size_reward_space_true)]
-    # reward_space_proxy = [np.random.multinomial(18, np.ones(feature_dim)) for _ in xrange(size_reward_space_proxy)]
-    reward_space_true = [np.random.randint(-9, 9, size=[feature_dim])   for _ in xrange(size_reward_space_true)]
-    reward_space_proxy = [np.random.randint(-9, 9, size=[feature_dim])   for _ in xrange(size_reward_space_proxy)]
+    # reward_space_true = [np.random.multinomial(18, np.ones(args.feature_dim)/18) for _ in xrange(size_reward_space_true)]
+    # reward_space_proxy = [np.random.multinomial(18, np.ones(args.feature_dim)) for _ in xrange(size_reward_space_proxy)]
+    reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_true)]
+    reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_proxy)]
     if proxy_subspace:
         reward_space_proxy = [choice(reward_space_true) for _ in xrange(size_reward_space_proxy)]
-    # reward_space_true = [np.random.dirichlet(np.ones(feature_dim)) * feature_dim - 1 for _ in xrange(size_reward_space_true)]
-    # reward_space_proxy = [np.random.dirichlet(np.ones(feature_dim)) * feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
+    # reward_space_true = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_true)]
+    # reward_space_proxy = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
 
     # Reward spaces for N-State-Mdp
     # from itertools import product
-    # reward_space_true = list(product([0,1], repeat=feature_dim))
+    # reward_space_true = list(product([0,1], repeat=args.feature_dim))
     # # reward_space_true.remove((0,0,0,0))
     # reward_space_true = [np.array(reward) for reward in reward_space_true]
     # reward_space_true = [choice(reward_space_true) for _ in range(size_reward_space_true)]
@@ -306,7 +311,7 @@ if __name__=='__main__':
     #               for true_reward in reward_space_true])
     # print('new prior: {prior}'.format(prior=prior))
     # mdp_test = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],   # proxy_given should have no effect
-    #                                      feature_dim=feature_dim, num_states_reachable=num_states, SEED=SEED)
+    #                                      feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
     # mdp_test.add_feature_map(mdp.features)
     # env_test = GridworldEnvironment(mdp_test)
     # agent.set_mdp(mdp_test)
@@ -327,7 +332,7 @@ if __name__=='__main__':
         # print 'Mean actual -reduction and std(mean) over random query: {r}'.format(r=mean_std_actual)
         # print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
         # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
-        experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, choosers, SEED, exp_params, exp_name)
+        experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params, exp_name)
         # experiment.run_experiment(num_iter_per_experiment)
         avg_post_exp_regrets, avg_post_regrets, \
         std_post_exp_regrets, std_post_regrets, \

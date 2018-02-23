@@ -753,14 +753,6 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
                     # reward += weight / (distance ** distance_exponent)
                 self.feature_matrix[y,x,:] = np.array(features)
 
-        '''We have the distance to each goal as a feature. But we could be unsure where the goals are. I.e. we could
-        have zero weight for most possible goals.
-        -Have a long reward vector with all goals instead and amend the feature vector to be the distance to all
-            possible goals.
-        -Stay with fixed goals but unknown weights for now (could be fine without training/test split)
-            -Pre-program goals, randomize weights
-        '''
-
     def convert_to_numpy_input(self):
         """Encodes this MDP in a format well-suited for deep models.
 
