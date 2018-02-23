@@ -328,7 +328,8 @@ class Experiment(object):
     def __init__(self, inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params, exp_name):
         self.inference = inference  # TODO: Possibly create inference here and maybe input params as a dict
         self.reward_space_proxy = reward_space_proxy
-        self.query_size = query_size
+        self.query_size_discrete = query_size
+        self.query_size_feature = args.query_size_feature
         self.num_queries_max = num_queries_max
         self.choosers = choosers
         self.seed = SEED
@@ -358,13 +359,9 @@ class Experiment(object):
         avg_post_regret_per_chooser = np.array(post_regret_measurements).mean(axis=0)
         std_post_regret_per_chooser = np.array(post_regret_measurements).std(axis=0)
 
-
-
-
         return avg_post_exp_regret_per_chooser, avg_post_regret_per_chooser, \
                std_post_exp_regret_per_chooser, std_post_regret_per_chooser, \
                self.results
-
 
 
     # @profile
@@ -403,13 +400,17 @@ class Experiment(object):
 
             for i in range(num_iter):
                 # print "Iteration: {i}/{m}. Total time: {t}".format(i=i+1,m=num_iter,t=time.clock()-self.t_0)
-                query, perf_measure, posterior \
-                    = self.query_chooser.find_query(self.query_size, chooser, true_reward)
-                _, post_cond_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)
-                # TODO: replace use of get_likelihood here
-                proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
-                # TODO: replace use of calc_and_save_posterior here
-                self.inference.update_prior(query, proxy_choice)    # TODO: Still uses calc_and_save_posterior
+                # Do iteration for feature-based choosers:
+                if chooser in ['feature_entropy']:
+                    query, objective, true_posterior = self.query_chooser.find_query(self.query_size_feature, chooser, true_reward)
+                    self.inference.update_prior(true_posterior)
+                else:
+                    query, perf_measure, posterior \
+                        = self.query_chooser.find_query(self.query_size_discrete, chooser, true_reward)
+
+                    _, post_cond_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)
+                    proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
+                    self.inference.update_prior(query, proxy_choice)    # TODO: Still uses calc_and_save_posterior
 
                 # Outcome measures
                 post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
@@ -417,14 +418,13 @@ class Experiment(object):
                 post_avg = self.inference.get_prior_avg()
                 test_regret = self.test_post_avg(post_avg, true_reward)
 
-                # TODO: Negative regrets; exp doesn't match post_regret
                 # Save results
+                # self.results[chooser, 'post_entropy', i, exp_num], \
                 self.results[chooser, 'query', i, exp_num], self.results[chooser,'perf_measure', i, exp_num], \
                 self.results[chooser, 'post_exp_regret', i, exp_num], self.results[chooser, 'post_regret', i, exp_num], \
-                self.results[chooser, 'post_entropy', i, exp_num], self.results[chooser, 'norm post_avg-true', i, exp_num],   \
+                self.results[chooser, 'norm post_avg-true', i, exp_num],   \
                 self.results[chooser, 'test_regret', i, exp_num] \
-                    = query, perf_measure, post_exp_regret, post_regret, post_cond_entropy, np.linalg.norm(post_avg-true_reward,1), test_regret
-
+                    = query, perf_measure, post_exp_regret, post_regret, np.linalg.norm(post_avg-true_reward,1), test_regret
 
 
             print('post_exp_regret: {p}'.format(p=post_exp_regret))

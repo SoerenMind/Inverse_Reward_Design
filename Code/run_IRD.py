@@ -168,6 +168,7 @@ if __name__=='__main__':
     parser.add_argument('q_size',type=int,default=2)
     # parser.add_argument('choosers',type=list,default='[greedy_entropy]')
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
+    parser.add_argument('--query_size_feature',type=int,default=3)
     parser.add_argument('--num_experiments',type=int,default=2)
     parser.add_argument('--num_iter',type=int,default=5)
     parser.add_argument('--gamma',type=float,default=0.99)
@@ -184,6 +185,7 @@ if __name__=='__main__':
     parser.add_argument('--width',type=int,default=8)
     parser.add_argument('--num_iters_optim',type=int,default=5)
     parser.add_argument('--value_iters',type=int,default=50)
+
 
     '''List of dictionaries is the data for one experiment and one chooser.
     There's a new list of dictionaries (thus a new CSV) started as the chooser changes.

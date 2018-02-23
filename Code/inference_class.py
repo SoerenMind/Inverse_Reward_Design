@@ -44,12 +44,19 @@ class Inference:
         index = self.reward_index[tuple(true_reward)]
         return self.prior[index]
 
-    def update_prior(self, query, chosen_proxy):
-        if len(query) == 0: # Do nothing for empty query
-            return
-        try: del self.prior_avg
-        except: pass
-        self.prior = self.calc_and_save_posterior(chosen_proxy, query)
+    def update_prior(self, query, chosen_proxy, true_posterior=None):
+        """Calculates posterior for given query and answer and replaces prior with the outcome. Deletes prior_avg.
+        If true_posterior is given, it replaces the prior directly and updates the prior_avg."""
+        if true_posterior is not None:
+            self.prior = true_posterior
+            try: del self.prior_avg
+            except: pass
+        else:
+            if len(query) == 0: # Do nothing for empty query
+                return
+            try: del self.prior_avg
+            except: pass
+            self.prior = self.calc_and_save_posterior(chosen_proxy, query)
 
     def reset_prior(self):
         '''Resets to uniform prior'''
