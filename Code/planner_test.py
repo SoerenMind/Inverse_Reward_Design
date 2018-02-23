@@ -20,7 +20,7 @@ class TestPlanner(unittest.TestCase):
 
         with tf.Session() as sess:
             sess.run(model.initialize_op)
-            qvals = model.compute_qvals(sess, mdp)
+            (qvals,) = model.compute(['q_values'], sess, mdp, [], mdp.feature_weights)
 
         for state in mdp.get_states():
             if mdp.is_terminal(state):

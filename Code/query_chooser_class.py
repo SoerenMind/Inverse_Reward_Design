@@ -210,7 +210,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         model = Model(self.args.feature_dim, self.mdp.height, self.mdp.width, self.args.gamma, num_iters,
                       feature_list, self.inference.true_reward_matrix, true_reward)
 
-        with tf.Session as sess:
+        with tf.Session() as sess:
             model_outputs = model.compute(desired_outputs, sess, mdp, init, optimize=True)
             if 'answer' in desired_outputs:
                 answer = model.sample_human_answer()

@@ -4,13 +4,22 @@ import tensorflow as tf
 from gridworld import Direction
 
 class Model(object):
-    def __init__(self, feature_dim, height, width, gamma, num_iters):
+    def __init__(self, feature_dim, height, width, gamma, num_iters, query,
+                 proxy_reward_space, true_reward_matrix, true_reward):
         self.feature_dim = feature_dim
         self.height = height
         self.width = width
         self.gamma = gamma
         self.num_iters = num_iters
         self.num_actions = 4
+        self.query = query
+        # List of possible settings for the query features
+        # Eg. If we are querying features 1 and 4, and discretizing each into 3
+        # buckets (-1, 0 and 1), the proxy reward space would be
+        # [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]
+        self.proxy_reward_space = proxy_reward_space
+        self.true_reward_matrix = true_reward_matrix
+        self.true_reward = true_reward
         self.build_tf_graph()
 
     def build_tf_graph(self):
@@ -19,6 +28,7 @@ class Model(object):
         self.initialize_op = tf.global_variables_initializer()
 
     def build_planner(self):
+        self.name_to_op = {}
         height, width, num_actions = self.height, self.width, self.num_actions
         dim, gamma = self.feature_dim, self.gamma
 
@@ -78,25 +88,60 @@ class Model(object):
             feature_expectations = tf.gather_nd(q_fes, indexes)
 
         self.feature_expectations = feature_expectations
+        self.name_to_op['feature_exps'] = feature_expectations
+
         fv = tf.concat([feature_batch, feature_expectations], axis=3)
         q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
         q_fes = tf.reshape(
             q_flattened_fes, [1, height, width, num_actions, dim])
-        self.q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
 
-    def compute_qvals(self, sess, mdp):
+        self.q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
+        self.name_to_op['q_values'] = self.q_values
+
+    def compute(self, outputs, sess, mdp, weight_inits, gradient_steps=0):
+        """
+        Takes gradient steps to set the non-query features to the values that
+        best optimize the objective. After optimization, calculates the values
+        specified in outputs and returns them.
+
+        :param outputs: List of strings, each specifying a value to compute.
+        :param sess: tf.Session() object.
+        :param mdp: An instance of GridworldMdpWithDistanceFeatures.
+        :param query: List of features (integers) to ask the user to set.
+        :param weight_inits: Initialization for the non-query features.
+        :param gradient_steps: Number of gradient steps to take.
+        :return: List of the same length as parameter `outputs`.
+        """
         image, features, _ = mdp.convert_to_numpy_input()
         fd = {}
         for i in range(len(mdp.goals)):
-            fd["weight_in" + str(i) + ":0"] = np.array([mdp.feature_weights[i]])
+            if i not in query:
+                name = "weight_in" + str(i) + ":0"
+                fd[name] = np.array([weight_inits[i]])
         sess.run(self.weight_assignments, feed_dict=fd)
 
         fd = {
             "image:0": image,
             "features:0": features
         }
-        (qvals,) = sess.run([self.q_values], feed_dict=fd)
-        return qvals
+        def get_op(name):
+            if name == 'entropy':
+                return -10.0
+            elif name == 'answer':
+                idx = np.random.choice(len(self.proxy_reward_space))
+                return self.proxy_reward_space[idx]
+            elif name == 'true_posterior':
+                K = len(self.proxy_reward_space)
+                N = len(self.true_reward_matrix)
+                result = np.random.rand(N, K)
+                return (result / result.sum(0)).T
+            elif name not in self.name_to_op:
+                raise ValueError("Unknown op name: " + str(name))
+            return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
+
+        return [get_op(name) for name in outputs]
+        # output_ops = [get_op(name) for name in outputs]
+        # return sess.run(output_ops, feed_dict=fd)
 
     def _weight_var(self, i):
         return tf.Variable(tf.zeros([1], name="weight"+str(i)), trainable=False)
