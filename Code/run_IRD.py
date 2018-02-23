@@ -171,8 +171,8 @@ if __name__=='__main__':
     parser.add_argument('--num_experiments',type=int,default=2)
     parser.add_argument('--num_iter',type=int,default=5)
     parser.add_argument('--gamma',type=float,default=0.99)
-    parser.add_argument('--size_r_space_true',type=int,default=50)
-    parser.add_argument('--size_proxy_space',type=int,default=30)
+    parser.add_argument('--size_r_space_true',type=int,default=200)
+    parser.add_argument('--size_proxy_space',type=int,default=50)
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=float,default=1.)
     parser.add_argument('--beta',type=float,default=2.)
@@ -183,7 +183,7 @@ if __name__=='__main__':
     parser.add_argument('--height',type=int,default=8)
     parser.add_argument('--width',type=int,default=8)
     parser.add_argument('--num_iters_optim',type=int,default=5)
-
+    parser.add_argument('--value_iters',type=int,default=50)
 
     '''List of dictionaries is the data for one experiment and one chooser.
     There's a new list of dictionaries (thus a new CSV) started as the chooser changes.
@@ -251,7 +251,7 @@ if __name__=='__main__':
     # Set up env and agent for gridworld
     grid = GridworldMdp.generate_random(height,width,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
     mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
-    agent = ValueIterationLikeAgent(gamma, num_iters=50)
+    agent = ValueIterationLikeAgent(gamma, num_iters=args.value_iters)
     super(ValueIterationLikeAgent, agent).set_mdp(mdp)
 
     env = GridworldEnvironment(mdp)

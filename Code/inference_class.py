@@ -115,13 +115,9 @@ class Inference:
         self.true_reward_avg_reward_matrix = np.matmul(self.feature_exp_matrix_true_rewards, self.true_reward_matrix.T)
         self.true_reward_avg_reward_vec = self.true_reward_avg_reward_matrix.diagonal()
 
-        # likelihoods, log_likelihoods, log_likelihoods_new, true_reward_avg_reward_vec = \
-        #     get_likelihoods_from_feature_expectations(self.feature_exp_matrix, self.true_reward_matrix,
-        #                                               self.beta, self.feature_exp_matrix_true_rewards)
-
-        log_Z_w, log_P_q_z, P_q_z, sum_to_1, Z_q, posterior, log_Z_q, post_ent, post_sum_to_1, log_post_ent, log_posterior \
-            = get_likelihoods_from_feature_expectations(self.feature_exp_matrix, self.true_reward_matrix,
-                                                      self.beta, self.prior, self.feature_exp_matrix_true_rewards)
+        # log_Z_w, log_P_q_z, P_q_z, sum_to_1, Z_q, posterior, log_Z_q, post_ent, post_sum_to_1, log_post_ent, log_posterior \
+        #     = get_likelihoods_from_feature_expectations(self.feature_exp_matrix, self.true_reward_matrix,
+        #                                               self.beta, self.prior, self.feature_exp_matrix_true_rewards)
 
 
     # @profile
@@ -271,8 +267,9 @@ class Inference:
         try:
             feature_expectations = self.feature_expectations_dict[tuple(proxy)]
         except:
-            self.agent.mdp.change_reward(proxy)
-            self.agent.set_mdp(self.agent.mdp)  # Does value iteration
+            # self.agent.mdp.change_reward(proxy)
+            self.agent.mdp.set_feature_weights(proxy)
+            iters = self.agent.set_mdp(self.agent.mdp)  # Does value iteration
             trajectories = [run_agent(self.agent, self.env) for _ in range(self.num_traject)]
             # trajectory = [trajectories[0][t][0] for t in range(20)]
             # print trajectory
@@ -286,6 +283,7 @@ class Inference:
             num_plannings_done = len(self.feature_expectations_dict.items())
             if num_plannings_done % 25 == 0:
                 print('Done planning for {num} proxies'.format(num=num_plannings_done))
+                print iters
         return feature_expectations
 
     # # @profile

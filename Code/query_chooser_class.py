@@ -57,13 +57,13 @@ class Query_Chooser_Subclass(Query_Chooser):
         return list(set_of_queries)
 
     # @profile
-    def find_query(self, query_size, chooser):
+    def find_query(self, query_size, chooser, true_reward):
         """Calls query chooser specified by chooser (string)."""
         if chooser == 'maxmin':
             return self.find_query_feature_diff(query_size)
         elif chooser == 'exhaustive':
             return self.find_regret_minimizing_query(query_size)
-        elif chooser == 'greedy':
+        elif chooser == 'greedy_regret':
             return self.find_best_query_greedy(query_size)
         elif chooser == 'random':
             return self.find_random_query(query_size)
@@ -73,6 +73,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             return self.find_best_query_greedy(query_size, total_reward=True)
         elif chooser == 'greedy_entropy':
             return self.find_best_query_greedy(query_size, entropy=True)
+        elif chooser == 'feature_entropy':
+            return self.find_feature_query_greedy(self, query_size, 'entropy', true_reward)
         else:
             raise NotImplementedError('Calling unimplemented query chooser')
 
@@ -165,16 +167,13 @@ class Query_Chooser_Subclass(Query_Chooser):
         while len(best_feature_list) < query_size:
             best_objective = float("inf")
             best_objective_plus_cost = best_objective
-            # TODO: Replace this loop with TF code and after convergence do forward pass for each feature. Could even be sped up with a (soft) max operation over features.
-            # TODO: Could also add pairs of features - squared complexity but only need to make tf graph half as often
-            # TODO: Could also make whole process differentiable with a MV-Bernoulli  distribution over included features
             for feature in range(feature_dim):
                 feature_list = best_feature_list+[feature]
 
                 (objective, optimal_weights) = self.calc_objective(feature_list, desired_outputs, init=best_optimal_weights)
                 query_cost = self.cost_of_asking * len(feature_list)
                 objective_plus_cost = objective + query_cost
-                if objective_plus_cost <= best_objective_plus_cost + 1e-15:
+                if objective_plus_cost <= best_objective_plus_cost + 1e-14:
                     best_objective = objective
                     best_objective_plus_cost = objective_plus_cost
                     best_optimal_weights_new = optimal_weights
@@ -189,19 +188,17 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         # Add: Get all measures for data recording?
-        desired_outputs = [measure, 'optimal_weights','feature_exps','answer','true_posterior']
-        outputs, answer = self.calc_objective(feature_list, desired_outputs, true_reward=true_reward, high_iters=True)
-
-        return best_feature_list, outputs[measure], outputs['true_posterior']
+        desired_outputs = [measure,'true_posterior']
+        (objective, true_posterior), answer = self.calc_objective(feature_list, desired_outputs,
+                                                                  true_reward=true_reward, high_iters=True)
+        return best_feature_list, objective, true_posterior
 
     def calc_objective(self, feature_list, desired_outputs, true_reward=None, init=None, high_iters=False):
         """
         Returns the desired model outputs after minimizing the desired measure over settings of fixed features.
 
-        :param previous_query: List of integers. Specifies free features in previous query.
-        :param feature: int. New feature considered for adding to the previous query.
-        :param gradient_optim: Bool Whether to optimize values of fixed features.
-        :return: objective (float)
+        :param feature_list: List of integers. Specifies free features in previous query.
+        :return: model_outputs: dictionary of model outputs, indexed by desired_outputs
         """
         mdp = self.inference.agent.mdp
 
@@ -328,19 +325,20 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 class Experiment(object):
     """"""
-    def __init__(self, inference, reward_space_proxy, query_size, num_queries_max, choosers, SEED, exp_params, exp_name):
+    def __init__(self, inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params, exp_name):
         self.inference = inference  # TODO: Possibly create inference here and maybe input params as a dict
         self.reward_space_proxy = reward_space_proxy
         self.query_size = query_size
         self.num_queries_max = num_queries_max
         self.choosers = choosers
         self.seed = SEED
-        self.query_chooser = Query_Chooser_Subclass(inference, reward_space_proxy, num_queries_max)
+        self.query_chooser = Query_Chooser_Subclass(inference, reward_space_proxy, num_queries_max, args)
         self.results = {}
         # Add variance
         self.measures = ['post_exp_regret','post_entropy','test_regret','norm post_avg-true','post_regret','perf_measure']
         self.exp_params = exp_params
         self.exp_name = exp_name
+        self.time = str(datetime.datetime.now())[:-6]
 
     # @profile
     def get_experiment_stats(self, num_iter, num_experiments):
@@ -479,8 +477,7 @@ class Experiment(object):
     def write_experiment_results_to_csv(self, exp_num, num_iter):
         """Writes a CSV for every chooser for every experiment. The CSV's columns are 'iteration' and all measures in
         self.measures."""
-        time = str(datetime.datetime.now())[:-13]
-        folder_name = time + ' ' + self.exp_name + '--'  + ' ' + self.exp_params
+        folder_name = self.time + ' ' + self.exp_name + '--'  + ' ' + self.exp_params
         if not os.path.exists('data/'+folder_name):
             os.mkdir('data/'+folder_name)
         else:
@@ -504,7 +501,7 @@ class Experiment(object):
         """Writes a CSV for every chooser averaged (and median-ed) across experiments. Saves in the same folder as
         CSVs per experiment. Columns are 'iteration' and all measures in self.measures."""
         time = str(datetime.datetime.now())[:-13]
-        folder_name = time + ' ' + self.exp_name + '--'  + ' ' + self.exp_params
+        folder_name = self.time + ' ' + self.exp_name + '--'  + ' ' + self.exp_params
         if not os.path.exists('data/'+folder_name):
             os.mkdir('data/'+folder_name)
         else:

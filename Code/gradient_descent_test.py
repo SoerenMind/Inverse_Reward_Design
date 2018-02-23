@@ -68,7 +68,7 @@ def get_likelihoods_from_feature_expectations(feature_exp_matrix,
     # Run graph in session
     with tf.Session() as sess:
         # var_list = [likelihoods, log_likelihoods, log_likelihoods_new, true_reward_avg_reward_vec]
-        var_list = [log_Z_w, log_P_q_z, P_q_z, sum_to_1, Z_q, posterior, log_Z_q, post_ent, post_sum_to_1,
+        var_list = [log_Z_w, log_P_q_z, log_Z_q, post_ent, post_sum_to_1,
                     log_posterior, post_ent, exp_post_ent]
         return sess.run(var_list, feed_dict={feature_exp: feature_exp_matrix,
                                     true_rewards: true_reward_matrix, true_feature_exp: feature_exp_matrix_true})
@@ -81,7 +81,7 @@ if __name__=='__main__':
     fe_true = np.eye(n_true,20)
     r_space_true = np.eye(n_true, 20)
     prior = np.ones(n_true)
-    log_Z_w, log_P_q_z, P_q_z, sum_to_1, Z_q, posterior, log_Z_q, post_ent, post_sum_to_1, log_posterior, \
+    log_Z_w, log_P_q_z, log_Z_q, post_ent, post_sum_to_1, log_posterior, \
     post_ent_log, exp_post_ent     \
             = get_likelihoods_from_feature_expectations(fe, r_space_true, 2, prior, feature_exp_matrix_true=fe_true)
 
