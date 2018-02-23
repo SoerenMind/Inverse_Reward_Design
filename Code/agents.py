@@ -116,7 +116,7 @@ class ValueIterationLikeAgent(Agent):
 
     def set_mdp(self, mdp):
         super(ValueIterationLikeAgent, self).set_mdp(mdp)
-        self.compute_values()
+        return self.compute_values()
 
     def compute_values(self):
         """Computes the values for self.mdp using value iteration.
@@ -138,11 +138,13 @@ class ValueIterationLikeAgent(Agent):
 
             if self.converged(values, new_values):
                 self.values = new_values
-                return
+                return iter
 
             values = new_values
 
         self.values = values
+        # print 'max V-iterations: {i}'.format(i=iter)
+        return iter
 
     def converged(self, values, new_values):
         """Returns True if value iteration has converged.
@@ -155,8 +157,14 @@ class ValueIterationLikeAgent(Agent):
         max_return = self.mdp.rewards.max() * np.true_divide(1,1 - self.gamma + 0.001)
         min_return = self.mdp.rewards.min() * np.true_divide(1,1 - self.gamma + 0.001)
         max_regret = max_return - min_return
+        max_reward = self.mdp.rewards.max()
+        # TODO: Doesn't converge because NPV of trajectory keeps growing with length for high gamma. Updates are ~~ max_reward even after many iterations. Initially max update = max_reward.
         for mu in new_values.keys():
-            if abs(values[mu] - new_values[mu]) > 1e-2 * max_regret:
+            # if abs(values[mu] - new_values[mu]) > 1e-2:
+            # if abs(values[mu] - new_values[mu]) > self.gamma**30 * max_reward:
+            update = abs(values[mu] - new_values[mu])
+            if abs(values[mu] - new_values[mu]) > max_regret * 1e-2:
+            # if abs(values[mu] - new_values[mu]) > max_reward * np.true_divide(1 - self.gamma + 0.001, self.gamma):
                 return False
         return True
 
