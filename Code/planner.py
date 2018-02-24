@@ -13,6 +13,7 @@ class Model(object):
         self.num_iters = num_iters
         self.num_actions = 4
         self.query = query
+        self.num_to_optimize = feature_dim - len(query)
         # List of possible settings for the query features
         # Eg. If we are querying features 1 and 4, and discretizing each into 3
         # buckets (-1, 0 and 1), the proxy reward space would be
@@ -36,16 +37,18 @@ class Model(object):
             tf.float32, name="image", shape=[height, width])
         self.features = tf.placeholder(
             tf.float32, name="features", shape=[height, width, dim])
-        
-        self.weights_list = [
-            self._weight_var(i) for i in range(dim)]
-        self.weight_inputs = [
-            self._weight_input(i) for i in range(dim)]
-        self.weight_assignments = [
-            w.assign(w_in) for w, w_in in zip(self.weights_list, self.weight_inputs)]
+
+        self.human_weights= tf.placeholder(
+            tf.float32, name="human_weights", shape=[len(self.query)])
+        self.weights_to_optimize = tf.Variable(
+            tf.zeros([self.num_to_optimize], name="weights_to_optimize"))
+        self.weight_inputs = tf.placeholder(
+            tf.float32, name="weight_inputs", shape=[self.num_to_optimize])
+        self.assign_op = self.weights_to_optimize.assign(self.weight_inputs)
 
         self.wall_weight = tf.constant([-1000000.0], dtype=tf.float32)
-        self.weights = tf.concat(self.weights_list + [self.wall_weight], axis=0)
+        # TODO(rohinmshah): Order of weights is now wrong.
+        self.weights = tf.concat([self.human_weights, self.weights_to_optimize, self.wall_weight], axis=0)
         dim += 1
 
         image_batch = tf.expand_dims(tf.expand_dims(self.image, 0), 3)
@@ -113,56 +116,37 @@ class Model(object):
         :return: List of the same length as parameter `outputs`.
         """
         image, features, _ = mdp.convert_to_numpy_input()
-        fd = {}
-        # for i in range(len(mdp.goals)):
-        #     if i not in self.query:
-        #         name = "weight_in" + str(i) + ":0"
-        #         try: fd[name] = np.array([weight_inits[i]])
-        #         except: fd[name] = np.array([0.])
-        #     sess.run(self.weight_assignments, feed_dict=fd)
 
         # if weight_inits is not None:
-        #     for i in range(len(mdp.goals)):
+        #     fd = {}
+        #     assign_ops = []
+        #     for i in range(self.feature_dim):
         #         if i not in self.query:
-        #             name = "weight_in" + str(i) + ":0"
-        #             fd[name] = np.array([weight_inits[i]])
-        #     sess.run(self.weight_assignments, feed_dict=fd)
-        #     # sess.run(self.weight_assignments, feed_dict=fd)
+        #             assign_ops.append(self.weight_assignments[i])
+        #             fd[self.weight_inputs[i]] = np.array([weight_inits[i]])
+        #     sess.run(assign_ops, feed_dict=fd)
 
-        if weight_inits is not None:
-            fd = {}
-            assign_ops = []
-            # for i in range(len(mdp.goals)):
-            for i in range(self.feature_dim):
-
-                if i not in self.query:
-                    # name = "weight_in" + str(i) + ":0"
-                    # fd[name] = np.array([weight_inits[i]])
-                    assign_ops.append(self.weight_assignments[i])
-                    fd[self.weight_inputs[i]] = np.array([weight_inits[i]])
-            sess.run(assign_ops, feed_dict=fd)
-
-        # fd = {
-        #     "image:0": image,
-        #     "features:0": features
-        # }
         fd = {
             self.image: image,
             self.features: features
         }
         def get_op(name):
+            K = len(self.proxy_reward_space)
             if name == 'entropy':
                 return 0.0
             elif name == 'answer':
                 idx = np.random.choice(len(self.proxy_reward_space))
                 return self.proxy_reward_space[idx]
             elif name == 'true_posterior':
-                K = len(self.proxy_reward_space)
                 N = len(self.true_reward_matrix)
                 result = np.random.rand(N, K)
                 return (result / result.sum(0)).T
             elif name == 'optimal_weights':
-                return np.zeros(self.feature_dim - len(self.query))
+                return np.zeros(self.num_to_optimize)
+            elif name == 'q_values':
+                return np.random.rand(K, self.height, self.width, self.num_actions)
+            elif name == 'feature_exps':
+                return np.random.rand(K, self.height, self.width, self.feature_dim)
             elif name not in self.name_to_op:
                 raise ValueError("Unknown op name: " + str(name))
             return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
@@ -170,12 +154,6 @@ class Model(object):
         return [get_op(name) for name in outputs]
         # output_ops = [get_op(name) for name in outputs]
         # return sess.run(output_ops, feed_dict=fd)
-
-    def _weight_var(self, i):
-        return tf.Variable(tf.zeros([1], name="weight"+str(i)), trainable=False)
-
-    def _weight_input(self, i):
-        return tf.placeholder(tf.float32, name="weight_in"+str(i), shape=[1])
 
     def _conv2d(self, x, k, name=None, strides=(1,1,1,1),pad='SAME'):
         return tf.nn.conv2d(x, k, name=name, strides=strides, padding=pad)

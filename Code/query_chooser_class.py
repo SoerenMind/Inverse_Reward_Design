@@ -196,8 +196,8 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         # Add: Get all measures for data recording?
-        desired_outputs = [measure,'true_posterior']
-        (objective, true_posterior), answer = self.calc_objective(feature_list, desired_outputs,
+        desired_outputs = [measure,'true_posterior', 'answer']
+        objective, true_posterior, answer = self.calc_objective(feature_list, desired_outputs,
                                                                   true_reward=true_reward, high_iters=True)
         return best_feature_list, objective, true_posterior
 
