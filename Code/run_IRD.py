@@ -171,7 +171,8 @@ if __name__=='__main__':
     parser.add_argument('--query_size_feature',type=int,default=3)
     parser.add_argument('--num_experiments',type=int,default=2)
     parser.add_argument('--num_iter',type=int,default=5)
-    parser.add_argument('--gamma',type=float,default=0.99)
+    # TODO: Values are computed as if trajectories are infinite. Problem?
+    parser.add_argument('--gamma',type=float,default=0.95)
     parser.add_argument('--size_r_space_true',type=int,default=200)
     parser.add_argument('--size_proxy_space',type=int,default=50)
     parser.add_argument('--num_trajectories',type=int,default=1)
@@ -184,7 +185,7 @@ if __name__=='__main__':
     parser.add_argument('--height',type=int,default=8)
     parser.add_argument('--width',type=int,default=8)
     parser.add_argument('--num_iters_optim',type=int,default=5)
-    parser.add_argument('--value_iters',type=int,default=50)
+    parser.add_argument('--value_iters',type=int,default=25)
 
 
     '''List of dictionaries is the data for one experiment and one chooser.

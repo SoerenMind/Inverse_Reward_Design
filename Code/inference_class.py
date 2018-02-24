@@ -274,8 +274,8 @@ class Inference:
         try:
             feature_expectations = self.feature_expectations_dict[tuple(proxy)]
         except:
-            # self.agent.mdp.change_reward(proxy)
-            self.agent.mdp.set_feature_weights(proxy)
+            self.agent.mdp.change_reward(proxy)
+            # self.agent.mdp.set_feature_weights(proxy)
             iters = self.agent.set_mdp(self.agent.mdp)  # Does value iteration
             trajectories = [run_agent(self.agent, self.env) for _ in range(self.num_traject)]
             # trajectory = [trajectories[0][t][0] for t in range(20)]

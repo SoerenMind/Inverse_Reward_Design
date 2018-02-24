@@ -136,8 +136,8 @@ class Query_Chooser_Subclass(Query_Chooser):
                 assert found_new
 
         posteriors, post_cond_entropy, evidence = self.inference.calc_posterior(query, get_entropy=True)
-        proxy_choice = best_query[np.random.multinomial(1, evidence)]
-        proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
+        proxy_choice = best_query[int(np.argwhere(np.random.multinomial(1, evidence) == 1))]
+        # proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
 
         self.inference.update_prior(query, proxy_choice)  # TODO: Still uses calc_and_save_posterior
 
@@ -395,7 +395,7 @@ class Experiment(object):
         # self.inference.calc_and_save_feature_expectations(self.inference.reward_space_true)
         print 'NOT CACHING FEATURES FOR TRUE REWARDS!'
         print('caching likelihoods...')
-        # self.inference.cache_lhoods()
+        self.inference.cache_lhoods()
         print('done caching')
 
         # Run experiment for each query chooser

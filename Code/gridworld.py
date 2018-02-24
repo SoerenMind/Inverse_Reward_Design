@@ -678,11 +678,11 @@ class GridworldMdpWithFeatures(GridworldMdp):
     def __init__(self, grid, living_reward=-0.01, noise=0):
         super(GridworldMdpWithFeatures, self).__init__(grid, living_reward, noise)
         self.grid = grid
-        self.feature_weights = None
+        # self.feature_weights = None
         self.populate_features()
 
-    def set_feature_weights(self, weights):
-        self.feature_weights = weights
+    # def set_feature_weights(self, weights):
+    #     self.feature_weights = weights
 
     def get_features(self,state):
         """Returns feature vector for state"""
@@ -694,13 +694,13 @@ class GridworldMdpWithFeatures(GridworldMdp):
 
     def get_reward(self, state, action):
         features = self.get_features(state)
-        return np.dot(features, self.feature_weights)
+        return np.dot(features, self.rewards)
 
 class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
     """Features are based on distance to places with reward."""
     def __init__(self, grid, dist_scale=-1, living_reward=-0.01, noise=0, rewards=None):
         self.dist_scale = dist_scale
-        self.feature_weights = None
+        # self.feature_weights = None
         super(GridworldMdpWithDistanceFeatures, self).__init__(
             grid, living_reward=-0.01, noise=0)
 
@@ -719,7 +719,7 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
         certain height and width. See assert_valid_grid for details on the grid
         format.
         """
-        self.feature_weights = []
+        # self.feature_weights = []
         self.goals = []
         self.start_state = None
 
@@ -727,7 +727,7 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
         for y in range(len(self.grid)):
             for x in range(len(self.grid[0])):
                 if self.grid[y][x] not in ['X', ' ', 'A']:
-                    self.feature_weights.append(float(self.grid[y][x]))
+                    # self.feature_weights.append(float(self.grid[y][x]))
                     self.goals.append((x,y))
                 elif self.grid[y][x] == 'A':
                     self.start_state = (x, y)
