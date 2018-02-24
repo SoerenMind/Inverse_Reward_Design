@@ -12,7 +12,7 @@ from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardc
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
 from agents import ImmediateRewardAgent, DirectionalAgent, ValueIterationLikeAgent
 from query_chooser_class import Query_Chooser_Subclass, Experiment
-from interface_discrete import Interface
+# from interface_discrete import Interface
 from random import choice, seed
 from scipy.special import comb
 import copy
