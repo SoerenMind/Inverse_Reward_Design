@@ -13,7 +13,6 @@ class Model(object):
         self.num_iters = num_iters
         self.num_actions = 4
         self.query = query
-        self.num_to_optimize = feature_dim - len(query)
         # List of possible settings for the query features
         # Eg. If we are querying features 1 and 4, and discretizing each into 3
         # buckets (-1, 0 and 1), the proxy reward space would be
@@ -26,6 +25,7 @@ class Model(object):
         self.build_tf_graph(objective, planner)
 
     def build_tf_graph(self, objective, planner):
+        self.build_weights()
         if planner == 'gridworld':
             self.build_planner()
         elif planner == 'bandits':
@@ -36,109 +36,19 @@ class Model(object):
         # Initializing the variables
         self.initialize_op = tf.global_variables_initializer()
 
-
-    def build_planner(self):
-        self.name_to_op = {}
-        height, width, num_actions = self.height, self.width, self.num_actions
-        dim, gamma = self.feature_dim, self.gamma
-
-        self.image = tf.placeholder(
-            tf.float32, name="image", shape=[height, width])
-        self.features = tf.placeholder(
-            tf.float32, name="features", shape=[height, width, dim])
-
-        self.human_weights= tf.placeholder(
-            tf.float32, name="human_weights", shape=[len(self.query)])
-        self.weights_to_optimize = tf.Variable(
-            tf.zeros([self.num_to_optimize], name="weights_to_optimize"))
-        self.weight_inputs = tf.placeholder(
-            tf.float32, name="weight_inputs", shape=[self.num_to_optimize])
+    def build_weights(self):
+        query_size = len(self.query)
+        num_fixed = self.feature_dim - query_size
+        self.human_weights= tf.placeholder(tf.float32, shape=[query_size])
+        self.weights_to_optimize = tf.Variable(tf.zeros([num_fixed]))
+        self.weight_inputs = tf.placeholder(tf.float32, shape=[num_fixed])
         self.assign_op = self.weights_to_optimize.assign(self.weight_inputs)
 
-        self.wall_weight = tf.constant([-1000000.0], dtype=tf.float32)
         # TODO(rohinmshah): Order of weights is now wrong.
-        self.weights = tf.concat([self.human_weights, self.weights_to_optimize, self.wall_weight], axis=0)
-        dim += 1
-
-        image_batch = tf.expand_dims(tf.expand_dims(self.image, 0), 3)
-        feature_batch = tf.expand_dims(self.features, 0)
-        feature_batch = tf.concat([feature_batch, image_batch], axis=3)
-
-        # To deal with walls, give a -1000000 reward whenever the agent takes an
-        # action that would move it into a wall.
-        north = Direction.get_number_from_direction(Direction.NORTH)
-        south = Direction.get_number_from_direction(Direction.SOUTH)
-        east = Direction.get_number_from_direction(Direction.EAST)
-        west = Direction.get_number_from_direction(Direction.WEST)
-
-        bellman_kernel_value = np.zeros([3, 3, 2*dim, num_actions*dim])
-        for i in range(dim):
-            # For every action, we get the features for the current state
-            bellman_kernel_value[1,1,i,i::dim] = [1.0] * num_actions
-            # If you move north, add the discounted features from the state
-            # north of you. Similarly for the other actions.
-            bellman_kernel_value[0,1,dim+i,north*dim+i] = gamma
-            bellman_kernel_value[2,1,dim+i,south*dim+i] = gamma
-            bellman_kernel_value[1,2,dim+i,east*dim+i] = gamma
-            bellman_kernel_value[1,0,dim+i,west*dim+i] = gamma
-        bellman_kernel = tf.constant(bellman_kernel_value, dtype=tf.float32)
-
-        index_prefixes = tf.constant(
-            [[[[0, i, j] for j in range(width)] for i in range(height)]],
-            dtype=tf.int64)
-
-        feature_expectations = tf.zeros([1, height, width, dim])
-        for _ in range(self.num_iters):
-            fv = tf.concat([feature_batch, feature_expectations], axis=3)
-            # TODO: Fix Bellman kernel
-            q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
-            q_fes = tf.reshape(
-                q_flattened_fes, [1, height, width, num_actions, dim])
-            q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
-            policy = tf.expand_dims(tf.argmax(q_values, axis=3), -1)
-            indexes = tf.concat([index_prefixes, policy], axis=3)
-            feature_expectations = tf.gather_nd(q_fes, indexes)
-
-        self.feature_expectations = feature_expectations
-        self.name_to_op['feature_exps'] = feature_expectations
-
-        fv = tf.concat([feature_batch, feature_expectations], axis=3)
-        q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
-        q_fes = tf.reshape(
-            q_flattened_fes, [1, height, width, num_actions, dim])
-
-        self.q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
-        self.name_to_op['q_values'] = self.q_values
-
-    def build_bandits_planner(self):
-        self.name_to_op = {}
-
-        self.features = tf.placeholder(
-            tf.float32, name="features", shape=[None, self.feature_dim])
-        self.human_weights= tf.placeholder(
-            tf.float32, name="human_weights", shape=[None, len(self.query)])
-        self.weights_to_optimize = tf.Variable(
-            tf.zeros([self.num_to_optimize], name="weights_to_optimize"))
-        self.weight_inputs = tf.placeholder(
-            tf.float32, name="weight_inputs", shape=[self.num_to_optimize])
-        self.assign_op = self.weights_to_optimize.assign(self.weight_inputs)
         self.weights = tf.concat([self.human_weights, self.weights_to_optimize], axis=0)
 
-        intermediate_tensor = tf.multiply(self.features, self.weights)    # TODO: weights are in wrong order
-        self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keepdims=False, name="rewards_per_state")
-
-        # (This is for one particular setting of the weights)
-        self.state_probs = tf.nn.softmax(self.reward_per_state, axis=-1, name="state_probs")
-        self.feature_expectations = tf.reduce_sum(
-            tf.multiply(self.features, self.state_probs), axis=-2 ,name="feature_expectations")
-
-        self.name_to_op['features'] = self.features
-        self.name_to_op['weights_unsorted'] = self.weights
-        self.name_to_op['state_probs'] = self.state_probs
-        self.name_to_op['reward_per_state'] = self.reward_per_state
-        self.name_to_op['feature_exps'] = self.feature_expectations
-
-
+    def build_planner(self):
+        raise NotImplemented('Should be implemented in subclass')
 
     def build_map_to_posterior(self):
         """
@@ -197,9 +107,9 @@ class Model(object):
         if 'query_entropy' in objective:
             pass
 
-
     # @profile
-    def compute(self, outputs, sess, mdp, prior, weight_inits, feature_expectations_test_input = None, gradient_steps=0):
+    # TODO: Remove the feature_expectations_test_input argument
+    def compute(self, outputs, sess, mdp, weight_inits, feature_expectations_test_input = None, gradient_steps=0):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -207,14 +117,12 @@ class Model(object):
 
         :param outputs: List of strings, each specifying a value to compute.
         :param sess: tf.Session() object.
-        :param mdp: An instance of GridworldMdpWithDistanceFeatures.
+        :param mdp: The MDP whose true reward function we want to identify.
         :param query: List of features (integers) to ask the user to set.
         :param weight_inits: Initialization for the non-query features.
         :param gradient_steps: Number of gradient steps to take.
         :return: List of the same length as parameter `outputs`.
         """
-        image, features, _ = mdp.convert_to_numpy_input()
-
         # if weight_inits is not None:
         #     fd = {}
         #     assign_ops = []
@@ -224,43 +132,200 @@ class Model(object):
         #             fd[self.weight_inputs[i]] = np.array([weight_inits[i]])
         #     sess.run(assign_ops, feed_dict=fd)
 
-        fd = {
-            self.features: features,
-            self.prior: prior,
-            self.human_weights: self.proxy_reward_space
-        }
-        if image is not None:
-            fd[self.image] = image
-        if feature_expectations_test_input is not None:
-            fd[self.feature_exp_test_input] = feature_expectations_test_input
-
+        fd = self.create_mdp_feed_dict(mdp)
+        if feature_expectationis_test_input is not None:
+            fd[self.feature_expectations] = feature_expectations_test_input
 
         def get_op(name):
             K = len(self.proxy_reward_space)
-            # if name == 'entropy':
-            #     return 0.0
-            if name == 'answer':
+            if name == 'entropy':
+                return 0.0
+            elif name == 'answer':
                 idx = np.random.choice(len(self.proxy_reward_space))
                 return self.proxy_reward_space[idx]
             elif name == 'true_posterior':
                 N = len(self.true_reward_matrix)
-                result = np.random.rand(N)
+                result = np.random.rand(N, K)
                 return (result / result.sum(0)).T
             elif name == 'optimal_weights':
-                return np.zeros(self.num_to_optimize)
+                return np.zeros(self.feature_dim - len(self.query))
             elif name == 'q_values':
                 return np.random.rand(K, self.height, self.width, self.num_actions)
             elif name == 'feature_exps':
                 return np.random.rand(K, self.height, self.width, self.feature_dim)
             elif name not in self.name_to_op:
                 raise ValueError("Unknown op name: " + str(name))
-            try: fd[self.feature_exp_test_input]
-            except: print 'self.feature_exp_test_input not in fd!'
             return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
 
         return [get_op(name) for name in outputs]
         # output_ops = [get_op(name) for name in outputs]
         # return sess.run(output_ops, feed_dict=fd)
+
+    def compute_from_reward_weights(self, outputs, sess, mdp, weights):
+        fd = self.create_mdp_feed_dict(mdp)
+        fd[self.weights] = weights
+        # TODO(rohinmshah): Handle other outputs as well
+        return sess.run([self.q_values], feed_dict=fd)
+
+    def create_mdp_feed_dict(self, mdp):
+        raise NotImplemented('Should be implemented in subclass')
+
+
+class BanditsModel(Model):
+    def build_planner(self):
+        self.name_to_op = {}
+
+        self.features = tf.placeholder(
+            tf.float32, name="features", shape=[None, self.feature_dim])
+
+        intermediate_tensor = tf.multiply(self.features, self.weights)
+        self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keepdims=False, name="rewards_per_state")
+
+        # (This is for one particular setting of the weights)
+        self.state_probs = tf.nn.softmax(self.reward_per_state, axis=-1, name="state_probs")
+        self.feature_expectations = tf.reduce_sum(
+            tf.multiply(self.features, self.state_probs), axis=-2 ,name="feature_expectations")
+
+        self.name_to_op['features'] = self.features
+        self.name_to_op['weights_unsorted'] = self.weights
+        self.name_to_op['state_probs'] = self.state_probs
+        self.name_to_op['reward_per_state'] = self.reward_per_state
+        self.name_to_op['feature_exps'] = self.feature_expectations
+
+
+class GridworldModel(Model):
+    def build_planner(self):
+        self.name_to_op = {}
+        height, width, dim = self.height, self.width, self.feature_dim
+        num_actions, gamma = self.num_actions, self.gamma
+
+        self.image = tf.placeholder(
+            tf.float32, name="image", shape=[height, width])
+        self.features = tf.placeholder(
+            tf.float32, name="features", shape=[height, width, dim])
+
+        image_batch = tf.expand_dims(tf.expand_dims(self.image, 0), 3)
+        feature_batch = tf.expand_dims(self.features, 0)
+        feature_batch = tf.concat([feature_batch, image_batch], axis=3)
+        dim += 1
+
+        # To deal with walls, give a -1000000 reward whenever the agent takes an
+        # action that would move it into a wall.
+        north = Direction.get_number_from_direction(Direction.NORTH)
+        south = Direction.get_number_from_direction(Direction.SOUTH)
+        east = Direction.get_number_from_direction(Direction.EAST)
+        west = Direction.get_number_from_direction(Direction.WEST)
+
+        bellman_kernel_value = np.zeros([3, 3, 2*dim, num_actions*dim])
+        for i in range(dim):
+            # For every action, we get the features for the current state
+            bellman_kernel_value[1,1,i,i::dim] = [1.0] * num_actions
+            # If you move north, add the discounted features from the state
+            # north of you. Similarly for the other actions.
+            bellman_kernel_value[0,1,dim+i,north*dim+i] = gamma
+            bellman_kernel_value[2,1,dim+i,south*dim+i] = gamma
+            bellman_kernel_value[1,2,dim+i,east*dim+i] = gamma
+            bellman_kernel_value[1,0,dim+i,west*dim+i] = gamma
+        bellman_kernel = tf.constant(bellman_kernel_value, dtype=tf.float32)
+
+        index_prefixes = tf.constant(
+            [[[[0, i, j] for j in range(width)] for i in range(height)]],
+            dtype=tf.int64)
+
+        feature_expectations = tf.zeros([1, height, width, dim])
+        for _ in range(self.num_iters):
+            fv = tf.concat([feature_batch, feature_expectations], axis=3)
+            # TODO: Fix Bellman kernel
+            q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
+            q_fes = tf.reshape(
+                q_flattened_fes, [1, height, width, num_actions, dim])
+            q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
+            policy = tf.expand_dims(tf.argmax(q_values, axis=3), -1)
+            indexes = tf.concat([index_prefixes, policy], axis=3)
+            feature_expectations = tf.gather_nd(q_fes, indexes)
+
+        self.feature_expectations = feature_expectations
+        self.name_to_op['feature_exps'] = feature_expectations
+
+        fv = tf.concat([feature_batch, feature_expectations], axis=3)
+        q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
+        q_fes = tf.reshape(
+            q_flattened_fes, [1, height, width, num_actions, dim])
+
+        self.q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
+        self.name_to_op['q_values'] = self.q_values
+
+    def create_mdp_feed_dict(self, mdp):
+        image, features, _ = mdp.convert_to_numpy_input()
+        return {
+            self.image: image,
+            self.features: features
+        }
+
+
+class GridworldModelUsingConvolutions(GridworldModel):
+    def build_planner(self):
+        self.name_to_op = {}
+        height, width, dim = self.height, self.width, self.feature_dim
+        num_actions, gamma = self.num_actions, self.gamma
+
+        self.image = tf.placeholder(
+            tf.float32, name="image", shape=[height, width])
+        self.features = tf.placeholder(
+            tf.float32, name="features", shape=[height, width, dim])
+
+        image_batch = tf.expand_dims(tf.expand_dims(self.image, 0), 3)
+        feature_batch = tf.expand_dims(self.features, 0)
+        feature_batch = tf.concat([feature_batch, image_batch], axis=3)
+        wall_weight = tf.constant([-1000000.0], dtype=tf.float32)
+        new_weights = tf.concat([self.weights, wall_weight], axis=0)
+        dim += 1
+
+        # To deal with walls, give a -1000000 reward whenever the agent takes an
+        # action that would move it into a wall.
+        north = Direction.get_number_from_direction(Direction.NORTH)
+        south = Direction.get_number_from_direction(Direction.SOUTH)
+        east = Direction.get_number_from_direction(Direction.EAST)
+        west = Direction.get_number_from_direction(Direction.WEST)
+
+        bellman_kernel_value = np.zeros([3, 3, 2*dim, num_actions*dim])
+        for i in range(dim):
+            # For every action, we get the features for the current state
+            bellman_kernel_value[1,1,i,i::dim] = [1.0] * num_actions
+            # If you move north, add the discounted features from the state
+            # north of you. Similarly for the other actions.
+            bellman_kernel_value[0,1,dim+i,north*dim+i] = gamma
+            bellman_kernel_value[2,1,dim+i,south*dim+i] = gamma
+            bellman_kernel_value[1,2,dim+i,east*dim+i] = gamma
+            bellman_kernel_value[1,0,dim+i,west*dim+i] = gamma
+        bellman_kernel = tf.constant(bellman_kernel_value, dtype=tf.float32)
+
+        index_prefixes = tf.constant(
+            [[[[0, i, j] for j in range(width)] for i in range(height)]],
+            dtype=tf.int64)
+
+        feature_expectations = tf.zeros([1, height, width, dim])
+        for _ in range(self.num_iters):
+            fv = tf.concat([feature_batch, feature_expectations], axis=3)
+            # TODO: Fix Bellman kernel
+            q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
+            q_fes = tf.reshape(
+                q_flattened_fes, [1, height, width, num_actions, dim])
+            q_values = tf.tensordot(q_fes, new_weights, [[4], [0]])
+            policy = tf.expand_dims(tf.argmax(q_values, axis=3), -1)
+            indexes = tf.concat([index_prefixes, policy], axis=3)
+            feature_expectations = tf.gather_nd(q_fes, indexes)
+
+        self.feature_expectations = feature_expectations
+        self.name_to_op['feature_exps'] = feature_expectations
+
+        fv = tf.concat([feature_batch, feature_expectations], axis=3)
+        q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
+        q_fes = tf.reshape(
+            q_flattened_fes, [1, height, width, num_actions, dim])
+
+        self.q_values = tf.tensordot(q_fes, new_weights, [[4], [0]])
+        self.name_to_op['q_values'] = self.q_values
 
     def _conv2d(self, x, k, name=None, strides=(1,1,1,1),pad='SAME'):
         return tf.nn.conv2d(x, k, name=name, strides=strides, padding=pad)
