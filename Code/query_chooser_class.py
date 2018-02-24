@@ -70,11 +70,11 @@ class Query_Chooser_Subclass(Query_Chooser):
         elif chooser == 'no_query':
             return [], self.get_exp_regret_from_query([]), None
         elif chooser == 'greedy_exp_reward':
-            return self.find_best_query_greedy(query_size, total_reward=True)
+            return self.find_best_query_greedy(query_size, total_reward=True, true_reward=true_reward)
         elif chooser == 'greedy_entropy':
             return self.find_best_query_greedy(query_size, entropy=True)
         elif chooser == 'feature_entropy':
-            return self.find_feature_query_greedy(self, query_size, 'entropy', true_reward)
+            return self.find_feature_query_greedy(query_size, 'entropy', true_reward)
         else:
             raise NotImplementedError('Calling unimplemented query chooser')
 
@@ -103,7 +103,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         return best_query, best_exp_exp_post_regret, best_regret_plus_cost
 
     # @profile
-    def find_best_query_greedy(self, query_size, total_reward=False, entropy=False):
+    def find_best_query_greedy(self, query_size, total_reward=False, entropy=False, true_reward=None):
         """Finds query of size query_size that minimizes expected regret by starting with a random proxy and greedily
         adding more proxies to the query.
         Not implemented: Query size could be chosen adaptively based on cost vs gain of bigger queries.
@@ -134,6 +134,13 @@ class Query_Chooser_Subclass(Query_Chooser):
             try: assert found_new # If no better query was found the while loop will go forever. Use <= instead.
             except:
                 assert found_new
+
+        posteriors, post_cond_entropy, evidence = self.inference.calc_posterior(query, get_entropy=True)
+        proxy_choice = best_query[np.random.multinomial(1, evidence)]
+        proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
+
+        self.inference.update_prior(query, proxy_choice)  # TODO: Still uses calc_and_save_posterior
+
         return best_query, best_objective, best_objective_plus_cost
 
     # def find_query_feature_diff(self, query_size=4):
@@ -163,6 +170,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_feature_list = []
         feature_dim = self.args.feature_dim
         desired_outputs = [measure, 'optimal_weights']
+        # desired_outputs = [measure]
         best_optimal_weights = None
         while len(best_feature_list) < query_size:
             best_objective = float("inf")
@@ -207,11 +215,13 @@ class Query_Chooser_Subclass(Query_Chooser):
         else:
             num_iters = self.args.num_iters_optim
 
-        model = Model(self.args.feature_dim, self.mdp.height, self.mdp.width, self.args.gamma, num_iters,
-                      feature_list, self.inference.true_reward_matrix, true_reward)
+        proxy_reward_space = [[-1],[0],[1]]
+
+        model = Model(self.args.feature_dim, mdp.height, mdp.width, self.args.gamma, num_iters,
+                      feature_list, proxy_reward_space ,self.inference.true_reward_matrix, true_reward)
 
         with tf.Session() as sess:
-            model_outputs = model.compute(desired_outputs, sess, mdp, init, optimize=True)
+            model_outputs = model.compute(desired_outputs, sess, mdp, init)
             if 'answer' in desired_outputs:
                 answer = model.sample_human_answer()
                 return model_outputs, answer
@@ -380,12 +390,12 @@ class Experiment(object):
         # function = self.inference.calc_and_save_feature_expectations
         # input = self.reward_space_proxy
         print('caching feature exp for proxies...')
-        self.inference.calc_and_save_feature_expectations(self.reward_space_proxy)
+        # self.inference.calc_and_save_feature_expectations(self.reward_space_proxy)
         print('caching feature exp for true rewards...')
         # self.inference.calc_and_save_feature_expectations(self.inference.reward_space_true)
         print 'NOT CACHING FEATURES FOR TRUE REWARDS!'
         print('caching likelihoods...')
-        self.inference.cache_lhoods()
+        # self.inference.cache_lhoods()
         print('done caching')
 
         # Run experiment for each query chooser
@@ -405,7 +415,7 @@ class Experiment(object):
                     query, objective, true_posterior = self.query_chooser.find_query(self.query_size_feature, chooser, true_reward)
                     self.inference.update_prior(true_posterior)
                 else:
-                    query, perf_measure, posterior \
+                    query, perf_measure, _ \
                         = self.query_chooser.find_query(self.query_size_discrete, chooser, true_reward)
 
                     _, post_cond_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)

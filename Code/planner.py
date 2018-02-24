@@ -114,19 +114,45 @@ class Model(object):
         """
         image, features, _ = mdp.convert_to_numpy_input()
         fd = {}
-        for i in range(len(mdp.goals)):
-            if i not in query:
-                name = "weight_in" + str(i) + ":0"
-                fd[name] = np.array([weight_inits[i]])
-        sess.run(self.weight_assignments, feed_dict=fd)
+        # for i in range(len(mdp.goals)):
+        #     if i not in self.query:
+        #         name = "weight_in" + str(i) + ":0"
+        #         try: fd[name] = np.array([weight_inits[i]])
+        #         except: fd[name] = np.array([0.])
+        #     sess.run(self.weight_assignments, feed_dict=fd)
 
+        # if weight_inits is not None:
+        #     for i in range(len(mdp.goals)):
+        #         if i not in self.query:
+        #             name = "weight_in" + str(i) + ":0"
+        #             fd[name] = np.array([weight_inits[i]])
+        #     sess.run(self.weight_assignments, feed_dict=fd)
+        #     # sess.run(self.weight_assignments, feed_dict=fd)
+
+        if weight_inits is not None:
+            fd = {}
+            assign_ops = []
+            # for i in range(len(mdp.goals)):
+            for i in range(self.feature_dim):
+
+                if i not in self.query:
+                    # name = "weight_in" + str(i) + ":0"
+                    # fd[name] = np.array([weight_inits[i]])
+                    assign_ops.append(self.weight_assignments[i])
+                    fd[self.weight_inputs[i]] = np.array([weight_inits[i]])
+            sess.run(assign_ops, feed_dict=fd)
+
+        # fd = {
+        #     "image:0": image,
+        #     "features:0": features
+        # }
         fd = {
-            "image:0": image,
-            "features:0": features
+            self.image: image,
+            self.features: features
         }
         def get_op(name):
             if name == 'entropy':
-                return -10.0
+                return 0.0
             elif name == 'answer':
                 idx = np.random.choice(len(self.proxy_reward_space))
                 return self.proxy_reward_space[idx]
@@ -135,6 +161,8 @@ class Model(object):
                 N = len(self.true_reward_matrix)
                 result = np.random.rand(N, K)
                 return (result / result.sum(0)).T
+            elif name == 'optimal_weights':
+                return np.zeros(self.feature_dim - len(self.query))
             elif name not in self.name_to_op:
                 raise ValueError("Unknown op name: " + str(name))
             return sess.run([self.name_to_op[name]], feed_dict=fd)[0]

@@ -208,7 +208,7 @@ if __name__=='__main__':
     exp_description = pprint("Comparing to entropy with many states and few true rewards. {nexp} experiments.")
 
     # Set parameters
-    dummy_rewards = np.zeros(6)
+    dummy_rewards = np.zeros(7)
     # TODO: Randomize goal positions per experiment
     goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
     # feature_dim = args.feature_dim
