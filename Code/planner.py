@@ -24,7 +24,7 @@ class Model(object):
         self.build_tf_graph()
 
     def build_tf_graph(self):
-        self.build_planner()
+        self.build_planner()     # Sets self.feature_exp
         # Initializing the variables
         self.initialize_op = tf.global_variables_initializer()
 
@@ -101,6 +101,7 @@ class Model(object):
         self.q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
         self.name_to_op['q_values'] = self.q_values
 
+    # @profile
     def compute(self, outputs, sess, mdp, weight_inits, gradient_steps=0):
         """
         Takes gradient steps to set the non-query features to the values that
@@ -131,7 +132,7 @@ class Model(object):
             self.features: features
         }
         def get_op(name):
-            K = len(self.proxy_reward_space)
+            K = len(self.proxy_reward_space)    # TODO this conflicts with the definition of the proxy space under Model.__init__
             if name == 'entropy':
                 return 0.0
             elif name == 'answer':
@@ -139,7 +140,7 @@ class Model(object):
                 return self.proxy_reward_space[idx]
             elif name == 'true_posterior':
                 N = len(self.true_reward_matrix)
-                result = np.random.rand(N, K)
+                result = np.random.rand(N)
                 return (result / result.sum(0)).T
             elif name == 'optimal_weights':
                 return np.zeros(self.num_to_optimize)
