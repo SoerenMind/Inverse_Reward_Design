@@ -165,11 +165,11 @@ def test_planning_speed(inference, reward_space_proxy):
 # ==================================================================================================== #
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('q_size',type=int,default=2)
+    parser.add_argument('q_size',type=int)
     # parser.add_argument('choosers',type=list,default='[greedy_entropy]')
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
     parser.add_argument('--query_size_feature',type=int,default=3)
-    parser.add_argument('--num_experiments',type=int,default=2)
+    parser.add_argument('--num_experiments',type=int,default=1)
     parser.add_argument('--num_iter',type=int,default=5)
     # TODO: Values are computed as if trajectories are infinite. Problem?
     parser.add_argument('--gamma',type=float,default=0.95)

@@ -164,6 +164,7 @@ class Query_Chooser_Subclass(Query_Chooser):
     #         best_query = best_query + [best_new_proxy]
     #     return best_query, max_min_diff, None
 
+    # @profile
     def find_feature_query_greedy(self, query_size, measure, true_reward):
         """Returns feature query of size query_size that minimizes the objective (e.g. posterior entropy)."""
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
@@ -196,11 +197,12 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         # Add: Get all measures for data recording?
-        desired_outputs = [measure,'true_posterior', 'answer']
-        objective, true_posterior, answer = self.calc_objective(feature_list, desired_outputs,
+        desired_outputs = [measure,'true_posterior']
+        objective, true_posterior = self.calc_objective(feature_list, desired_outputs,
                                                                   true_reward=true_reward, high_iters=True)
         return best_feature_list, objective, true_posterior
 
+    # @profile
     def calc_objective(self, feature_list, desired_outputs, true_reward=None, init=None, high_iters=False):
         """
         Returns the desired model outputs after minimizing the desired measure over settings of fixed features.
@@ -222,9 +224,9 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         with tf.Session() as sess:
             model_outputs = model.compute(desired_outputs, sess, mdp, init)
-            if 'answer' in desired_outputs:
-                answer = model.sample_human_answer()
-                return model_outputs, answer
+            # if 'answer' in desired_outputs:
+            #     answer = model.sample_human_answer()
+            #     return model_outputs, answer
         return model_outputs
 
 
@@ -346,7 +348,7 @@ class Experiment(object):
         self.query_chooser = Query_Chooser_Subclass(inference, reward_space_proxy, num_queries_max, args)
         self.results = {}
         # Add variance
-        self.measures = ['post_exp_regret','post_entropy','test_regret','norm post_avg-true','post_regret','perf_measure']
+        self.measures = ['post_exp_regret','test_regret','norm post_avg-true','post_regret','perf_measure']
         self.exp_params = exp_params
         self.exp_name = exp_name
         self.time = str(datetime.datetime.now())[:-6]
@@ -413,7 +415,7 @@ class Experiment(object):
                 # Do iteration for feature-based choosers:
                 if chooser in ['feature_entropy']:
                     query, objective, true_posterior = self.query_chooser.find_query(self.query_size_feature, chooser, true_reward)
-                    self.inference.update_prior(true_posterior)
+                    self.inference.update_prior(None, None, true_posterior)
                 else:
                     query, perf_measure, _ \
                         = self.query_chooser.find_query(self.query_size_discrete, chooser, true_reward)
@@ -443,7 +445,7 @@ class Experiment(object):
 
         return post_exp_regret_per_chooser, post_regret_per_chooser
 
-
+    # @profile
     def test_post_avg(self, post_avg, true_reward):
         dist_scale = 0.5
         gamma = 0.8
