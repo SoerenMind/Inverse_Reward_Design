@@ -4,3 +4,6 @@ Code/data/
 *~
 *.pyc
 *.prof
+*.lprof
+
+*.lprof
