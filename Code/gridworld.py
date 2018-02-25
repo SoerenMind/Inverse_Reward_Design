@@ -96,7 +96,22 @@ class Mdp(object):
         '''Sets new reward function (for reward design).'''
         self.rewards = rewards
 
+    def convert_to_numpy_input(self):
+        """Encodes this MDP in a format well-suited for deep models.
 
+        Returns three things -- a grid of indicators for whether or not a wall
+        is present, a Numpy array of features, and the start state (a tuple in
+        the format x, y).
+        """
+        if isinstance(self, GridworldMdp):
+            walls = np.array(self.walls, dtype=int)
+            return walls, self.feature_matrix, self.start_state
+        elif isinstance(self, NStateMdpRandomGaussianFeatures):
+            return None, self.feature_matrix_mean, None
+        elif isinstance(self, NStateMdpGaussianFeatures):
+            return None, self.feature_matrix, None
+        else:
+            raise ValueError("Unknown MDP class")
 
 
 
@@ -135,7 +150,8 @@ class NStateMdp(Mdp):
 
     def get_states(self):
         all_states = range(self.num_states)
-        return all_states + [self.terminal_state]
+        # return all_states + [self.terminal_state]
+        return all_states
 
     def get_start_state(self):
         """Returns the start state."""
@@ -247,6 +263,7 @@ class NStateMdpGaussianFeatures(NStateMdp):
         self.feature_dim = feature_dim
         self.num_states_reachable = num_states_reachable
         self.populate_features()
+        self.type = 'bandits'
         # self.populate_reward
 
     def populate_features(self):
@@ -257,9 +274,11 @@ class NStateMdpGaussianFeatures(NStateMdp):
         mean = np.zeros(self.feature_dim)
         # cov = invwishart.rvs(df=self.feature_dim, scale=np.ones(self.feature_dim), size=1)
         cov = np.eye(self.feature_dim)
+        self.feature_matrix = np.zeros([self.num_states, self.feature_dim])
         for state in self.get_states():
             features = multivariate_normal.rvs(mean=mean,cov=cov,size=1)
             self.features[state] = features
+            self.feature_matrix[state,:] = np.array(features)
 
     def get_features(self, state):
         return self.features[state]
@@ -299,7 +318,7 @@ class NStateMdpRandomGaussianFeatures(NStateMdp):
         self.feature_dim = feature_dim
         self.num_states_reachable = num_states_reachable
         self.populate_features()
-        # self.populate_reward
+        self.type = 'bandits'
 
     def populate_features(self):
         """Draws each state's feature DISTRIBUTION PARAMETERS from an Inv Wishard and stores them in a
@@ -309,11 +328,15 @@ class NStateMdpRandomGaussianFeatures(NStateMdp):
         self.SEED += 1  # Ensures different features for each new MDP
         mean_hyperprior = np.zeros(self.feature_dim)
         cov_hyperprior = np.eye(self.feature_dim)
-        # mean = np.zeros(self.feature_dim)
+
+        self.feature_matrix_mean = np.zeros([self.num_states, self.feature_dim])
         for state in self.get_states():
             mean = multivariate_normal.rvs(mean=mean_hyperprior, cov=cov_hyperprior)
             cov = invwishart.rvs(df=self.feature_dim, scale=np.ones(self.feature_dim), size=1)
             self.feature_params[state] = (mean, cov)
+            self.feature_matrix_mean[state,:] = np.array(mean)
+
+
 
     def get_features(self, state):
         """Draws features(state) from the Gaussian corresponding to the state."""
@@ -364,6 +387,7 @@ class GridworldMdp(Mdp):
         self.terminal_state = 'Terminal State'
 
         self.walls = [[space == 'X' for space in row] for row in grid]
+        self.type = 'gridworld'
         # self.populate_rewards_and_start_state(grid)
 
 
@@ -753,15 +777,6 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
                     # reward += weight / (distance ** distance_exponent)
                 self.feature_matrix[y,x,:] = np.array(features)
 
-    def convert_to_numpy_input(self):
-        """Encodes this MDP in a format well-suited for deep models.
-
-        Returns three things -- a grid of indicators for whether or not a wall
-        is present, a Numpy array of features, and the start state (a tuple in
-        the format x, y).
-        """
-        walls = np.array(self.walls, dtype=int)
-        return walls, self.feature_matrix, self.start_state
 
 
 

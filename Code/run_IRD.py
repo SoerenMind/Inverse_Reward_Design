@@ -20,16 +20,12 @@ from utils import Distribution
 from scipy.misc import logsumexp
 import sys
 import argparse
-
+import tensorflow as tf
 
 
 print 'Time to import: {deltat}'.format(deltat=time.clock() - start)
 
-"""Time sinks:
--import agent runner in inference
--from utils import Distribution in agents.py (ca 2s)
--from agent_runner import run_agent in interface_discrete.py (0.3s)
-"""
+
 
 def powerset(s):
     x = len(s)
@@ -173,10 +169,10 @@ if __name__=='__main__':
     parser.add_argument('--num_iter',type=int,default=5)
     # TODO: Values are computed as if trajectories are infinite. Problem?
     parser.add_argument('--gamma',type=float,default=0.95)
-    parser.add_argument('--size_r_space_true',type=int,default=200)
+    parser.add_argument('--size_true_space',type=int,default=200)
     parser.add_argument('--size_proxy_space',type=int,default=50)
     parser.add_argument('--num_trajectories',type=int,default=1)
-    parser.add_argument('--seed',type=float,default=1.)
+    parser.add_argument('--seed',type=int,default=1)
     parser.add_argument('--beta',type=float,default=2.)
     parser.add_argument('--num_states',type=int,default=100)
     parser.add_argument('--dist_scale',type=float,default=0.5)
@@ -186,21 +182,10 @@ if __name__=='__main__':
     parser.add_argument('--width',type=int,default=8)
     parser.add_argument('--num_iters_optim',type=int,default=5)
     parser.add_argument('--value_iters',type=int,default=25)
+    parser.add_argument('--mdp_type',type=str,default='gridworld')
 
 
-    '''List of dictionaries is the data for one experiment and one chooser.
-    There's a new list of dictionaries (thus a new CSV) started as the chooser changes.
-        So multiple (num choosers) CSVs are created after an experiment run.
-    But all lists/CSVs are kept as the next experiment starts.
-    At the end of all experiments we have num_choosers x num_experiments lists.
-        We compute the average of each field over experiments. (We'll probably just need the last row).
-        That's separate averages for each chooser.
-
-    What if we want to test the query size?
-    '''
     args = parser.parse_args()
-    print args.c
-    # assert 0
 
 
     # Experiment description
@@ -209,9 +194,10 @@ if __name__=='__main__':
     exp_description = pprint("Comparing to entropy with many states and few true rewards. {nexp} experiments.")
 
     # Set parameters
-    dummy_rewards = np.zeros(7)
+    dummy_rewards = np.zeros(3)
     # TODO: Randomize goal positions per experiment
-    goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
+    # goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
+    goals = [(1,1), (2,6), (3,3)]
     # feature_dim = args.feature_dim
     args.feature_dim = len(goals)   # Overwriting arg input
     # Set parameters
@@ -220,7 +206,7 @@ if __name__=='__main__':
     seed(SEED)
     beta = args.beta
     num_states = args.num_states
-    size_reward_space_true = args.size_r_space_true
+    size_reward_space_true = args.size_true_space
     size_reward_space_proxy = args.size_proxy_space
     num_queries_max = args.num_queries_max
     num_traject = args.num_traject
@@ -243,46 +229,49 @@ if __name__=='__main__':
 
 
     # # Set up env and agent for NStateMdp
+    if args.mdp_type == 'bandits':
+        # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
+        #                                 feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
+        mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
+                                        feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
+        agent = ImmediateRewardAgent()
+        agent.set_mdp(mdp)
 
-    # # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
-    # #                                 feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
-    # mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],
-    #                                 feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
-    # agent = ImmediateRewardAgent()
-    # agent.set_mdp(mdp)
+        # Reward spaces for N-State-Mdp
+        from itertools import product
+        reward_space_true = list(product([0,1], repeat=args.feature_dim))
+        # reward_space_true.remove((0,0,0,0))
+        reward_space_true = [np.array(reward) for reward in reward_space_true]
+        reward_space_true = [choice(reward_space_true) for _ in range(size_reward_space_true)]
+        # reward_space_true = [np.array([0, 0, 0, 0]), np.array([0, 0, 0, 1]), np.array([0, 0, 1, 1]), np.array([1, 0, 1, 0])]
+        reward_space_proxy = [choice(reward_space_true) for _ in range(size_reward_space_proxy)]
+        # reward_space_proxy = reward_space_true
+        # len_reward_space = len(reward_space_true)
+        # reward_space = [np.array([1,0]),np.array([0,1]), np.array([1,1])]
 
     # Set up env and agent for gridworld
-    grid = GridworldMdp.generate_random(height,width,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
-    mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
-    agent = ValueIterationLikeAgent(gamma, num_iters=args.value_iters)
-    super(ValueIterationLikeAgent, agent).set_mdp(mdp)
+    elif args.mdp_type == 'gridworld':
+        grid = GridworldMdp.generate_random(height,width,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
+        mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
+        agent = ValueIterationLikeAgent(gamma, num_iters=args.value_iters)
+        super(ValueIterationLikeAgent, agent).set_mdp(mdp)
 
-    env = GridworldEnvironment(mdp)
 
 
-    # Create reward spaces for gridworld
-    # reward_space_true = [np.random.multinomial(18, np.ones(args.feature_dim)/18) for _ in xrange(size_reward_space_true)]
-    # reward_space_proxy = [np.random.multinomial(18, np.ones(args.feature_dim)) for _ in xrange(size_reward_space_proxy)]
-    reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_true)]
-    reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_proxy)]
-    if proxy_subspace:
-        reward_space_proxy = [choice(reward_space_true) for _ in xrange(size_reward_space_proxy)]
-    # reward_space_true = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_true)]
-    # reward_space_proxy = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
+        # Create reward spaces for gridworld
+        # reward_space_true = [np.random.multinomial(18, np.ones(args.feature_dim)/18) for _ in xrange(size_reward_space_true)]
+        # reward_space_proxy = [np.random.multinomial(18, np.ones(args.feature_dim)) for _ in xrange(size_reward_space_proxy)]
+        reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_true)]
+        reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_proxy)]
+        if proxy_subspace:
+            reward_space_proxy = [choice(reward_space_true) for _ in xrange(size_reward_space_proxy)]
+        # reward_space_true = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_true)]
+        # reward_space_proxy = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
 
-    # Reward spaces for N-State-Mdp
-    # from itertools import product
-    # reward_space_true = list(product([0,1], repeat=args.feature_dim))
-    # # reward_space_true.remove((0,0,0,0))
-    # reward_space_true = [np.array(reward) for reward in reward_space_true]
-    # reward_space_true = [choice(reward_space_true) for _ in range(size_reward_space_true)]
-    # # reward_space_true = [np.array([0, 0, 0, 0]), np.array([0, 0, 0, 1]), np.array([0, 0, 1, 1]), np.array([1, 0, 1, 0])]
-    # reward_space_proxy = [choice(reward_space_true) for _ in range(size_reward_space_proxy)]
-    # # reward_space_proxy = reward_space_true
-    # # len_reward_space = len(reward_space_true)
-    # # reward_space = [np.array([1,0]),np.array([0,1]), np.array([1,1])]
+
 
     # Set up inference
+    env = GridworldEnvironment(mdp)
     inference = Inference(agent, env, beta, reward_space_true, reward_space_proxy,
                           num_traject=num_traject, prior=None)
 

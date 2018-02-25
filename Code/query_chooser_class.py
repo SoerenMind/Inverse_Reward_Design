@@ -75,6 +75,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             return self.find_best_query_greedy(query_size, entropy=True)
         elif chooser == 'feature_entropy':
             return self.find_feature_query_greedy(query_size, 'entropy', true_reward)
+        elif chooser == 'feature_variance':
+            return self.find_feature_query_greedy(query_size, 'variance', true_reward)
         else:
             raise NotImplementedError('Calling unimplemented query chooser')
 
@@ -174,6 +176,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         # desired_outputs = [measure]
         best_optimal_weights = None
         while len(best_feature_list) < query_size:
+            found_new = False
             best_objective = float("inf")
             best_objective_plus_cost = best_objective
             for feature in range(feature_dim):
@@ -182,6 +185,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                 (objective, optimal_weights) = self.calc_objective(feature_list, desired_outputs, init=best_optimal_weights)
                 query_cost = self.cost_of_asking * len(feature_list)
                 objective_plus_cost = objective + query_cost
+                print('Model outputs calculated')
                 if objective_plus_cost <= best_objective_plus_cost + 1e-14:
                     best_objective = objective
                     best_objective_plus_cost = objective_plus_cost
@@ -194,11 +198,13 @@ class Query_Chooser_Subclass(Query_Chooser):
                 assert found_new
             best_feature_list = best_feature_list_new
             best_optimal_weights = best_optimal_weights_new
+            print 'Query length increased to {s}'.format(s=len(best_feature_list))
 
+        print('query found')
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         # Add: Get all measures for data recording?
         desired_outputs = [measure,'true_posterior']
-        objective, true_posterior = self.calc_objective(feature_list, desired_outputs,
+        objective, true_posterior = self.calc_objective(best_feature_list, desired_outputs,
                                                                   true_reward=true_reward, high_iters=True)
         return best_feature_list, objective, true_posterior
 
@@ -211,19 +217,43 @@ class Query_Chooser_Subclass(Query_Chooser):
         :return: model_outputs: dictionary of model outputs, indexed by desired_outputs
         """
         mdp = self.inference.agent.mdp
+        try: height, width = mdp.height, mdp.width
+        except: height, width = None, None
 
         if high_iters:
-            num_iters = 10
+            num_iters = 50
         else:
             num_iters = self.args.num_iters_optim
 
         proxy_reward_space = [[-1],[0],[1]]
 
-        model = Model(self.args.feature_dim, mdp.height, mdp.width, self.args.gamma, num_iters,
-                      feature_list, proxy_reward_space ,self.inference.true_reward_matrix, true_reward)
+        model = Model(self.args.feature_dim, height, width, self.args.gamma, num_iters, feature_list,
+                      proxy_reward_space ,self.inference.true_reward_matrix, true_reward, self.args.beta, 'entropy',
+                      planner=mdp.type)
 
         with tf.Session() as sess:
-            model_outputs = model.compute(desired_outputs, sess, mdp, init)
+            feature_exp_true = self.inference.feature_exp_matrix   # For testing purposes (wrong dimension)
+            assert feature_exp_true is not None
+
+            desired_outputs = ['entropy', 'optimal_weights', 'features', 'weights_unsorted', 'state_probs',
+                               'reward_per_state', 'feature_exps']
+            model_outputs = model.compute(desired_outputs, sess, mdp, self.inference.prior, init, feature_exp_true)
+            print desired_outputs
+            print desired_outputs[0], model_outputs[0]
+            print desired_outputs[1], model_outputs[1]
+            print desired_outputs[2], model_outputs[2]
+            print desired_outputs[3], model_outputs[3]
+            print desired_outputs[4], model_outputs[4]
+            print desired_outputs[5], model_outputs[5]
+            print desired_outputs[6], model_outputs[6]
+
+            # print model_outputs[1]
+            # print model_outputs[2]
+            # print model_outputs[3]
+            # print model_outputs[4]
+            # print model_outputs[5]
+            # print model_outputs[6]
+
             # if 'answer' in desired_outputs:
             #     answer = model.sample_human_answer()
             #     return model_outputs, answer
@@ -400,12 +430,12 @@ class Experiment(object):
         self.inference.cache_lhoods()
         print('done caching')
 
-        # Run experiment for each query chooser
         perf_measure = float('inf')
         post_exp_regret = float('inf')
         post_regret = float('inf')
         post_entropy = float('inf')
 
+        # Run experiment for each query chooser
         for chooser in self.choosers:
             print "=========Experiment {n}/{N} for {chooser}=========".format(chooser=chooser,n=exp_num+1,N=num_experiments)
             self.inference.reset_prior()
@@ -428,7 +458,7 @@ class Experiment(object):
                 post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
                 post_regret = self.query_chooser.get_regret_from_query_and_true_reward([], true_reward) # TODO: Still uses old get_regret, get_avg_reward, get_feature_exp
                 post_avg = self.inference.get_prior_avg()
-                test_regret = self.test_post_avg(post_avg, true_reward)
+                test_regret = float('inf')  # self.test_post_avg(post_avg, true_reward)
 
                 # Save results
                 # self.results[chooser, 'post_entropy', i, exp_num], \
@@ -447,12 +477,12 @@ class Experiment(object):
 
     # @profile
     def test_post_avg(self, post_avg, true_reward):
-        dist_scale = 0.5
-        gamma = 0.8
+        # dist_scale = 0.5
+        # gamma = 0.8
         # goals = [(1, 1), (2, 6), (3, 3), (3, 4), (4, 5), (6, 4), (6, 6)]
         goals = [(1, 5), (1, 2), (3, 6), (2, 3), (6, 1), (3, 5), (4, 2)]
         num_traject = 1
-        beta = 2.
+        # beta = 2.
         reps = 4
         post_reward_avg = 0
         post_regret_avg = 0

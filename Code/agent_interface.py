@@ -1,3 +1,5 @@
+import numpy as np
+
 class Agent(object):
     """Defines the interface that an agent playing an MDP should implement."""
 
@@ -24,9 +26,9 @@ class Agent(object):
 
         Returns: An action a such that a is in self.mdp.get_actions(state).
         """
-        return self.get_action_distribution(state).sample()
+        # return self.get_action_distribution(state).sample()
         # return np.random.choice(np.array(self.get_action_distribution(state)))
-        # return self.get_action_distribution(state)[0]
+        return self.get_action_distribution(state)[0]
 
     def get_action_distribution(self, state):
         """Returns a Distribution over actions that the agent takes in `state`.

@@ -5,7 +5,7 @@ from gridworld import Direction
 
 class Model(object):
     def __init__(self, feature_dim, height, width, gamma, num_iters, query,
-                 proxy_reward_space, true_reward_matrix, true_reward):
+                 proxy_reward_space, true_reward_matrix, true_reward, beta, objective, planner='gridworld'):
         self.feature_dim = feature_dim
         self.height = height
         self.width = width
@@ -19,14 +19,23 @@ class Model(object):
         # buckets (-1, 0 and 1), the proxy reward space would be
         # [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]
         self.proxy_reward_space = proxy_reward_space
+        self.query_size = len(self.proxy_reward_space)
         self.true_reward_matrix = true_reward_matrix
         self.true_reward = true_reward
-        self.build_tf_graph()
+        self.beta = beta
+        self.build_tf_graph(objective, planner)
 
-    def build_tf_graph(self):
-        self.build_planner()     # Sets self.feature_exp
+    def build_tf_graph(self, objective, planner):
+        if planner == 'gridworld':
+            self.build_planner()
+        elif planner == 'bandits':
+            self.build_bandits_planner()
+        else: raise ValueError("Unknown planner: " + str(planner))
+        self.build_map_to_posterior()
+        self.build_map_to_objective(objective)
         # Initializing the variables
         self.initialize_op = tf.global_variables_initializer()
+
 
     def build_planner(self):
         self.name_to_op = {}
@@ -101,8 +110,96 @@ class Model(object):
         self.q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
         self.name_to_op['q_values'] = self.q_values
 
+    def build_bandits_planner(self):
+        self.name_to_op = {}
+
+        self.features = tf.placeholder(
+            tf.float32, name="features", shape=[None, self.feature_dim])
+        self.human_weights= tf.placeholder(
+            tf.float32, name="human_weights", shape=[None, len(self.query)])
+        self.weights_to_optimize = tf.Variable(
+            tf.zeros([self.num_to_optimize], name="weights_to_optimize"))
+        self.weight_inputs = tf.placeholder(
+            tf.float32, name="weight_inputs", shape=[self.num_to_optimize])
+        self.assign_op = self.weights_to_optimize.assign(self.weight_inputs)
+        self.weights = tf.concat([self.human_weights, self.weights_to_optimize], axis=0)
+
+        intermediate_tensor = tf.multiply(self.features, self.weights)    # TODO: weights are in wrong order
+        self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keepdims=False, name="rewards_per_state")
+
+        # (This is for one particular setting of the weights)
+        self.state_probs = tf.nn.softmax(self.reward_per_state, axis=-1, name="state_probs")
+        self.feature_expectations = tf.reduce_sum(
+            tf.multiply(self.features, self.state_probs), axis=-2 ,name="feature_expectations")
+
+        self.name_to_op['features'] = self.features
+        self.name_to_op['weights_unsorted'] = self.weights
+        self.name_to_op['state_probs'] = self.state_probs
+        self.name_to_op['reward_per_state'] = self.reward_per_state
+        self.name_to_op['feature_exps'] = self.feature_expectations
+
+
+
+    def build_map_to_posterior(self):
+        """
+        Maps self.feature_exp (created by planner) to self.log_posterior.
+        """
+        'for testing purposes'
+        self.feature_exp_test_input = tf.placeholder(
+            tf.float32, name='feature_exp_test_input', shape=(None, self.feature_dim))
+        self.true_reward_tensor = tf.constant(
+            self.true_reward_matrix, dtype=tf.float32, name="true_reward_tensor", shape=self.true_reward_matrix.shape)
+
+        avg_reward_matrix = tf.matmul(
+            self.feature_exp_test_input, tf.transpose(self.true_reward_tensor), name='avg_reward_matrix')
+        log_likelihoods_new = self.beta * avg_reward_matrix
+
+        # Calculate posterior
+        self.prior = tf.placeholder(tf.float32, name="prior", shape=(len(self.true_reward_matrix)))
+        log_Z_w = tf.reduce_logsumexp(log_likelihoods_new, axis=0, name='log_Z_q')
+        log_P_q_z = log_likelihoods_new - log_Z_w
+        self.log_Z_q, max_a, max_b = logdot(log_P_q_z, tf.log(self.prior))
+        self.log_posterior = log_P_q_z + tf.log(self.prior) - self.log_Z_q
+        self.posterior = tf.exp(self.log_posterior, name="posterior")
+
+        post_sum_to_1 = tf.reduce_sum(tf.exp(self.log_posterior), axis=1, name='post_sum_to_1')
+        tf.assert_equal(post_sum_to_1, 1., name='posteriors_normalized')
+
+        # Fill name to ops dict
+        self.name_to_op['true_reward_tensor'] = self.true_reward_tensor
+        self.name_to_op['prior'] = self.prior
+        self.name_to_op['posterior'] = self.posterior
+
+    def build_map_to_objective(self, objective):
+        """
+
+        :param objective:
+        """
+        if 'entropy' in objective:
+            post_ent = - tf.reduce_sum(
+                tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keepdims=True, name='post_ent')
+            self.exp_post_ent = tf.reduce_sum(
+                tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keepdims=True, name='exp_post_entropy')
+            self.name_to_op['entropy'] = self.exp_post_ent
+
+        if 'variance' in objective:
+            posterior = tf.exp(self.log_posterior, name="posterior")
+            post_avg, post_var = tf.nn.moments(posterior, axes=[1], keep_dims=False)
+            self.generalized_var = tf.matrix_determinant(post_var, name="generalized_variance")
+            self.name_to_op['variance'] = self.generalized_var
+
+        if 'regret' in objective:
+            pass
+
+        if 'avg_reward' in objective:
+            pass
+
+        if 'query_entropy' in objective:
+            pass
+
+
     # @profile
-    def compute(self, outputs, sess, mdp, weight_inits, gradient_steps=0):
+    def compute(self, outputs, sess, mdp, prior, weight_inits, feature_expectations_test_input = None, gradient_steps=0):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -128,14 +225,21 @@ class Model(object):
         #     sess.run(assign_ops, feed_dict=fd)
 
         fd = {
-            self.image: image,
-            self.features: features
+            self.features: features,
+            self.prior: prior,
+            self.human_weights: self.proxy_reward_space
         }
+        if image is not None:
+            fd[self.image] = image
+        if feature_expectations_test_input is not None:
+            fd[self.feature_exp_test_input] = feature_expectations_test_input
+
+
         def get_op(name):
-            K = len(self.proxy_reward_space)    # TODO this conflicts with the definition of the proxy space under Model.__init__
-            if name == 'entropy':
-                return 0.0
-            elif name == 'answer':
+            K = len(self.proxy_reward_space)
+            # if name == 'entropy':
+            #     return 0.0
+            if name == 'answer':
                 idx = np.random.choice(len(self.proxy_reward_space))
                 return self.proxy_reward_space[idx]
             elif name == 'true_posterior':
@@ -150,6 +254,8 @@ class Model(object):
                 return np.random.rand(K, self.height, self.width, self.feature_dim)
             elif name not in self.name_to_op:
                 raise ValueError("Unknown op name: " + str(name))
+            try: fd[self.feature_exp_test_input]
+            except: print 'self.feature_exp_test_input not in fd!'
             return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
 
         return [get_op(name) for name in outputs]
@@ -158,3 +264,14 @@ class Model(object):
 
     def _conv2d(self, x, k, name=None, strides=(1,1,1,1),pad='SAME'):
         return tf.nn.conv2d(x, k, name=name, strides=strides, padding=pad)
+
+
+def logdot(a,b):
+    max_a, max_b = tf.reduce_max(a), tf.reduce_max(b)   # TODO: make sure broadcasting is right. Don't let max_a be max over whole matrix.
+    exp_a, exp_b = a - max_a, b - max_b
+    exp_a = tf.exp(exp_a)
+    exp_b = tf.exp(exp_b)
+    # c = tf.tensordot(exp_a, exp_b, axes=1)
+    c = tf.reduce_sum(tf.multiply(exp_a,exp_b), axis=1, keepdims=True)
+    c = tf.log(c) + max_a + max_b
+    return c, max_a, max_b
