@@ -217,19 +217,22 @@ class Query_Chooser_Subclass(Query_Chooser):
         :return: model_outputs: dictionary of model outputs, indexed by desired_outputs
         """
         mdp = self.inference.agent.mdp
-        try: height, width = mdp.height, mdp.width
-        except: height, width = None, None
-
-        if high_iters:
-            num_iters = 50
-        else:
-            num_iters = self.args.num_iters_optim
-
+        num_iters = 50 if high_iters else self.args.num_iters_optim
         proxy_reward_space = [[-1],[0],[1]]
 
-        model = Model(self.args.feature_dim, height, width, self.args.gamma, num_iters, feature_list,
-                      proxy_reward_space ,self.inference.true_reward_matrix, true_reward, self.args.beta, 'entropy',
-                      planner=mdp.type)
+        if mdp.type == 'bandits':
+            model = BanditsModel(
+                self.args.feature_dim, self.args.gamma, feature_list,
+                proxy_reward_space, self.inference.true_reward_matrix,
+                true_reward, self.args.beta, 'entropy')
+        elif mdp.type == 'gridworld':
+            model = GridworldModel(
+                self.args.feature_dim, self.args.gamma, feature_list,
+                proxy_reward_space, self.inference.true_reward_matrix,
+                true_reward, self.args.beta, 'entropy', mdp.height, mdp.width,
+                num_iters)
+        else:
+            raise ValueError('Unknown model type: ' + str(mdp.type))
 
         with tf.Session() as sess:
             feature_exp_true = self.inference.feature_exp_matrix   # For testing purposes (wrong dimension)

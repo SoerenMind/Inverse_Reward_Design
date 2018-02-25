@@ -90,30 +90,15 @@ class Mdp(object):
         reachable from 'state' by taking 'action' along with their transition
         probabilities.
         """
-        raise NotImplementedError
+        raise NotImplemented
 
     def change_reward(self, rewards):
         '''Sets new reward function (for reward design).'''
         self.rewards = rewards
 
     def convert_to_numpy_input(self):
-        """Encodes this MDP in a format well-suited for deep models.
-
-        Returns three things -- a grid of indicators for whether or not a wall
-        is present, a Numpy array of features, and the start state (a tuple in
-        the format x, y).
-        """
-        if isinstance(self, GridworldMdp):
-            walls = np.array(self.walls, dtype=int)
-            return walls, self.feature_matrix, self.start_state
-        elif isinstance(self, NStateMdpRandomGaussianFeatures):
-            return None, self.feature_matrix_mean, None
-        elif isinstance(self, NStateMdpGaussianFeatures):
-            return None, self.feature_matrix, None
-        else:
-            raise ValueError("Unknown MDP class")
-
-
+        """Encodes this MDP in a format well-suited for deep models."""
+        raise NotImplemented
 
 
 
@@ -297,6 +282,10 @@ class NStateMdpGaussianFeatures(NStateMdp):
         """
         self.feature_dim = feature_dict.copy()
 
+    def convert_to_numpy_input(self):
+        """Encodes this MDP in a format well-suited for deep models."""
+        return None, self.feature_matrix, None
+
 class NStateMdpRandomGaussianFeatures(NStateMdp):
     """
     Features for each state are drawn from a different Gaussian for each state. The map: state \mapsto features is stochastic.
@@ -349,6 +338,10 @@ class NStateMdpRandomGaussianFeatures(NStateMdp):
         This makes sure that a test MDP can have the same feature map as the training MDP.
         """
         raise NotImplementedError
+
+    def convert_to_numpy_input(self):
+        """Encodes this MDP in a format well-suited for deep models."""
+        return None, self.feature_matrix_mean, None
 
 
 
@@ -465,6 +458,16 @@ class GridworldMdp(Mdp):
             y = random.randint(1, self.height - 2)
             x = random.randint(1, self.width - 2)
         return (x, y)
+
+    def convert_to_numpy_input(self):
+        """Encodes this MDP in a format well-suited for deep models.
+
+        Returns three things -- a grid of indicators for whether or not a wall
+        is present, a Numpy array of features, and the start state (a tuple in
+        the format x, y).
+        """
+        walls = np.array(self.walls, dtype=int)
+        return walls, self.feature_matrix, self.start_state
 
     @staticmethod
     def generate_random(height, width, pr_wall, pr_reward, goals=None, living_reward=0, noise=0, print_grid = False):
