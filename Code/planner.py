@@ -5,7 +5,7 @@ from gridworld import Direction
 
 class Model(object):
     def __init__(self, feature_dim, height, width, gamma, num_iters, query,
-                 proxy_reward_space, true_reward_matrix, true_reward, beta, objective, planner='gridworld'):
+                 proxy_reward_space, true_reward_matrix, true_reward, beta, objective):
         self.feature_dim = feature_dim
         self.height = height
         self.width = width
@@ -22,15 +22,11 @@ class Model(object):
         self.true_reward_matrix = true_reward_matrix
         self.true_reward = true_reward
         self.beta = beta
-        self.build_tf_graph(objective, planner)
+        self.build_tf_graph(objective)
 
-    def build_tf_graph(self, objective, planner):
+    def build_tf_graph(self, objective):
         self.build_weights()
-        if planner == 'gridworld':
-            self.build_planner()
-        elif planner == 'bandits':
-            self.build_bandits_planner()
-        else: raise ValueError("Unknown planner: " + str(planner))
+        self.build_planner()
         self.build_map_to_posterior()
         self.build_map_to_objective(objective)
         # Initializing the variables
@@ -87,9 +83,9 @@ class Model(object):
         """
         if 'entropy' in objective:
             post_ent = - tf.reduce_sum(
-                tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keepdims=True, name='post_ent')
+                tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent')
             self.exp_post_ent = tf.reduce_sum(
-                tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keepdims=True, name='exp_post_entropy')
+                tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='exp_post_entropy')
             self.name_to_op['entropy'] = self.exp_post_ent
 
         if 'variance' in objective:
@@ -141,8 +137,7 @@ class Model(object):
             if name == 'entropy':
                 return 0.0
             elif name == 'answer':
-                idx = np.random.choice(len(self.proxy_reward_space))
-                return self.proxy_reward_space[idx]
+                return self.proxy_reward_space[np.random.choice(K)]
             elif name == 'true_posterior':
                 N = len(self.true_reward_matrix)
                 result = np.random.rand(N, K)
@@ -179,7 +174,7 @@ class BanditsModel(Model):
             tf.float32, name="features", shape=[None, self.feature_dim])
 
         intermediate_tensor = tf.multiply(self.features, self.weights)
-        self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keepdims=False, name="rewards_per_state")
+        self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
 
         # (This is for one particular setting of the weights)
         self.state_probs = tf.nn.softmax(self.reward_per_state, axis=-1, name="state_probs")
@@ -330,6 +325,6 @@ def logdot(a,b):
     exp_a = tf.exp(exp_a)
     exp_b = tf.exp(exp_b)
     # c = tf.tensordot(exp_a, exp_b, axes=1)
-    c = tf.reduce_sum(tf.multiply(exp_a,exp_b), axis=1, keepdims=True)
+    c = tf.reduce_sum(tf.multiply(exp_a,exp_b), axis=1, keep_dims=True)
     c = tf.log(c) + max_a + max_b
     return c, max_a, max_b

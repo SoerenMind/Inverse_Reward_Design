@@ -14,13 +14,15 @@ class TestPlanner(unittest.TestCase):
         random.seed(1)
         grid = GridworldMdp.generate_random(8, 8, 0.1, 0.1)
         mdp = GridworldMdpWithDistanceFeatures(grid)
-        feature_dim = len(mdp.goals)
-        print 'MDP with ' + str(feature_dim) + ' features'
-        mdp.rewards = np.random.randn(feature_dim)
+        dim = len(mdp.goals)
+        print 'MDP with ' + str(dim) + ' features'
+        mdp.rewards = np.random.randn(dim)
         mdp.feature_weights = mdp.rewards
         agent = OptimalAgent(gamma=0.9, num_iters=10)
         agent.set_mdp(mdp)
-        model = GridworldModel(feature_dim, 8, 8, 0.9, 10, [], None, None, None)
+        dummy_proxy_space = [[-1], [0], [1]]
+        dummy_true_reward_matrix = np.random.rand(3, dim)
+        model = GridworldModel(dim, 8, 8, 0.9, 10, [0], dummy_proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 'entropy')
 
         with tf.Session() as sess:
             sess.run(model.initialize_op)
