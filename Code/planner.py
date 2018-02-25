@@ -197,63 +197,57 @@ class GridworldModel(Model):
     def build_planner(self):
         self.name_to_op = {}
         height, width, dim = self.height, self.width, self.feature_dim
-        num_actions, gamma = self.num_actions, self.gamma
+        num_actions = self.num_actions
 
         self.image = tf.placeholder(
             tf.float32, name="image", shape=[height, width])
         self.features = tf.placeholder(
             tf.float32, name="features", shape=[height, width, dim])
 
-        image_batch = tf.expand_dims(tf.expand_dims(self.image, 0), 3)
-        feature_batch = tf.expand_dims(self.features, 0)
-        feature_batch = tf.concat([feature_batch, image_batch], axis=3)
+        features_wall = tf.concat(
+            [self.features, tf.expand_dims(self.image, -1)], axis=-1)
+        weights_wall = tf.concat([self.weights, [-1000000]], axis=-1)
         dim += 1
 
-        # To deal with walls, give a -1000000 reward whenever the agent takes an
-        # action that would move it into a wall.
-        north = Direction.get_number_from_direction(Direction.NORTH)
-        south = Direction.get_number_from_direction(Direction.SOUTH)
-        east = Direction.get_number_from_direction(Direction.EAST)
-        west = Direction.get_number_from_direction(Direction.WEST)
-
-        bellman_kernel_value = np.zeros([3, 3, 2*dim, num_actions*dim])
-        for i in range(dim):
-            # For every action, we get the features for the current state
-            bellman_kernel_value[1,1,i,i::dim] = [1.0] * num_actions
-            # If you move north, add the discounted features from the state
-            # north of you. Similarly for the other actions.
-            bellman_kernel_value[0,1,dim+i,north*dim+i] = gamma
-            bellman_kernel_value[2,1,dim+i,south*dim+i] = gamma
-            bellman_kernel_value[1,2,dim+i,east*dim+i] = gamma
-            bellman_kernel_value[1,0,dim+i,west*dim+i] = gamma
-        bellman_kernel = tf.constant(bellman_kernel_value, dtype=tf.float32)
-
         index_prefixes = tf.constant(
-            [[[[0, i, j] for j in range(width)] for i in range(height)]],
+            [[[[i, j, k]
+               for k in range(dim)]
+              for j in range(width)]
+             for i in range(height)],
             dtype=tf.int64)
 
-        feature_expectations = tf.zeros([1, height, width, dim])
+        feature_expectations = tf.zeros([height, width, dim])
         for _ in range(self.num_iters):
-            fv = tf.concat([feature_batch, feature_expectations], axis=3)
-            # TODO: Fix Bellman kernel
-            q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
-            q_fes = tf.reshape(
-                q_flattened_fes, [1, height, width, num_actions, dim])
-            q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
-            policy = tf.expand_dims(tf.argmax(q_values, axis=3), -1)
-            indexes = tf.concat([index_prefixes, policy], axis=3)
+            q_fes = self.bellman_update(feature_expectations, features_wall)
+            q_values = tf.tensordot(q_fes, weights_wall, [[-2], [0]])
+            policy = tf.expand_dims(tf.argmax(q_values, axis=-1), -1)
+            repeated_policy = tf.stack([policy] * dim, axis=-2)
+            indexes = tf.concat([index_prefixes, repeated_policy], axis=-1)
             feature_expectations = tf.gather_nd(q_fes, indexes)
 
-        self.feature_expectations = feature_expectations
-        self.name_to_op['feature_exps'] = feature_expectations
+        self.feature_expectations = feature_expectations[:,:,:-1]
+        self.name_to_op['feature_exps'] = self.feature_expectations
 
-        fv = tf.concat([feature_batch, feature_expectations], axis=3)
-        q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
-        q_fes = tf.reshape(
-            q_flattened_fes, [1, height, width, num_actions, dim])
+        q_fes = self.bellman_update(feature_expectations, features_wall)
+        q_values = tf.tensordot(q_fes, weights_wall, [[-2], [0]])
+        self.q_values = q_values
+        self.name_to_op['q_values'] = q_values
 
-        self.q_values = tf.tensordot(q_fes, self.weights, [[4], [0]])
-        self.name_to_op['q_values'] = self.q_values
+    def bellman_update(self, fes, features):
+        height, width, dim = self.height, self.width, self.feature_dim + 1
+        gamma = self.gamma
+        extra_row = tf.zeros((1, width, dim))
+        extra_col = tf.zeros((height, 1, dim))
+
+        north_lookahead = tf.concat([extra_row, fes[:-1]], axis=0)
+        north_fes = features + gamma * north_lookahead
+        south_lookahead = tf.concat([fes[1:], extra_row], axis=0)
+        south_fes = features + gamma * south_lookahead
+        east_lookahead = tf.concat([fes[:,1:], extra_col], axis=1)
+        east_fes = features + gamma * east_lookahead
+        west_lookahead = tf.concat([extra_col, fes[:,:-1]], axis=1)
+        west_fes = features + gamma * west_lookahead
+        return tf.stack([north_fes, south_fes, east_fes, west_fes], axis=-1)
 
     def create_mdp_feed_dict(self, mdp):
         image, features, _ = mdp.convert_to_numpy_input()
@@ -307,7 +301,6 @@ class GridworldModelUsingConvolutions(GridworldModel):
         feature_expectations = tf.zeros([1, height, width, dim])
         for _ in range(self.num_iters):
             fv = tf.concat([feature_batch, feature_expectations], axis=3)
-            # TODO: Fix Bellman kernel
             q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
             q_fes = tf.reshape(
                 q_flattened_fes, [1, height, width, num_actions, dim])

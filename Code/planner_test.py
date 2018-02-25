@@ -1,4 +1,5 @@
 import numpy as np
+import random
 import tensorflow as tf
 import unittest
 
@@ -9,6 +10,8 @@ from agents import OptimalAgent
 
 class TestPlanner(unittest.TestCase):
     def test_planner(self):
+        np.random.seed(1)
+        random.seed(1)
         grid = GridworldMdp.generate_random(8, 8, 0.1, 0.1)
         mdp = GridworldMdpWithDistanceFeatures(grid)
         feature_dim = len(mdp.goals)
@@ -17,7 +20,7 @@ class TestPlanner(unittest.TestCase):
         mdp.feature_weights = mdp.rewards
         agent = OptimalAgent(gamma=0.9, num_iters=10)
         agent.set_mdp(mdp)
-        model = GridworldModelUsingConvolutions(feature_dim, 8, 8, 0.9, 10, [], None, None, None)
+        model = GridworldModel(feature_dim, 8, 8, 0.9, 10, [], None, None, None)
 
         with tf.Session() as sess:
             sess.run(model.initialize_op)
@@ -30,7 +33,7 @@ class TestPlanner(unittest.TestCase):
             for action in mdp.get_actions(state):
                 expected_q = agent.qvalue(state, action)
                 action_num = Direction.get_number_from_direction(action)
-                actual_q = qvals[0,y,x,action_num]
+                actual_q = qvals[y,x,action_num]
                 # self.assertEqual(expected_q, actual_q)
                 self.assertAlmostEqual(expected_q, actual_q, places=2)
 
