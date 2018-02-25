@@ -14,13 +14,14 @@ class Model(object):
         # buckets (-1, 0 and 1), the proxy reward space would be
         # [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]
         self.proxy_reward_space = proxy_reward_space
-        self.query_size = len(self.proxy_reward_space)
+        self.K = len(self.proxy_reward_space)
         self.true_reward_matrix = true_reward_matrix
         self.true_reward = true_reward
         self.beta = beta
         self.build_tf_graph(objective)
 
     def build_tf_graph(self, objective):
+        self.name_to_op = {}
         self.build_weights()
         self.build_planner()
         self.build_map_to_posterior()
@@ -29,15 +30,25 @@ class Model(object):
         self.initialize_op = tf.global_variables_initializer()
 
     def build_weights(self):
-        query_size = len(self.query)
-        num_fixed = self.feature_dim - query_size
-        self.human_weights= tf.placeholder(tf.float32, shape=[query_size])
-        self.weights_to_optimize = tf.Variable(tf.zeros([num_fixed]))
+        query_size, dim, K = len(self.query), self.feature_dim, self.K
+        num_fixed = dim - query_size
+        self.query_weights= tf.constant(self.proxy_reward_space, dtype=tf.float32)
+        self.other_weights = tf.Variable(tf.zeros([num_fixed]))
         self.weight_inputs = tf.placeholder(tf.float32, shape=[num_fixed])
-        self.assign_op = self.weights_to_optimize.assign(self.weight_inputs)
+        self.assign_op = self.other_weights.assign(self.weight_inputs)
 
-        # TODO(rohinmshah): Order of weights is now wrong.
-        self.weights = tf.concat([self.human_weights, self.weights_to_optimize], axis=0)
+        # Let's say query is [1, 3] and there are 6 features.
+        # query_weights = [10, 11] and weight_inputs = [12, 13, 14, 15].
+        # Then we want self.weights to be [12, 10, 13, 11, 14, 15].
+        # Concatenate to get [10, 11, 12, 13, 14, 15]
+        repeated_weights = tf.stack([self.other_weights] * K, axis=0)
+        unordered_weights = tf.concat(
+            [self.query_weights, repeated_weights], axis=1)
+        # Then permute using gather to get the desired result.
+        # The permutation can be computed from the query [1, 3] using
+        # get_permutation_from_query.
+        self.permutation = tf.placeholder(tf.int32, shape=[dim])
+        self.weights = tf.gather(unordered_weights, self.permutation, axis=-1)
 
     def build_planner(self):
         raise NotImplemented('Should be implemented in subclass')
@@ -46,11 +57,14 @@ class Model(object):
         """
         Maps self.feature_exp (created by planner) to self.log_posterior.
         """
+        K = self.K
         self.true_reward_tensor = tf.constant(
             self.true_reward_matrix, dtype=tf.float32, name="true_reward_tensor", shape=self.true_reward_matrix.shape)
 
+        true_reward_repeated = tf.stack(
+            [tf.transpose(self.true_reward_tensor)] * K, axis=0)
         avg_reward_matrix = tf.matmul(
-            self.feature_expectations, tf.transpose(self.true_reward_tensor), name='avg_reward_matrix')
+            self.feature_expectations, true_reward_repeated, name='avg_reward_matrix')
         log_likelihoods_new = self.beta * avg_reward_matrix
 
         # Calculate posterior
@@ -98,7 +112,7 @@ class Model(object):
 
     # @profile
     # TODO: Remove the feature_expectations_test_input argument
-    def compute(self, outputs, sess, mdp, prior, weight_inits, feature_expectations_test_input = None, gradient_steps=0):
+    def compute(self, outputs, sess, mdp, prior=None, weight_inits=None, feature_expectations_test_input = None, gradient_steps=0):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -112,17 +126,14 @@ class Model(object):
         :param gradient_steps: Number of gradient steps to take.
         :return: List of the same length as parameter `outputs`.
         """
-        # if weight_inits is not None:
-        #     fd = {}
-        #     assign_ops = []
-        #     for i in range(self.feature_dim):
-        #         if i not in self.query:
-        #             assign_ops.append(self.weight_assignments[i])
-        #             fd[self.weight_inputs[i]] = np.array([weight_inits[i]])
-        #     sess.run(assign_ops, feed_dict=fd)
+        if weight_inits is not None:
+            fd = {self.weight_inputs: weight_inits}
+            sess.run([self.assign_op], feed_dict=fd)
 
         fd = self.create_mdp_feed_dict(mdp)
-        fd[self.prior] = prior
+        if prior is not None:
+            fd[self.prior] = prior
+        fd[self.permutation] = self.get_permutation_from_query(self.query)
         if feature_expectations_test_input is not None:
             fd[self.feature_expectations] = feature_expectations_test_input
 
@@ -136,8 +147,6 @@ class Model(object):
                 return (result / result.sum(0)).T
             elif name == 'optimal_weights':
                 return np.zeros(self.feature_dim - len(self.query))
-            elif name == 'q_values':
-                return np.random.rand(K, self.height, self.width, self.num_actions)
             elif name == 'feature_exps':
                 return np.random.rand(K, self.height, self.width, self.feature_dim)
             elif name not in self.name_to_op:
@@ -148,20 +157,30 @@ class Model(object):
         # output_ops = [get_op(name) for name in outputs]
         # return sess.run(output_ops, feed_dict=fd)
 
-    def compute_from_reward_weights(self, outputs, sess, mdp, weights):
-        fd = self.create_mdp_feed_dict(mdp)
-        fd[self.weights] = weights
-        # TODO(rohinmshah): Handle other outputs as well
-        return sess.run([self.q_values], feed_dict=fd)
-
     def create_mdp_feed_dict(self, mdp):
         raise NotImplemented('Should be implemented in subclass')
+
+    def get_permutation_from_query(self, query):
+        dim = self.feature_dim
+        # Running example: query = [1, 3], and we want indexes that will permute
+        # weights [10, 11, 12, 13, 14, 15] to [12, 10, 13, 11, 14, 15].
+        # Compute the feature numbers for unordered_weights.
+        # This can be thought of as an unordered_weight -> feature map
+        # In our example, this would be [1, 3, 0, 2, 4, 5]
+        feature_order = query[:]
+        for i in range(dim):
+            if i not in feature_order:
+                feature_order.append(i)
+        # Invert the previous map to get the feature -> unordered_weight map.
+        # This gives us [2, 0, 3, 1, 4, 5]
+        indexes = [None] * dim
+        for i in range(dim):
+            indexes[feature_order[i]] = i
+        return indexes
 
 
 class BanditsModel(Model):
     def build_planner(self):
-        self.name_to_op = {}
-
         self.features = tf.placeholder(
             tf.float32, name="features", shape=[None, self.feature_dim])
 
@@ -179,6 +198,9 @@ class BanditsModel(Model):
         self.name_to_op['reward_per_state'] = self.reward_per_state
         self.name_to_op['feature_exps'] = self.feature_expectations
 
+    def create_mdp_feed_dict(self, mdp):
+        return {}
+
 
 class GridworldModel(Model):
     def __init__(self, feature_dim, gamma, query, proxy_reward_space,
@@ -189,10 +211,10 @@ class GridworldModel(Model):
         self.num_iters = num_iters
         self.num_actions = 4
         super(GridworldModel, self).__init__(feature_dim, gamma, query, proxy_reward_space, true_reward_matrix, true_reward, beta, objective)
+
     def build_planner(self):
-        self.name_to_op = {}
         height, width, dim = self.height, self.width, self.feature_dim
-        num_actions = self.num_actions
+        num_actions, K = self.num_actions, self.K
 
         self.image = tf.placeholder(
             tf.float32, name="image", shape=[height, width])
@@ -201,46 +223,60 @@ class GridworldModel(Model):
 
         features_wall = tf.concat(
             [self.features, tf.expand_dims(self.image, -1)], axis=-1)
-        weights_wall = tf.concat([self.weights, [-1000000]], axis=-1)
+        features_wall = tf.stack([features_wall] * K, axis=0)
+        wall_constant = [[-1000000.0] for _ in range(K)]
+        weights_wall = tf.concat([self.weights, wall_constant], axis=-1)
+        # Change from K by dim to K by 1 by dim
+        weights_wall = tf.expand_dims(weights_wall, axis=1)
+        # Change to K by height by width by 1 by dim
+        weights_wall = tf.stack([weights_wall] * width, axis=1)
+        weights_wall = tf.stack([weights_wall] * height, axis=1)
         dim += 1
 
         index_prefixes = tf.constant(
-            [[[[i, j, k]
-               for k in range(dim)]
-              for j in range(width)]
-             for i in range(height)],
+            [[[[[i, j, k, l]
+                for l in range(dim)]
+               for k in range(width)]
+              for j in range(height)]
+             for i in range(K)],
             dtype=tf.int64)
 
-        feature_expectations = tf.zeros([height, width, dim])
+        feature_expectations = tf.zeros([K, height, width, dim])
         for _ in range(self.num_iters):
             q_fes = self.bellman_update(feature_expectations, features_wall)
-            q_values = tf.tensordot(q_fes, weights_wall, [[-2], [0]])
+            q_values = tf.squeeze(tf.matmul(weights_wall, q_fes), [-2])
             policy = tf.expand_dims(tf.argmax(q_values, axis=-1), -1)
             repeated_policy = tf.stack([policy] * dim, axis=-2)
             indexes = tf.concat([index_prefixes, repeated_policy], axis=-1)
             feature_expectations = tf.gather_nd(q_fes, indexes)
 
-        self.feature_expectations = feature_expectations[:,:,:-1]
+        # Remove the wall feature
+        self.feature_expectations_grid = feature_expectations[:,:,:,:-1]
+        dim -= 1
+        self.name_to_op['feature_exps_grid'] = self.feature_expectations_grid
+
+        self.feature_expectations = tf.reshape(
+            self.feature_expectations_grid, (K, -1, dim))
         self.name_to_op['feature_exps'] = self.feature_expectations
 
         q_fes = self.bellman_update(feature_expectations, features_wall)
-        q_values = tf.tensordot(q_fes, weights_wall, [[-2], [0]])
+        q_values = tf.squeeze(tf.matmul(weights_wall, q_fes), [-2])
         self.q_values = q_values
         self.name_to_op['q_values'] = q_values
 
     def bellman_update(self, fes, features):
         height, width, dim = self.height, self.width, self.feature_dim + 1
-        gamma = self.gamma
-        extra_row = tf.zeros((1, width, dim))
-        extra_col = tf.zeros((height, 1, dim))
+        gamma, K = self.gamma, self.K
+        extra_row = tf.zeros((K, 1, width, dim))
+        extra_col = tf.zeros((K, height, 1, dim))
 
-        north_lookahead = tf.concat([extra_row, fes[:-1]], axis=0)
+        north_lookahead = tf.concat([extra_row, fes[:,:-1]], axis=1)
         north_fes = features + gamma * north_lookahead
-        south_lookahead = tf.concat([fes[1:], extra_row], axis=0)
+        south_lookahead = tf.concat([fes[:,1:], extra_row], axis=1)
         south_fes = features + gamma * south_lookahead
-        east_lookahead = tf.concat([fes[:,1:], extra_col], axis=1)
+        east_lookahead = tf.concat([fes[:,:,1:], extra_col], axis=2)
         east_fes = features + gamma * east_lookahead
-        west_lookahead = tf.concat([extra_col, fes[:,:-1]], axis=1)
+        west_lookahead = tf.concat([extra_col, fes[:,:,:-1]], axis=2)
         west_fes = features + gamma * west_lookahead
         return tf.stack([north_fes, south_fes, east_fes, west_fes], axis=-1)
 
@@ -254,7 +290,6 @@ class GridworldModel(Model):
 
 class GridworldModelUsingConvolutions(GridworldModel):
     def build_planner(self):
-        self.name_to_op = {}
         height, width, dim = self.height, self.width, self.feature_dim
         num_actions, gamma = self.num_actions, self.gamma
 
@@ -304,8 +339,9 @@ class GridworldModelUsingConvolutions(GridworldModel):
             indexes = tf.concat([index_prefixes, policy], axis=3)
             feature_expectations = tf.gather_nd(q_fes, indexes)
 
-        self.feature_expectations = feature_expectations
-        self.name_to_op['feature_exps'] = feature_expectations
+        self.feature_expectations = tf.reshape(
+            feature_expectations[:,:,:,:-1], (1, -1, dim-1))
+        self.name_to_op['feature_exps'] = self.feature_expectations
 
         fv = tf.concat([feature_batch, feature_expectations], axis=3)
         q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
