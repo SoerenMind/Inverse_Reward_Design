@@ -22,7 +22,7 @@ class TestPlanner(unittest.TestCase):
         agent.set_mdp(mdp)
         dummy_proxy_space = [[-1], [0], [1]]
         dummy_true_reward_matrix = np.random.rand(3, dim)
-        model = GridworldModel(dim, 8, 8, 0.9, 10, [0], dummy_proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 'entropy')
+        model = GridworldModel(dim, 0.9, [0], dummy_proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 'entropy', 8, 8, 10)
 
         with tf.Session() as sess:
             sess.run(model.initialize_op)

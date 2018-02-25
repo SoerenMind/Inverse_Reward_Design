@@ -4,14 +4,10 @@ import tensorflow as tf
 from gridworld import Direction
 
 class Model(object):
-    def __init__(self, feature_dim, height, width, gamma, num_iters, query,
-                 proxy_reward_space, true_reward_matrix, true_reward, beta, objective):
+    def __init__(self, feature_dim, gamma, query, proxy_reward_space,
+                 true_reward_matrix, true_reward, beta, objective):
         self.feature_dim = feature_dim
-        self.height = height
-        self.width = width
         self.gamma = gamma
-        self.num_iters = num_iters
-        self.num_actions = 4
         self.query = query
         # List of possible settings for the query features
         # Eg. If we are querying features 1 and 4, and discretizing each into 3
@@ -50,14 +46,11 @@ class Model(object):
         """
         Maps self.feature_exp (created by planner) to self.log_posterior.
         """
-        'for testing purposes'
-        self.feature_exp_test_input = tf.placeholder(
-            tf.float32, name='feature_exp_test_input', shape=(None, self.feature_dim))
         self.true_reward_tensor = tf.constant(
             self.true_reward_matrix, dtype=tf.float32, name="true_reward_tensor", shape=self.true_reward_matrix.shape)
 
         avg_reward_matrix = tf.matmul(
-            self.feature_exp_test_input, tf.transpose(self.true_reward_tensor), name='avg_reward_matrix')
+            self.feature_expectations, tf.transpose(self.true_reward_tensor), name='avg_reward_matrix')
         log_likelihoods_new = self.beta * avg_reward_matrix
 
         # Calculate posterior
@@ -105,7 +98,7 @@ class Model(object):
 
     # @profile
     # TODO: Remove the feature_expectations_test_input argument
-    def compute(self, outputs, sess, mdp, weight_inits, feature_expectations_test_input = None, gradient_steps=0):
+    def compute(self, outputs, sess, mdp, prior, weight_inits, feature_expectations_test_input = None, gradient_steps=0):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -129,14 +122,13 @@ class Model(object):
         #     sess.run(assign_ops, feed_dict=fd)
 
         fd = self.create_mdp_feed_dict(mdp)
-        if feature_expectationis_test_input is not None:
+        fd[self.prior] = prior
+        if feature_expectations_test_input is not None:
             fd[self.feature_expectations] = feature_expectations_test_input
 
         def get_op(name):
             K = len(self.proxy_reward_space)
-            if name == 'entropy':
-                return 0.0
-            elif name == 'answer':
+            if name == 'answer':
                 return self.proxy_reward_space[np.random.choice(K)]
             elif name == 'true_posterior':
                 N = len(self.true_reward_matrix)
@@ -189,6 +181,14 @@ class BanditsModel(Model):
 
 
 class GridworldModel(Model):
+    def __init__(self, feature_dim, gamma, query, proxy_reward_space,
+                 true_reward_matrix, true_reward, beta, objective,
+                 height, width, num_iters):
+        self.height = height
+        self.width = width
+        self.num_iters = num_iters
+        self.num_actions = 4
+        super(GridworldModel, self).__init__(feature_dim, gamma, query, proxy_reward_space, true_reward_matrix, true_reward, beta, objective)
     def build_planner(self):
         self.name_to_op = {}
         height, width, dim = self.height, self.width, self.feature_dim
