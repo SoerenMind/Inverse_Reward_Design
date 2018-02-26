@@ -4,7 +4,7 @@ print('importing')
 
 start = time.clock()
 import numpy as np
-from inference_class import Inference
+from inference_class import InferenceDiscrete
 from gridworld import GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
 from agents import ImmediateRewardAgent, DirectionalAgent, OptimalAgent
@@ -55,8 +55,8 @@ def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, p
         for proxy in omega:
             # TODO: Extremely costly to get posterior for all proxy choices. Save repeated computations?
             # Do I have to do (and thus save) the planning for every proxy here?
-            inference.calc_and_save_posterior(proxy, reward_space_proxy=omega)    # Do only once per reward
-            posterior = dict([(tuple(true_reward), inference.get_posterior(true_reward))
+            inference.calc_and_save_posterior(omega, proxy)    # Do only once per reward
+            posterior = dict([(tuple(true_reward), inference.get_posterior(true_reward, omega, proxy))
                               for true_reward in reward_space_true])
             post_avg = sum([posterior[tuple(reward)] * reward for reward in reward_space_true]) # Over whole reward_space
             # Calculate expected regret from optimizing post_avg (expectation over posterior true rewards)
@@ -129,7 +129,7 @@ def get_regret_from_query(inference_eval, best_query, num_true_rewards=500):
     for true_reward in reward_space_true:
         lhoods = []
         for i, proxy in enumerate(best_query):
-            lhood = inference_eval.get_likelihood(true_reward, proxy, best_query)
+            lhood = inference_eval.get_likelihood(true_reward, best_query, proxy)
             lhoods.append(lhood)
         # chosen_proxy_number = np.array(lhoods).argmax()  # Replace argmax with sampling
         d = {i: lhood for i, lhood in enumerate(lhoods)}
@@ -137,8 +137,8 @@ def get_regret_from_query(inference_eval, best_query, num_true_rewards=500):
         except:
             chosen_proxy_number = np.array(lhoods).argmax()  # Replace argmax with sampling
         chosen_proxy = best_query[chosen_proxy_number]
-        inference_eval.calc_and_save_posterior(chosen_proxy, best_query)
-        post_avg = inference_eval.get_posterior_avg()
+        inference_eval.calc_and_save_posterior(best_query, chosen_proxy)
+        post_avg = inference_eval.get_posterior_avg(best_query, chosen_proxy)
         # TODO: Make a query_chooser / inference.function from query to regret or so
         optimal_reward = inference_eval.get_avg_reward(true_reward, true_reward)
         post_reward = inference_eval.get_avg_reward(post_avg, true_reward)
@@ -274,8 +274,9 @@ if __name__=='__main__':
 
     # Set up inference
     env = GridworldEnvironment(mdp)
-    inference = Inference(agent, mdp, env, beta, reward_space_true, reward_space_proxy,
-                          num_traject=num_traject, prior=None)
+    inference = InferenceDiscrete(
+        agent, mdp, env, beta, reward_space_true, reward_space_proxy,
+        num_traject=num_traject, prior=None)
 
     'Print derived parameters'
     # print('Size of reward_space_true:{size}'.format(size=size_reward_space_true))
@@ -300,15 +301,15 @@ if __name__=='__main__':
 
     'Set up test environment (not used)'
     # print 'starting posterior calculation'
-    # inference.calc_and_save_posterior(proxy_given, reward_space_proxy)
-    # prior = dict([(tuple(true_reward), inference.get_posterior(true_reward))
+    # inference.calc_and_save_posterior(reward_space_proxy, proxy_given)
+    # prior = dict([(tuple(true_reward), inference.get_posterior(true_reward, reward_space_proxy, proxy_given))
     #               for true_reward in reward_space_true])
     # print('new prior: {prior}'.format(prior=prior))
     # mdp_test = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],   # proxy_given should have no effect
     #                                      feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
     # mdp_test.add_feature_map(mdp.features)
     # env_test = GridworldEnvironment(mdp_test)
-    # inference_test = Inference(agent, mdp_test, env_test, beta=1., reward_space_true=reward_space_true, num_traject=1, prior=prior)
+    # inference_test = InferenceDiscrete(agent, mdp_test, env_test, beta=1., reward_space_true=reward_space_true, num_traject=1, prior=prior)
 
 
 

@@ -23,67 +23,95 @@ class Inference:
         self.mdp = mdp
         self.env = env
         self.beta = beta
-        # self.reward_space_proxy = reward_space_proxy
         self.reward_space_proxy = reward_space_proxy
         self.reward_space_true = reward_space_true
         self.true_reward_matrix = np.array(self.reward_space_true)
         self.num_traject = num_traject
+        self.cache = {
+            'prior_avg': None,
+            'evidence': None
+        }
         self.reset_prior()
         self.feature_expectations_dict = {}
         self.avg_reward_dict = {}
         self.make_reward_to_index_dict()
+
     # # @profile
     def get_prior(self, true_reward):
         '''Gets prior(true_reward) from prior vector.'''
-        # if self.prior is None:
-        #     num_rewards = len(self.reward_space_true)
-        #     self.prior = np.ones(num_rewards) / num_rewards
-        #     return np.true_divide(1, len(self.reward_space_true))
-        # else: return self.prior[tuple(true_reward)]
-        # else:
         # TODO: Compare performance to having 2D reward space array and doing reward_space.tolist.index(reward).
         index = self.reward_index[tuple(true_reward)]
         return self.prior[index]
 
-    def update_prior(self, query, chosen_proxy, true_posterior=None):
+    # TODO(rohinmshah): Remove the true_posterior argument, that case should be handled by caching
+    def update_prior(self, query, answer, true_posterior=None):
         """Calculates posterior for given query and answer and replaces prior with the outcome. Deletes prior_avg.
         If true_posterior is given, it replaces the prior directly and updates the prior_avg."""
         if true_posterior is not None:
+            self.cache['prior_avg'] = None
             self.prior = true_posterior
-            try: del self.prior_avg
-            except: pass
+        # TODO(rohinmshah): Can the elif case be removed?
+        elif len(query) == 0: # Do nothing for empty query
+            return
         else:
-            if len(query) == 0: # Do nothing for empty query
-                return
-            try: del self.prior_avg
-            except: pass
-            self.prior = self.calc_and_save_posterior(chosen_proxy, query)
+            self.cache['prior_avg'] = None
+            self.prior = self.calc_and_save_posterior(query, answer)
 
     def reset_prior(self):
         '''Resets to uniform prior'''
-        try: del self.prior_avg
-        except: pass
+        self.cache['prior_avg'] = None
         num_rewards = len(self.reward_space_true)
         self.prior = np.ones(num_rewards) / num_rewards
 
+    # TODO(rohinmshah): Convert everything to log space
+    def get_likelihood(self, true_reward, query, answer):
+        raise NotImplemented
 
+    def get_evidence(self, true_reward, query, answer):
+        result = self.cache['evidence']
+        if result is not None:
+            return result
+        raise NotImplemented
+
+    def get_posterior(self, true_reward, query, answer):
+        '''Just Bayes' rule'''
+        # TODO (efficiency): Cache to save up to 10% of the time in get_exp_regret
+        lhood = self.get_likelihood(true_reward, query, answer)
+        evidence = self.get_evidence(true_reward, query, answer)
+        prior = self.get_prior(true_reward)
+        # Z = self.get_Z_constant(reward)
+        return np.true_divide(lhood, evidence) * prior
+
+    def get_posterior_avg(self, query, answer):
+        return sum([true_reward * self.get_posterior(true_reward, query, answer)
+                    for true_reward in self.reward_space_true])
+
+    def get_prior_avg(self):
+        """Calculates and returns prior average reward if it's not cached. Cached version is deleted in self.update_prior."""
+        cached_result = self.cache['prior_avg']
+        if cached_result is not None:
+            return cached_result
+
+        result = np.array(sum([self.get_prior(true_reward) * true_reward
+                               for true_reward in self.reward_space_true]))
+        self.cache['prior_avg'] = result
+        return result
+
+
+class InferenceDiscrete(Inference):
     # @profile
-    def calc_and_save_posterior(self, proxy_given, reward_space_proxy):
+    def calc_and_save_posterior(self, query, answer):
         """
-        Calculates and caches all likelihoods and the normalizer for a given reward space and proxy_given.
+        Calculates and caches all likelihoods and the normalizer for a given reward space and answer.
         """
-        self.likelihoods = {tuple(true_reward): self.get_likelihood(true_reward, proxy_given, reward_space_proxy)
+        self.likelihoods = {tuple(true_reward): self.get_likelihood(true_reward, query, answer)
                             for true_reward in self.reward_space_true}
         self.evidence = np.sum([lhood * self.get_prior(true_reward)
                                 for true_reward, lhood in self.likelihoods.items()])
+        self.cache['evidence'] = self.evidence
         likelihoods_vec = np.array([self.likelihoods[tuple(true_reward)] for true_reward in self.reward_space_true])
         posterior_vec = likelihoods_vec * self.prior / self.evidence
         return posterior_vec
-
-    # def calc_and_save_feature_expectations(self,reward_space_proxy):
-    #     """Currently not used"""
-    #     for proxy in reward_space_proxy:
-    #         self.get_feature_expectations(proxy)
 
     # @profile
     def get_avg_reward_for_post_averages(self,post_averages):
@@ -175,7 +203,7 @@ class Inference:
         # log_probs + log_prior - log_evidence
 
         # @profile
-    def get_likelihood(self, true_reward, proxy, reward_space_proxy):
+    def get_likelihood(self, true_reward, reward_space_proxy, proxy):
         """NOT IN USE!
         Calculates likelihood of proxy reward given true reward.
         Proxy selection is assumed to be Boltzman rational."""
@@ -195,7 +223,7 @@ class Inference:
                 -log_Z = logsumexp(lhoods[i,{j in q}])
                 -log_P_ijq = log_lhoods[ij] - log_Z
                 -Cache logsumexp for a query and then substract it from the log_lhood[ij]
-        -Function: calc_and_save_posterior(proxy, query):
+        -Function: calc_and_save_posterior(query, proxy):
             -Do not cache (self.)likelihoods unless you use the same query again at some point
             -Calculate log_Z
             -Make probabilities-vector with get_likelihood
@@ -223,21 +251,10 @@ class Inference:
     # def get_Z_constant(self, true_reward):
     #     Z_normalization = 0
     #     for proxy in self.reward_space_proxy:
-    #         Z_normalization += self.get_likelihood(true_reward, np.array(proxy)) \
+    #         Z_normalization += self.get_likelihood(true_reward, self.proxy_reward_space, np.array(proxy)) \
     #                            * self.get_prior(proxy)
     #     return Z_normalization
 
-    # # @profile
-    def get_posterior(self, true_reward):
-        '''Just Bayes' rule'''
-        # TODO (efficiency): Cache to save up to 10% of the time in get_exp_regret
-        lhood = self.likelihoods[tuple(true_reward)]
-        # lhood = self.get_likelihood(true_reward, proxy)
-        # Z = self.get_Z_constant(true_reward)
-        prior = self.get_prior(true_reward)
-        if self.evidence == 0:
-            print('Warning: evidence=0')
-        return np.true_divide(lhood, self.evidence) * prior
     # # @profile
     def get_avg_reward(self, proxy, true_reward):
         """Calculates average true reward over num_runs trajectories when the agent optimizes the proxy reward."""
@@ -253,19 +270,6 @@ class Inference:
             self.avg_reward_dict[tuple(proxy), tuple(true_reward)] = reward
         # reward = self.mdp.get_reward_from_features(feature_expectations, true_reward)
         return reward
-
-    def get_posterior_avg(self):
-        return sum([true_reward * self.get_posterior(true_reward) for true_reward in self.reward_space_true])
-
-    def get_prior_avg(self):
-        """Calculates and returns prior average reward if it's not cached. Cached version is deleted in self.update_prior."""
-        try:
-            return self.prior_avg
-        except:
-            # Vectorize:
-            self.prior_avg = np.array(sum([self.get_prior(true_reward) * true_reward
-                                  for true_reward in self.reward_space_true]))
-            return self.prior_avg
 
     # @profile
     def get_feature_expectations(self, proxy):
@@ -313,7 +317,7 @@ class Inference:
         # idx = [self.reward_index_proxy[tuple(proxy)] for proxy in query]
 
         # Old approach
-        lhoods = [self.get_likelihood(true_reward, proxy, query) for proxy in query]    # TODO: Use cached ones.
+        lhoods = [self.get_likelihood(true_reward, query, proxy) for proxy in query]    # TODO: Use cached ones.
         # Replace with vector
         # lhoods = self.likelihood_dict[true_reward, query]
         d = {i: lhood for i, lhood in enumerate(lhoods)}
@@ -358,7 +362,7 @@ def test_inference(inference, rfunc_proxy_given, reward_space):
     cum_post = 0
     # for true_reward in itertools.product([0,1],repeat=num_states):
     for true_reward in reward_space:
-        post = inference.get_posterior(true_reward, rfunc_proxy_given)
+        post = inference.get_posterior(true_reward, inference.reward_space_proxy, rfunc_proxy_given)
         cum_post += post
     return cum_post
 

@@ -7,7 +7,7 @@ import time
 from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
 from agents import ImmediateRewardAgent, DirectionalAgent, OptimalAgent
-from inference_class import Inference
+from inference_class import InferenceDiscrete
 import csv
 import os
 import datetime
@@ -144,7 +144,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         except: raise ValueError('evidence: '+str(evidence)+' does not sum to 1')
         # proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
 
-        self.inference.update_prior(query, proxy_choice)  # TODO: Still uses calc_and_save_posterior
+        self.inference.update_prior(query, proxy_choice)
 
         return best_query, best_objective, best_objective_plus_cost
 
@@ -238,7 +238,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         The calculation is done by calculating the probability of each answer and then the regret conditioned on it."""
 
         if len(query) == 0:
-            return self.get_exp_regret(no_query=True)
+            return self.get_exp_regret_from_prior()
 
         posterior, post_averages, probs_proxy_choice = self.inference.calc_posterior(query)
         avg_reward_matrix = self.inference.get_avg_reward_for_post_averages(post_averages)
@@ -257,44 +257,22 @@ class Query_Chooser_Subclass(Query_Chooser):
         posteriors, conditional_entropy, probs_proxy_choice = self.inference.calc_posterior(query, get_entropy=True)
         return conditional_entropy
 
-    # # @profile
-    def get_exp_regret(self, no_query=False):
-        """Returns the expected regret if proxy is the answer chosen from query.
-        Proxy and query are not used here because the likelihoods in self.inference are already conditioned on them!
-        Calculates the posterior over true rewards. Assumes that the posterior average will be optimized (greedy assumption).
-        Then calculates the expected regret which is the expected difference between the reward if optimizing the true
-        reward and the reward if optimizing the posterior average.
-        """
+    # @profile
+    def get_exp_regret_from_prior(self):
+        """Returns the expected regret from the prior."""
         # inference has to have cached the posterior for the right proxy & query here.
         exp_regret = 0
-
-        # If no query, return prior regret
-        if no_query:
-            prior_avg = sum([self.inference.get_prior(true_reward) * true_reward
-                             for true_reward in self.inference.reward_space_true])
-            for true_reward in self.inference.reward_space_true:
-                p_true_reward = self.inference.get_prior(true_reward)
-                optimal_reward = self.inference.get_avg_reward(true_reward,true_reward)
-                prior_reward = self.inference.get_avg_reward(prior_avg, true_reward)
-                regret = optimal_reward - prior_reward
-                exp_regret += regret * p_true_reward
-            return exp_regret
-
-        # Get expected regret for query
-        post_avg = self.inference.get_posterior_avg()   # uses cached posterior
-        for true_reward in self.inference.reward_space_true:    # Vectorize
-            p_true_reward = self.inference.get_posterior(true_reward)
-            optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)    # Cache to save 9%
-            # True reward for optimizing post_avg
-            post_reward = self.inference.get_avg_reward(post_avg, true_reward)
-            regret = optimal_reward - post_reward
+        prior_avg = sum([self.inference.get_prior(true_reward) * true_reward
+                         for true_reward in self.inference.reward_space_true])
+        for true_reward in self.inference.reward_space_true:
+            p_true_reward = self.inference.get_prior(true_reward)
+            optimal_reward = self.inference.get_avg_reward(true_reward,true_reward)
+            prior_reward = self.inference.get_avg_reward(prior_avg, true_reward)
+            regret = optimal_reward - prior_reward
             exp_regret += regret * p_true_reward
         return exp_regret
-        # posterior = {tuple(true_reward): self.inference.get_posterior(true_reward)
-        #                   for true_reward in self.inference.reward_space_true}
-        # exp_regret = self.get_regret(posterior, query)
 
-    # # @profile
+    # @profile
     def get_regret(self, proxy, true_reward):
         """Gets difference of reward under true_reward-function for optimizing for true_reward vs proxy."""
         optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)  # Cache to save 9%
@@ -302,7 +280,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         regret = optimal_reward - proxy_reward
         return regret
 
-    # # @profile
+    # @profile
     def get_exp_regret_from_query(self, query):
         """Calculates the actual regret from a query by looping through (and weighting) true rewards."""
         if len(query) == 0:
@@ -314,7 +292,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         else:
             raise NotImplementedError
 
-    # # @profile
+    # @profile
     def get_regret_from_query_and_true_reward(self, query, true_reward):
         if len(query) == 0:
             prior_avg = self.inference.get_prior_avg()
@@ -412,7 +390,7 @@ class Experiment(object):
 
                     _, post_cond_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)
                     proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
-                    self.inference.update_prior(query, proxy_choice)    # TODO: Still uses calc_and_save_posterior
+                    self.inference.update_prior(query, proxy_choice)
 
                 # Outcome measures
                 post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
@@ -463,8 +441,10 @@ class Experiment(object):
 
             # Set up inference
             env = GridworldEnvironment(mdp)
-            inference = Inference(agent, mdp, env, beta, self.inference.reward_space_true, self.inference.reward_space_proxy,
-                                  num_traject=num_traject, prior=None)
+            inference = Inference(
+                agent, mdp, env, beta, self.inference.reward_space_true,
+                self.inference.reward_space_proxy, num_traject=num_traject,
+                prior=None)
 
             post_reward = inference.get_avg_reward(post_avg, true_reward)
             optimal_reward = inference.get_avg_reward(true_reward, true_reward)
