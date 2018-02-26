@@ -229,7 +229,7 @@ class BanditsModel(Model):
         intermediate_tensor = tf.multiply(tf.stack([self.features]*self.K,axis=2), weights_reshaped)
         self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
         self.name_to_op['reward_per_state'] = self.reward_per_state
-        self.state_probs = tf.nn.softmax(self.reward_per_state, axis=0, name="state_probs")
+        self.state_probs = tf.nn.softmax(self.reward_per_state, dim=0, name="state_probs")
         self.name_to_op['state_probs'] = self.state_probs
 
         # Calculate feature expectations
