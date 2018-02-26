@@ -175,8 +175,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
         best_query = []
         feature_dim = self.args.feature_dim
-        desired_outputs = [measure, 'other_weights']
-        # desired_outputs = [measure]
         best_optimal_weights = None
         while len(best_query) < query_size:
             best_query, best_optimal_weights = self.find_next_feature(
@@ -198,17 +196,22 @@ class Query_Chooser_Subclass(Query_Chooser):
 
     def find_next_feature(self, curr_query, curr_weights, measure, true_reward):
         mdp = self.inference.mdp
-        desired_outputs = [measure, 'optimal_weights']
+        desired_outputs = [measure, 'other_weights']
+        features = [i for i in range(self.args.feature_dim) if i not in curr_query]
 
         best_objective, best_objective_plus_cost = float("inf"), float("inf")
         best_query, best_optimal_weights = None, None
-        for feature in range(self.args.feature_dim):
+        for i, feature in enumerate(features):
             query = curr_query+[feature]
+            weights = None
+            if curr_weights is not None:
+                weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
             model = self.get_model(query, true_reward)
+
             with tf.Session() as sess:
                 sess.run(model.initialize_op)
                 objective, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, self.inference.prior, curr_weights)
+                    desired_outputs, sess, mdp, self.inference.prior, weights)
             query_cost = self.cost_of_asking * len(query)
             objective_plus_cost = objective + query_cost
             print('Model outputs calculated')
