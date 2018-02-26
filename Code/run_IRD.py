@@ -55,7 +55,7 @@ def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, p
         for proxy in omega:
             # TODO: Extremely costly to get posterior for all proxy choices. Save repeated computations?
             # Do I have to do (and thus save) the planning for every proxy here?
-            inference.calc_and_save_posterior(omega, proxy)    # Do only once per reward
+            inference.get_full_posterior(omega, proxy)    # Do only once per reward
             posterior = dict([(tuple(true_reward), inference.get_posterior(true_reward, omega, proxy))
                               for true_reward in reward_space_true])
             post_avg = sum([posterior[tuple(reward)] * reward for reward in reward_space_true]) # Over whole reward_space
@@ -137,7 +137,7 @@ def get_regret_from_query(inference_eval, best_query, num_true_rewards=500):
         except:
             chosen_proxy_number = np.array(lhoods).argmax()  # Replace argmax with sampling
         chosen_proxy = best_query[chosen_proxy_number]
-        inference_eval.calc_and_save_posterior(best_query, chosen_proxy)
+        inference_eval.get_full_posterior(best_query, chosen_proxy)
         post_avg = inference_eval.get_posterior_avg(best_query, chosen_proxy)
         # TODO: Make a query_chooser / inference.function from query to regret or so
         optimal_reward = inference_eval.get_avg_reward(true_reward, true_reward)
@@ -301,7 +301,7 @@ if __name__=='__main__':
 
     'Set up test environment (not used)'
     # print 'starting posterior calculation'
-    # inference.calc_and_save_posterior(reward_space_proxy, proxy_given)
+    # inference.get_full_posterior(reward_space_proxy, proxy_given)
     # prior = dict([(tuple(true_reward), inference.get_posterior(true_reward, reward_space_proxy, proxy_given))
     #               for true_reward in reward_space_true])
     # print('new prior: {prior}'.format(prior=prior))

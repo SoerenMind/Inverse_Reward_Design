@@ -61,9 +61,9 @@ class Query_Chooser_Subclass(Query_Chooser):
     # @profile
     def find_query(self, query_size, chooser, true_reward):
         """Calls query chooser specified by chooser (string)."""
-        if chooser == 'maxmin':
-            return self.find_query_feature_diff(query_size)
-        elif chooser == 'exhaustive':
+        # if chooser == 'maxmin':
+        #     return self.find_query_feature_diff(query_size)
+        if chooser == 'exhaustive':
             return self.find_regret_minimizing_query(query_size)
         elif chooser == 'greedy_regret':
             return self.find_best_query_greedy(query_size)

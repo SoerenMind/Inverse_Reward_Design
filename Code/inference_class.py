@@ -5,8 +5,46 @@ from scipy.misc import logsumexp
 from gradient_descent_test import get_likelihoods_from_feature_expectations
 
 
-
 class Inference:
+    pass
+
+
+"""Main vectorization
+        -Cache feature_exp for whole proxy space in a matrix (cache self.matrix)
+        -Multiply by true reward matrix to get all avg_rewards (cache self.matrix)
+        -Take exp(avg_rewards)
+        -Cache lhoods = exp(beta * reward_matrix)
+
+
+        -Cache log_lhoods = np.log(lhoods)
+            -Calculate on demand per query
+            -Function: inference.get_likelihoods(true, query):  # Gets likelihoods for all proxies in query
+                -Or: Function: inference.get_likelihoods_for_query:
+                    -Calculate log_Z
+                    -Calculate each get_likelihood(log_Z=given)
+                -log_Z = logsumexp(lhoods[i,{j in q}])
+                -log_P_ijq = log_lhoods[ij] - log_Z
+                -Cache logsumexp for a query and then substract it from the log_lhood[ij]
+        -Function: get_full_posterior(query, answer):
+            -Do not cache (self.)likelihoods unless you use the same query again at some point
+            -Calculate log_Z
+            -Make probabilities-vector with get_likelihood
+                -Use indexes for rewards (or an index map)
+            -return posterior_vec = likelihoods_vec * self.prior / self.evidence
+            -Cache post_avg?
+        -What about posterior averages?
+            -We can already calculate the likelihood of proxy choices and the posteriors.
+            -We need post_reward but we've only got avg_reward matrix for proxy/true pairs.
+                (-Precompute all the post averages | proxy, query? No because queries are unknown.)
+                    -But maybe precompute for all queries you know you'll consider next. Make set_of_queries and do
+                     get_full_posterior for each answer. Get and cache feature_exp for all the post_averages.
+                     Multiply with true_reward matrix to get avg_rewards given all true rewards.
+                     -Get feature_exp for true_rewards too and get diagonal of multiplication with true_reward_matrix.
+                -Don't need to get avg rewards / likelihoods for the post_averages!
+"""
+
+
+class InferenceDiscrete(Inference):
     def __init__(self, agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None):
         """
         :param agent: Agent object or subclass
@@ -29,7 +67,8 @@ class Inference:
         self.num_traject = num_traject
         self.cache = {
             'prior_avg': None,
-            'evidence': None
+            'evidence': {},
+            'likelihoods': {}
         }
         self.reset_prior()
         self.feature_expectations_dict = {}
@@ -55,7 +94,7 @@ class Inference:
             return
         else:
             self.cache['prior_avg'] = None
-            self.prior = self.calc_and_save_posterior(query, answer)
+            self.prior = self.get_full_posterior(query, answer)
 
     def reset_prior(self):
         '''Resets to uniform prior'''
@@ -63,21 +102,51 @@ class Inference:
         num_rewards = len(self.reward_space_true)
         self.prior = np.ones(num_rewards) / num_rewards
 
-    # TODO(rohinmshah): Convert everything to log space
     def get_likelihood(self, true_reward, query, answer):
-        raise NotImplemented
+        true_reward = tuple(true_reward)
+        result = self.cache['likelihoods']
+        if (query, answer) in result:
+            result = result[(query, answer)]
+        if true_reward in result:
+            return result[(true_reward)]
 
-    def get_evidence(self, true_reward, query, answer):
+        result = self.calc_likelihood(true_reward, query, answer)
+        lcache = self.cache['likelihoods']
+        if (query, answer) not in lcache:
+            lcache[(query, answer)] = {}
+        lcache[(query, answer)][true_reward] = result
+        return result
+
+    # TODO(rohinmshah): Convert everything to log space
+    def calc_likelihood(self, true_reward, query, answer):
+        """Calculates likelihood of proxy reward given true reward.
+        Proxy selection is assumed to be Boltzman rational."""
+        # TODO: Cache sum of numerators for each query?
+        expected_true_reward = self.get_avg_reward(answer, true_reward)
+        numerator = np.exp(self.beta * expected_true_reward)
+        # Make sure floats don't become too large. Use log-likelihoods?
+        Z_summands = [np.exp(self.beta * self.get_avg_reward(proxy_i, true_reward)) for proxy_i in query]
+        lhood = np.true_divide(numerator, np.sum(Z_summands))
+        return lhood
+
+    def get_evidence(self, query, answer):
         result = self.cache['evidence']
-        if result is not None:
-            return result
-        raise NotImplemented
+        if (query, answer) in result:
+            return result[(query, answer)]
+
+        result = self.calc_evidence(true_reward, query, answer)
+        self.cache['evidence'][(query, answer)] = result
+        return result
+
+    def calc_evidence(self, query, answer):
+        return np.sum([self.get_likelihood(true_reward, query, answer) * self.get_prior(true_reward)
+                       for true_reward in self.reward_space_true])
 
     def get_posterior(self, true_reward, query, answer):
         '''Just Bayes' rule'''
         # TODO (efficiency): Cache to save up to 10% of the time in get_exp_regret
         lhood = self.get_likelihood(true_reward, query, answer)
-        evidence = self.get_evidence(true_reward, query, answer)
+        evidence = self.get_evidence(query, answer)
         prior = self.get_prior(true_reward)
         # Z = self.get_Z_constant(reward)
         return np.true_divide(lhood, evidence) * prior
@@ -92,26 +161,17 @@ class Inference:
         if cached_result is not None:
             return cached_result
 
-        result = np.array(sum([self.get_prior(true_reward) * true_reward
-                               for true_reward in self.reward_space_true]))
+        result = self.calc_prior_avg()
         self.cache['prior_avg'] = result
         return result
 
+    def calc_prior_avg(self):
+        return np.array(sum([self.get_prior(true_reward) * true_reward
+                             for true_reward in self.reward_space_true]))
 
-class InferenceDiscrete(Inference):
-    # @profile
-    def calc_and_save_posterior(self, query, answer):
-        """
-        Calculates and caches all likelihoods and the normalizer for a given reward space and answer.
-        """
-        self.likelihoods = {tuple(true_reward): self.get_likelihood(true_reward, query, answer)
-                            for true_reward in self.reward_space_true}
-        self.evidence = np.sum([lhood * self.get_prior(true_reward)
-                                for true_reward, lhood in self.likelihoods.items()])
-        self.cache['evidence'] = self.evidence
-        likelihoods_vec = np.array([self.likelihoods[tuple(true_reward)] for true_reward in self.reward_space_true])
-        posterior_vec = likelihoods_vec * self.prior / self.evidence
-        return posterior_vec
+    def get_full_posterior(self, query, answer):
+        return np.array([self.get_posterior(true_reward, query, answer)
+                         for true_reward in self.reward_space_true])
 
     # @profile
     def get_avg_reward_for_post_averages(self,post_averages):
@@ -202,52 +262,6 @@ class InferenceDiscrete(Inference):
         # log_evidence = ?
         # log_probs + log_prior - log_evidence
 
-        # @profile
-    def get_likelihood(self, true_reward, reward_space_proxy, proxy):
-        """NOT IN USE!
-        Calculates likelihood of proxy reward given true reward.
-        Proxy selection is assumed to be Boltzman rational."""
-        """Main vectorization
-        -Cache feature_exp for whole proxy space in a matrix (cache self.matrix)
-        -Multiply by true reward matrix to get all avg_rewards (cache self.matrix)
-        -Take exp(avg_rewards)
-        -Cache lhoods = exp(beta * reward_matrix)
-
-
-        -Cache log_lhoods = np.log(lhoods)
-            -Calculate on demand per query
-            -Function: inference.get_likelihoods(true, query):  # Gets likelihoods for all proxies in query
-                -Or: Function: inference.get_likelihoods_for_query:
-                    -Calculate log_Z
-                    -Calculate each get_likelihood(log_Z=given)
-                -log_Z = logsumexp(lhoods[i,{j in q}])
-                -log_P_ijq = log_lhoods[ij] - log_Z
-                -Cache logsumexp for a query and then substract it from the log_lhood[ij]
-        -Function: calc_and_save_posterior(query, proxy):
-            -Do not cache (self.)likelihoods unless you use the same query again at some point
-            -Calculate log_Z
-            -Make probabilities-vector with get_likelihood
-                -Use indexes for rewards (or an index map)
-            -return posterior_vec = likelihoods_vec * self.prior / self.evidence
-            -Cache post_avg?
-        -What about posterior averages?
-            -We can already calculate the likelihood of proxy choices and the posteriors.
-            -We need post_reward but we've only got avg_reward matrix for proxy/true pairs.
-                (-Precompute all the post averages | proxy, query? No because queries are unknown.)
-                    -But maybe precompute for all queries you know you'll consider next. Make set_of_queries and do
-                     calc_and_save_posterior for each answer. Get and cache feature_exp for all the post_averages.
-                     Multiply with true_reward matrix to get avg_rewards given all true rewards.
-                     -Get feature_exp for true_rewards too and get diagonal of multiplication with true_reward_matrix.
-                -Don't need to get avg rewards / likelihoods for the post_averages!
-        """
-        # TODO: Cache sum of numerators for each query?
-        expected_true_reward = self.get_avg_reward(proxy, true_reward)
-        numerator = np.exp(self.beta * expected_true_reward)
-        # Make sure floats don't become too large. Use log-likelihoods?
-        Z_summands = [np.exp(self.beta * self.get_avg_reward(proxy_i, true_reward)) for proxy_i in reward_space_proxy]
-        lhood = np.true_divide(numerator, np.sum(Z_summands))
-        return lhood
-
     # def get_Z_constant(self, true_reward):
     #     Z_normalization = 0
     #     for proxy in self.reward_space_proxy:
@@ -317,7 +331,7 @@ class InferenceDiscrete(Inference):
         # idx = [self.reward_index_proxy[tuple(proxy)] for proxy in query]
 
         # Old approach
-        lhoods = [self.get_likelihood(true_reward, query, proxy) for proxy in query]    # TODO: Use cached ones.
+        lhoods = [self.get_likelihood(true_reward, query, proxy) for proxy in query]
         # Replace with vector
         # lhoods = self.likelihood_dict[true_reward, query]
         d = {i: lhood for i, lhood in enumerate(lhoods)}
