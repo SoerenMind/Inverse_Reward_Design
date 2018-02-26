@@ -262,6 +262,8 @@ class GridworldModel(Model):
             tf.float32, name="image", shape=[height, width])
         self.features = tf.placeholder(
             tf.float32, name="features", shape=[height, width, dim])
+        self.start_x = tf.placeholder(tf.int32, name="start_x", shape=[])
+        self.start_y = tf.placeholder(tf.int32, name="start_y", shape=[])
 
         features_wall = tf.concat(
             [self.features, tf.expand_dims(self.image, -1)], axis=-1)
@@ -297,8 +299,8 @@ class GridworldModel(Model):
         dim -= 1
         self.name_to_op['feature_exps_grid'] = self.feature_expectations_grid
 
-        self.feature_expectations = tf.reshape(
-            self.feature_expectations_grid, (K, -1, dim))
+        x, y = self.start_x, self.start_y
+        self.feature_expectations = self.feature_expectations_grid[:,y,x,:]
         self.name_to_op['feature_exps'] = self.feature_expectations
 
         q_fes = self.bellman_update(feature_expectations, features_wall)
@@ -323,10 +325,13 @@ class GridworldModel(Model):
         return tf.stack([north_fes, south_fes, east_fes, west_fes], axis=-1)
 
     def create_mdp_feed_dict(self, mdp):
-        image, features, _ = mdp.convert_to_numpy_input()
+        image, features, start_state = mdp.convert_to_numpy_input()
+        x, y = start_state
         return {
             self.image: image,
-            self.features: features
+            self.features: features,
+            self.start_x: x,
+            self.start_y: y
         }
 
 
