@@ -37,6 +37,8 @@ class Model(object):
         self.weight_inputs = tf.placeholder(tf.float32, shape=[num_fixed], name="weight_inputs")
         self.assign_op = self.other_weights.assign(self.weight_inputs)
 
+
+
         # Let's say query is [1, 3] and there are 6 features.
         # query_weights = [10, 11] and weight_inputs = [12, 13, 14, 15].
         # Then we want self.weights to be [12, 10, 13, 11, 14, 15].
@@ -49,6 +51,14 @@ class Model(object):
         # get_permutation_from_query.
         self.permutation = tf.placeholder(tf.int32, shape=[dim])
         self.weights = tf.gather(unordered_weights, self.permutation, axis=-1)
+
+        self.name_to_op = {}    # Remove
+        self.name_to_op['weights'] = self.weights
+        self.name_to_op['query_weights'] = self.query_weights
+
+        # print self.query_weights.shape
+        # print self.other_weights.shape
+        # print self.weights.shape
 
 
     def build_planner(self):
@@ -200,24 +210,8 @@ class Model(object):
 
 
 class BanditsModel(Model):
-    def build_tf_graph(self, objective):
-        self.build_weights()
-        self.build_planner()
-        self.build_map_to_posterior()
-        self.build_map_to_objective(objective)
-        # Initializing the variables
-        self.initialize_op = tf.global_variables_initializer()
-
-        self.name_to_op = {}
-        self.build_weights()
-        self.build_planner()
-        self.build_map_to_posterior()
-        self.build_map_to_objective(objective)
-        # Initializing the variables
-        self.initialize_op = tf.global_variables_initializer()
 
     def build_planner(self):
-        self.name_to_op = {}
         self.features = tf.placeholder(
             tf.float32, name="features", shape=[None, self.feature_dim])
         self.name_to_op['features'] = self.features
@@ -229,6 +223,7 @@ class BanditsModel(Model):
         intermediate_tensor = tf.multiply(tf.stack([self.features]*self.K,axis=2), weights_reshaped)
         self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
         self.name_to_op['reward_per_state'] = self.reward_per_state
+        self.name_to_op['q_values'] = self.reward_per_state
         self.state_probs = tf.nn.softmax(self.reward_per_state, dim=0, name="state_probs")
         self.name_to_op['state_probs'] = self.state_probs
 
