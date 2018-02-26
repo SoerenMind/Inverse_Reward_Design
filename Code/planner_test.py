@@ -4,9 +4,10 @@ import tensorflow as tf
 import unittest
 from itertools import product
 
-from planner import GridworldModel, GridworldModelUsingConvolutions
+from planner import GridworldModel, BanditsModel
 from gridworld import Direction
 from gridworld import GridworldMdp, GridworldMdpWithDistanceFeatures
+from gridworld import NStateMdpGaussianFeatures
 from agents import OptimalAgent
 
 class TestPlanner(unittest.TestCase):
@@ -27,19 +28,34 @@ class TestPlanner(unittest.TestCase):
         proxy_space = list(product(range(-1, 2), range(-1, 2)))
         dummy_true_reward_matrix = np.random.rand(3, dim)
         model = GridworldModel(dim, 0.9, query, proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 'entropy', 8, 8, 10)
+        self.check_model_equivalent(model, query, other_weights, mdp, 10)
 
+    def test_bandits_planner(self):
+        dim = 5
+        weights = np.random.randn(dim)
+        mdp = NStateMdpGaussianFeatures(
+            num_states=7, rewards=weights, start_state=0,
+            preterminal_states=[], feature_dim=dim, num_states_reachable=7)
+        query = [0, 2, 3]
+        other_weights = np.array([weights[1], weights[4]])
+        proxy_space = list(product(range(-1, 2), range(-1, 2)))
+        dummy_true_reward_matrix = np.random.rand(3, dim)
+        model = BanditsModel(dim, 0.9, query, proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 'entropy')
+        self.check_model_equivalent(model, query, other_weights, mdp, 20)
+
+    def check_model_equivalent(self, model, query, weights, mdp, num_iters):
         with tf.Session() as sess:
             sess.run(model.initialize_op)
-            (qvals,) = model.compute(['q_values'], sess, mdp, weight_inits=other_weights)
+            (qvals,) = model.compute(['q_values'], sess, mdp, weight_inits=weights)
 
-        agent = OptimalAgent(gamma=0.9, num_iters=10)
-        for i, proxy in enumerate(proxy_space):
+        agent = OptimalAgent(gamma=model.gamma, num_iters=num_iters)
+        for i, proxy in enumerate(model.proxy_reward_space):
             for idx, val in zip(query, proxy):
                 mdp.rewards[idx] = val
             agent.set_mdp(mdp)
-            self.check_equivalent(qvals[i], agent, mdp)
+            self.check_qvals_equivalent(qvals[i], agent, mdp)
 
-    def check_equivalent(self, qvals, agent, mdp):
+    def check_qvals_equivalent(self, qvals, agent, mdp):
         for state in mdp.get_states():
             if mdp.is_terminal(state):
                 continue

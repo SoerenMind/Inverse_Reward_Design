@@ -4,20 +4,17 @@ print('importing')
 
 start = time.clock()
 import numpy as np
-import environment
-import agent_class
-from inference_class import Inference, test_inference
-import itertools
-from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
+from inference_class import Inference
+from gridworld import GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
-from agents import ImmediateRewardAgent, DirectionalAgent, ValueIterationLikeAgent
+from agents import ImmediateRewardAgent, DirectionalAgent, OptimalAgent
 from query_chooser_class import Query_Chooser_Subclass, Experiment
 # from interface_discrete import Interface
 from random import choice, seed
-from scipy.special import comb
+# from scipy.special import comb
 import copy
 from utils import Distribution
-from scipy.misc import logsumexp
+# from scipy.misc import logsumexp
 import sys
 import argparse
 import tensorflow as tf
@@ -235,7 +232,6 @@ if __name__=='__main__':
         mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
                                         feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
         agent = ImmediateRewardAgent()
-        agent.set_mdp(mdp)
 
         # Reward spaces for N-State-Mdp
         from itertools import product
@@ -253,8 +249,7 @@ if __name__=='__main__':
     elif args.mdp_type == 'gridworld':
         grid = GridworldMdp.generate_random(height,width,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
         mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
-        agent = ValueIterationLikeAgent(gamma, num_iters=args.value_iters)
-        super(ValueIterationLikeAgent, agent).set_mdp(mdp)
+        agent = OptimalAgent(gamma, num_iters=args.value_iters)
 
 
 
@@ -272,7 +267,7 @@ if __name__=='__main__':
 
     # Set up inference
     env = GridworldEnvironment(mdp)
-    inference = Inference(agent, env, beta, reward_space_true, reward_space_proxy,
+    inference = Inference(agent, mdp, env, beta, reward_space_true, reward_space_proxy,
                           num_traject=num_traject, prior=None)
 
     'Print derived parameters'
@@ -306,8 +301,7 @@ if __name__=='__main__':
     #                                      feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
     # mdp_test.add_feature_map(mdp.features)
     # env_test = GridworldEnvironment(mdp_test)
-    # agent.set_mdp(mdp_test)
-    # inference_test = Inference(agent, env_test, beta=1., reward_space_true=reward_space_true, num_traject=1, prior=prior)
+    # inference_test = Inference(agent, mdp_test, env_test, beta=1., reward_space_true=reward_space_true, num_traject=1, prior=prior)
 
 
 

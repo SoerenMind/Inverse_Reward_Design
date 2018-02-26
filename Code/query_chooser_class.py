@@ -1,4 +1,4 @@
-from itertools import combinations
+from itertools import combinations, product
 from scipy.special import comb
 from random import choice, sample, seed
 import numpy as np
@@ -6,12 +6,12 @@ import time
 # for test environment
 from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
-from agents import ImmediateRewardAgent, DirectionalAgent, ValueIterationLikeAgent
+from agents import ImmediateRewardAgent, DirectionalAgent, OptimalAgent
 from inference_class import Inference
 import csv
 import os
 import datetime
-from planner import Model, BanditsModel, GridworldModel, GridworldModelUsingConvolutions
+from planner import GridworldModel, BanditsModel
 import tensorflow as tf
 from itertools import product
 
@@ -171,81 +171,75 @@ class Query_Chooser_Subclass(Query_Chooser):
     # @profile
     def find_feature_query_greedy(self, query_size, measure, true_reward):
         """Returns feature query of size query_size that minimizes the objective (e.g. posterior entropy)."""
+        mdp = self.inference.mdp
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
-        best_feature_list = []
+        best_query = []
         feature_dim = self.args.feature_dim
-        desired_outputs = [measure, 'other_weights']
-        # desired_outputs = [measure]
         best_optimal_weights = None
-        while len(best_feature_list) < query_size:
-            found_new = False
-            best_objective = float("inf")
-            best_objective_plus_cost = best_objective
-            for feature in range(feature_dim):
-                feature_list = best_feature_list+[feature]
-
-                (objective, optimal_weights) = self.calc_objective(feature_list, desired_outputs, init=best_optimal_weights)
-                query_cost = self.cost_of_asking * len(feature_list)
-                objective_plus_cost = objective + query_cost
-                print('Model outputs calculated')
-                if objective_plus_cost <= best_objective_plus_cost + 1e-14:
-                    best_objective = objective
-                    best_objective_plus_cost = objective_plus_cost
-                    best_optimal_weights_new = optimal_weights
-                    best_feature_list_new = feature_list
-                    found_new = True
-            try:
-                assert found_new  # If no better query was found the while loop will go forever.
-            except:
-                assert found_new
-            best_feature_list = best_feature_list_new
-            best_optimal_weights = best_optimal_weights_new
-            print 'Query length increased to {s}'.format(s=len(best_feature_list))
+        while len(best_query) < query_size:
+            best_query, best_optimal_weights = self.find_next_feature(
+                best_query, best_optimal_weights, measure, true_reward)
+            print 'Query length increased to {s}'.format(s=len(best_query))
 
         print('query found')
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         # Add: Get all measures for data recording?
         desired_outputs = [measure,'true_posterior']
-        objective, true_posterior = self.calc_objective(best_feature_list, desired_outputs,
-                                                                  true_reward=true_reward, high_iters=True)
-        return best_feature_list, objective, true_posterior
+        model = self.get_model(best_query, true_reward)
+        with tf.Session() as sess:
+            sess.run(model.initialize_op)
+            # TODO: self.inference.feature_exp_matrix should be something else?
+            objective, true_posterior = model.compute(
+                desired_outputs, sess, mdp, self.inference.prior,
+                best_optimal_weights, self.inference.feature_exp_matrix)
+        return best_query, objective, true_posterior
 
-    # @profile
-    def calc_objective(self, feature_list, desired_outputs, true_reward=None, init=None, high_iters=False):
-        """
-        Returns the desired model outputs after minimizing the desired measure over settings of fixed features.
+    def find_next_feature(self, curr_query, curr_weights, measure, true_reward):
+        mdp = self.inference.mdp
+        desired_outputs = [measure, 'other_weights']
+        features = [i for i in range(self.args.feature_dim) if i not in curr_query]
 
-        :param feature_list: List of integers. Specifies free features in previous query.
-        :return: model_outputs: dictionary of model outputs, indexed by desired_outputs
-        """
-        mdp = self.inference.agent.mdp
+        best_objective, best_objective_plus_cost = float("inf"), float("inf")
+        best_query, best_optimal_weights = None, None
+        for i, feature in enumerate(features):
+            query = curr_query+[feature]
+            weights = None
+            if curr_weights is not None:
+                weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
+            model = self.get_model(query, true_reward)
+
+            with tf.Session() as sess:
+                sess.run(model.initialize_op)
+                objective, optimal_weights = model.compute(
+                    desired_outputs, sess, mdp, self.inference.prior, weights)
+            query_cost = self.cost_of_asking * len(query)
+            objective_plus_cost = objective + query_cost
+            print('Model outputs calculated')
+            if objective_plus_cost <= best_objective_plus_cost + 1e-14:
+                best_objective = objective
+                best_objective_plus_cost = objective_plus_cost
+                best_optimal_weights = optimal_weights
+                best_query = query
+        return best_query, best_optimal_weights
+
+    def get_model(self, query, true_reward=None, high_iters=False):
+        mdp = self.inference.mdp
         num_iters = 50 if high_iters else self.args.num_iters_optim
-
-        'Proxy space with all weights free'
-        # feature_list = range(self.args.feature_dim)
-        # proxy_reward_space = [list(proxy) for proxy in self.reward_space_proxy]
-        proxy_reward_space = list(product(*[[-1, 0, 1] for _ in range(len(feature_list))]))
+        proxy_space = list(product(*[[-1, 0, 1] for _ in range(len(query))]))
 
         if mdp.type == 'bandits':
-            model = BanditsModel(
-                self.args.feature_dim, self.args.gamma, feature_list,
-                proxy_reward_space, self.inference.true_reward_matrix,
+            return BanditsModel(
+                self.args.feature_dim, self.args.gamma, query,
+                proxy_space, self.inference.true_reward_matrix,
                 true_reward, self.args.beta, 'entropy')
         elif mdp.type == 'gridworld':
-            model = GridworldModel(
-                self.args.feature_dim, self.args.gamma, feature_list,
-                proxy_reward_space, self.inference.true_reward_matrix,
+            return GridworldModel(
+                self.args.feature_dim, self.args.gamma, query,
+                proxy_space, self.inference.true_reward_matrix,
                 true_reward, self.args.beta, 'entropy', mdp.height, mdp.width,
                 num_iters)
         else:
             raise ValueError('Unknown model type: ' + str(mdp.type))
-
-        with tf.Session() as sess:
-            sess.run(model.initialize_op)
-            model_outputs = model.compute(desired_outputs, sess, mdp, self.inference.prior)
-
-        return model_outputs
-
 
     def find_random_query(self, query_size):
         query = [choice(self.reward_space_proxy) for _ in range(query_size)]
@@ -479,12 +473,11 @@ class Experiment(object):
             # Set environment and agent
             grid = GridworldMdp.generate_random(8, 8, 0.1, 0.2, goals, living_reward=-0.01)
             mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=post_avg)
-            agent = ValueIterationLikeAgent(gamma, num_iters=50)
-            super(ValueIterationLikeAgent, agent).set_mdp(mdp)
+            agent = OptimalAgent(gamma, num_iters=50)
 
             # Set up inference
             env = GridworldEnvironment(mdp)
-            inference = Inference(agent, env, beta, self.inference.reward_space_true, self.inference.reward_space_proxy,
+            inference = Inference(agent, mdp, env, beta, self.inference.reward_space_true, self.inference.reward_space_proxy,
                                   num_traject=num_traject, prior=None)
 
             post_reward = inference.get_avg_reward(post_avg, true_reward)

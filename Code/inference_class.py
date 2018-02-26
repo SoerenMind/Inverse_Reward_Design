@@ -7,7 +7,7 @@ from gradient_descent_test import get_likelihoods_from_feature_expectations
 
 
 class Inference:
-    def __init__(self, agent, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None):
+    def __init__(self, agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None):
         """
         :param agent: Agent object or subclass
         :param env: Environment object or subclass
@@ -20,6 +20,7 @@ class Inference:
         # Or input env_type+s_terminal+etc
         # self.env = env
         self.agent = agent
+        self.mdp = mdp
         self.env = env
         self.beta = beta
         # self.reward_space_proxy = reward_space_proxy
@@ -250,7 +251,7 @@ class Inference:
             feature_expectations = self.get_feature_expectations(proxy)
             reward = np.dot(feature_expectations, true_reward)
             self.avg_reward_dict[tuple(proxy), tuple(true_reward)] = reward
-        # reward = self.agent.mdp.get_reward_from_features(feature_expectations, true_reward)
+        # reward = self.mdp.get_reward_from_features(feature_expectations, true_reward)
         return reward
 
     def get_posterior_avg(self):
@@ -274,9 +275,9 @@ class Inference:
         try:
             feature_expectations = self.feature_expectations_dict[tuple(proxy)]
         except:
-            self.agent.mdp.change_reward(proxy)
-            # self.agent.mdp.set_feature_weights(proxy)
-            iters = self.agent.set_mdp(self.agent.mdp)  # Does value iteration
+            self.mdp.change_reward(proxy)
+            # self.mdp.set_feature_weights(proxy)
+            iters = self.agent.set_mdp(self.mdp)  # Does value iteration
             trajectories = [run_agent(self.agent, self.env) for _ in range(self.num_traject)]
             # trajectory = [trajectories[0][t][0] for t in range(20)]
             # print trajectory
@@ -284,7 +285,7 @@ class Inference:
             for traject in trajectories:
                 for t, tup in enumerate(traject):
                     traject[t] = tuple(list(tup)+[self.agent.gamma**t])
-            feature_expectations = self.agent.mdp.get_feature_expectations_from_trajectories(trajectories)
+            feature_expectations = self.mdp.get_feature_expectations_from_trajectories(trajectories)
             # feature_expectations = np.true_divide(np.ones(shape=proxy.shape), len(proxy))
             self.feature_expectations_dict[tuple(proxy)] = feature_expectations
             num_plannings_done = len(self.feature_expectations_dict.items())
@@ -338,7 +339,7 @@ class Inference:
         self.avg_reward_dict = {}
         self.likelihoods = {}
         self.reset_prior()
-        if reset_mdp: self.agent.mdp.populate_features()
+        if reset_mdp: self.mdp.populate_features()
         # Reset other cached variables if new ones added!
 
     def make_reward_to_index_dict(self):

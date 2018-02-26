@@ -99,9 +99,9 @@ class Model(object):
         """
         if 'entropy' in objective:
             post_ent = - tf.reduce_sum(
-                tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keepdims=True, name='post_ent')
+                tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent')
             self.exp_post_ent = tf.reduce_sum(
-                tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keepdims=True, name='exp_post_entropy')
+                tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='exp_post_entropy')
             self.name_to_op['entropy'] = self.exp_post_ent
 
         if 'variance' in objective:
@@ -229,13 +229,13 @@ class BanditsModel(Model):
         intermediate_tensor = tf.multiply(tf.stack([self.features]*self.K,axis=2), weights_reshaped)
         self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
         self.name_to_op['reward_per_state'] = self.reward_per_state
-        self.state_probs = tf.nn.softmax(self.reward_per_state, axis=0, name="state_probs")
+        self.state_probs = tf.nn.softmax(self.reward_per_state, dim=0, name="state_probs")
         self.name_to_op['state_probs'] = self.state_probs
 
         # Calculate feature expectations
         probs_stack = tf.stack([self.state_probs] * self.feature_dim, axis=1)
         features_stack = tf.multiply(tf.stack([self.features] * self.K, axis=2), probs_stack, name='multi')
-        self.feature_expectations = tf.reduce_sum(features_stack, axis=0, keepdims=False, name="feature_exps")
+        self.feature_expectations = tf.reduce_sum(features_stack, axis=0, keep_dims=False, name="feature_exps")
         self.feature_expectations = tf.transpose(self.feature_expectations)
         self.name_to_op['feature_exps'] = self.feature_expectations
 
@@ -262,6 +262,8 @@ class GridworldModel(Model):
             tf.float32, name="image", shape=[height, width])
         self.features = tf.placeholder(
             tf.float32, name="features", shape=[height, width, dim])
+        self.start_x = tf.placeholder(tf.int32, name="start_x", shape=[])
+        self.start_y = tf.placeholder(tf.int32, name="start_y", shape=[])
 
         features_wall = tf.concat(
             [self.features, tf.expand_dims(self.image, -1)], axis=-1)
@@ -297,8 +299,8 @@ class GridworldModel(Model):
         dim -= 1
         self.name_to_op['feature_exps_grid'] = self.feature_expectations_grid
 
-        self.feature_expectations = tf.reshape(
-            self.feature_expectations_grid, (K, -1, dim))
+        x, y = self.start_x, self.start_y
+        self.feature_expectations = self.feature_expectations_grid[:,y,x,:]
         self.name_to_op['feature_exps'] = self.feature_expectations
 
         q_fes = self.bellman_update(feature_expectations, features_wall)
@@ -323,78 +325,14 @@ class GridworldModel(Model):
         return tf.stack([north_fes, south_fes, east_fes, west_fes], axis=-1)
 
     def create_mdp_feed_dict(self, mdp):
-        image, features, _ = mdp.convert_to_numpy_input()
+        image, features, start_state = mdp.convert_to_numpy_input()
+        x, y = start_state
         return {
             self.image: image,
-            self.features: features
+            self.features: features,
+            self.start_x: x,
+            self.start_y: y
         }
-
-
-class GridworldModelUsingConvolutions(GridworldModel):
-    def build_planner(self):
-        height, width, dim = self.height, self.width, self.feature_dim
-        num_actions, gamma = self.num_actions, self.gamma
-
-        self.image = tf.placeholder(
-            tf.float32, name="image", shape=[height, width])
-        self.features = tf.placeholder(
-            tf.float32, name="features", shape=[height, width, dim])
-
-        image_batch = tf.expand_dims(tf.expand_dims(self.image, 0), 3)
-        feature_batch = tf.expand_dims(self.features, 0)
-        feature_batch = tf.concat([feature_batch, image_batch], axis=3)
-        wall_weight = tf.constant([-1000000.0], dtype=tf.float32)
-        new_weights = tf.concat([self.weights, wall_weight], axis=0)
-        dim += 1
-
-        # To deal with walls, give a -1000000 reward whenever the agent takes an
-        # action that would move it into a wall.
-        north = Direction.get_number_from_direction(Direction.NORTH)
-        south = Direction.get_number_from_direction(Direction.SOUTH)
-        east = Direction.get_number_from_direction(Direction.EAST)
-        west = Direction.get_number_from_direction(Direction.WEST)
-
-        bellman_kernel_value = np.zeros([3, 3, 2*dim, num_actions*dim])
-        for i in range(dim):
-            # For every action, we get the features for the current state
-            bellman_kernel_value[1,1,i,i::dim] = [1.0] * num_actions
-            # If you move north, add the discounted features from the state
-            # north of you. Similarly for the other actions.
-            bellman_kernel_value[0,1,dim+i,north*dim+i] = gamma
-            bellman_kernel_value[2,1,dim+i,south*dim+i] = gamma
-            bellman_kernel_value[1,2,dim+i,east*dim+i] = gamma
-            bellman_kernel_value[1,0,dim+i,west*dim+i] = gamma
-        bellman_kernel = tf.constant(bellman_kernel_value, dtype=tf.float32)
-
-        index_prefixes = tf.constant(
-            [[[[0, i, j] for j in range(width)] for i in range(height)]],
-            dtype=tf.int64)
-
-        feature_expectations = tf.zeros([1, height, width, dim])
-        for _ in range(self.num_iters):
-            fv = tf.concat([feature_batch, feature_expectations], axis=3)
-            q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
-            q_fes = tf.reshape(
-                q_flattened_fes, [1, height, width, num_actions, dim])
-            q_values = tf.tensordot(q_fes, new_weights, [[4], [0]])
-            policy = tf.expand_dims(tf.argmax(q_values, axis=3), -1)
-            indexes = tf.concat([index_prefixes, policy], axis=3)
-            feature_expectations = tf.gather_nd(q_fes, indexes)
-
-        self.feature_expectations = tf.reshape(
-            feature_expectations[:,:,:,:-1], (1, -1, dim-1))
-        self.name_to_op['feature_exps'] = self.feature_expectations
-
-        fv = tf.concat([feature_batch, feature_expectations], axis=3)
-        q_flattened_fes = self._conv2d(fv, bellman_kernel, "q_flat_fe")
-        q_fes = tf.reshape(
-            q_flattened_fes, [1, height, width, num_actions, dim])
-
-        self.q_values = tf.tensordot(q_fes, new_weights, [[4], [0]])
-        self.name_to_op['q_values'] = self.q_values
-
-    def _conv2d(self, x, k, name=None, strides=(1,1,1,1),pad='SAME'):
-        return tf.nn.conv2d(x, k, name=name, strides=strides, padding=pad)
 
 
 def logdot(a,b):
