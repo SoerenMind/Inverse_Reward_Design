@@ -4,11 +4,11 @@ import tensorflow as tf
 from gridworld import Direction
 
 class Model(object):
-    def __init__(self, feature_dim, gamma, query, proxy_reward_space,
+    def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
                  true_reward_matrix, true_reward, beta, objective):
         self.feature_dim = feature_dim
         self.gamma = gamma
-        self.query = query
+        self.query_size = query_size
         # List of possible settings for the query features
         # Eg. If we are querying features 1 and 4, and discretizing each into 3
         # buckets (-1, 0 and 1), the proxy reward space would be
@@ -30,7 +30,7 @@ class Model(object):
         self.initialize_op = tf.global_variables_initializer()
 
     def build_weights(self):
-        query_size, dim, K = len(self.query), self.feature_dim, self.K
+        query_size, dim, K = self.query_size, self.feature_dim, self.K
         num_fixed = dim - query_size
         self.query_weights= tf.constant(self.proxy_reward_space, dtype=tf.float32, name="query_weights")
         self.other_weights = tf.Variable(tf.zeros([num_fixed]), name="other_weights")
@@ -135,7 +135,7 @@ class Model(object):
             pass
 
     # TODO: Remove the feature_expectations_test_input argument
-    def compute(self, outputs, sess, mdp, prior=None, weight_inits=None, feature_expectations_test_input = None, gradient_steps=0):
+    def compute(self, outputs, sess, mdp, query, prior=None, weight_inits=None, feature_expectations_test_input = None, gradient_steps=0):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -156,7 +156,7 @@ class Model(object):
         fd = self.create_mdp_feed_dict(mdp)
         if prior is not None:
             fd[self.prior] = prior
-        fd[self.permutation] = self.get_permutation_from_query(self.query)
+        fd[self.permutation] = self.get_permutation_from_query(query)
 
 
         def get_op(name):
@@ -245,14 +245,14 @@ class BanditsModel(Model):
 
 
 class GridworldModel(Model):
-    def __init__(self, feature_dim, gamma, query, proxy_reward_space,
+    def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
                  true_reward_matrix, true_reward, beta, objective,
                  height, width, num_iters):
         self.height = height
         self.width = width
         self.num_iters = num_iters
         self.num_actions = 4
-        super(GridworldModel, self).__init__(feature_dim, gamma, query, proxy_reward_space, true_reward_matrix, true_reward, beta, objective)
+        super(GridworldModel, self).__init__(feature_dim, gamma, query_size, proxy_reward_space, true_reward_matrix, true_reward, beta, objective)
 
     def build_planner(self):
         height, width, dim = self.height, self.width, self.feature_dim

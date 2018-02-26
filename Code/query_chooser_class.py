@@ -190,7 +190,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             sess.run(model.initialize_op)
             # TODO: self.inference.feature_exp_matrix should be something else?
             objective, true_posterior = model.compute(
-                desired_outputs, sess, mdp, self.inference.prior,
+                desired_outputs, sess, mdp, best_query, self.inference.prior,
                 best_optimal_weights, self.inference.feature_exp_matrix)
         return best_query, objective, true_posterior
 
@@ -211,7 +211,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             with tf.Session() as sess:
                 sess.run(model.initialize_op)
                 objective, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, self.inference.prior, weights)
+                    desired_outputs, sess, mdp, query, self.inference.prior, weights)
             query_cost = self.cost_of_asking * len(query)
             objective_plus_cost = objective + query_cost
             print('Model outputs calculated')
@@ -229,12 +229,12 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         if mdp.type == 'bandits':
             return BanditsModel(
-                self.args.feature_dim, self.args.gamma, query,
+                self.args.feature_dim, self.args.gamma, len(query),
                 proxy_space, self.inference.true_reward_matrix,
                 true_reward, self.args.beta, 'entropy')
         elif mdp.type == 'gridworld':
             return GridworldModel(
-                self.args.feature_dim, self.args.gamma, query,
+                self.args.feature_dim, self.args.gamma, len(query),
                 proxy_space, self.inference.true_reward_matrix,
                 true_reward, self.args.beta, 'entropy', mdp.height, mdp.width,
                 num_iters)
