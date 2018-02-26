@@ -225,7 +225,7 @@ class Query_Chooser_Subclass(Query_Chooser):
     def get_model(self, query, true_reward=None, high_iters=False):
         mdp = self.inference.mdp
         num_iters = 50 if high_iters else self.args.num_iters_optim
-        proxy_space = list(product(*[[-1, 0, 1] for _ in range(len(query))]))
+        proxy_space = list(product([-1, 0, 1], repeat=len(query)))
 
         if mdp.type == 'bandits':
             return BanditsModel(
@@ -395,9 +395,9 @@ class Experiment(object):
         # Cache feature exp and lhoods
         # function = self.inference.calc_and_save_feature_expectations
         # input = self.reward_space_proxy
-        print('caching feature exp for proxies...')
+        # print('caching feature exp for proxies...')
         # self.inference.calc_and_save_feature_expectations(self.reward_space_proxy)
-        print('caching feature exp for true rewards...')
+        # print('caching feature exp for true rewards...')
         # self.inference.calc_and_save_feature_expectations(self.inference.reward_space_true)
         print 'NOT CACHING FEATURES FOR TRUE REWARDS!'
         print('caching likelihoods...')

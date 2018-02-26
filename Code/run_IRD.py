@@ -201,6 +201,8 @@ if __name__=='__main__':
     choosers = args.c
     SEED = args.seed
     seed(SEED)
+    np.random.seed(SEED)
+    tf.set_random_seed(SEED)
     beta = args.beta
     num_states = args.num_states
     size_reward_space_true = args.size_true_space
@@ -237,6 +239,7 @@ if __name__=='__main__':
         from itertools import product
         reward_space_true = list(product([0,1], repeat=args.feature_dim))
         # reward_space_true.remove((0,0,0,0))
+        # TODO(rohinmshah): These reward spaces have many copies of the same reward function
         reward_space_true = [np.array(reward) for reward in reward_space_true]
         reward_space_true = [choice(reward_space_true) for _ in range(size_reward_space_true)]
         # reward_space_true = [np.array([0, 0, 0, 0]), np.array([0, 0, 0, 1]), np.array([0, 0, 1, 1]), np.array([1, 0, 1, 0])]
@@ -257,11 +260,15 @@ if __name__=='__main__':
         # reward_space_true = [np.random.multinomial(18, np.ones(args.feature_dim)/18) for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.multinomial(18, np.ones(args.feature_dim)) for _ in xrange(size_reward_space_proxy)]
         reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_true)]
-        reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_proxy)]
         if proxy_subspace:
             reward_space_proxy = [choice(reward_space_true) for _ in xrange(size_reward_space_proxy)]
+        else:
+            reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_proxy)]
         # reward_space_true = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
+
+    else:
+        raise ValueError('Unknown MDP type: ' + str(args.mdp_type))
 
 
 

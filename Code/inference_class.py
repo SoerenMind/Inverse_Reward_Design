@@ -80,10 +80,10 @@ class Inference:
         posterior_vec = likelihoods_vec * self.prior / self.evidence
         return posterior_vec
 
-    def calc_and_save_feature_expectations(self,reward_space_proxy):
-        """Currently not used"""
-        for proxy in reward_space_proxy:
-            self.get_feature_expectations(proxy)
+    # def calc_and_save_feature_expectations(self,reward_space_proxy):
+    #     """Currently not used"""
+    #     for proxy in reward_space_proxy:
+    #         self.get_feature_expectations(proxy)
 
     # @profile
     def get_avg_reward_for_post_averages(self,post_averages):
@@ -112,8 +112,8 @@ class Inference:
             self.feature_exp_matrix[n,:] = self.get_feature_expectations(proxy)
 
         self.avg_reward_matrix = np.matmul(self.feature_exp_matrix, self.true_reward_matrix.T)
-        self.lhood_numerator_matrix = np.exp(self.beta * self.avg_reward_matrix)
-        self.log_lhood_numerator_matrix = np.log(self.lhood_numerator_matrix)   # TODO: This just removes the exponential but can lead to overflow
+        self.log_lhood_numerator_matrix = self.beta * self.avg_reward_matrix
+        self.lhood_numerator_matrix = np.exp(self.log_lhood_numerator_matrix)
 
         # Cache results for true rewards
         num_true_rewards = len(self.reward_space_true)
@@ -317,10 +317,11 @@ class Inference:
         # Replace with vector
         # lhoods = self.likelihood_dict[true_reward, query]
         d = {i: lhood for i, lhood in enumerate(lhoods)}
-        try:
-            chosen_proxy_number = Distribution(d).sample()
-        except:
-            chosen_proxy_number = np.array(lhoods).argmax()  # Replaces argmax with sampling
+        # try:
+        #     chosen_proxy_number = Distribution(d).sample()
+        # except:
+        #     chosen_proxy_number = np.array(lhoods).argmax()  # Replaces argmax with sampling
+        chosen_proxy_number = Distribution(d).sample()
         chosen_proxy = query[chosen_proxy_number]
         return chosen_proxy
 
