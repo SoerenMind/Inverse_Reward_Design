@@ -284,7 +284,7 @@ class NStateMdpGaussianFeatures(NStateMdp):
 
     def convert_to_numpy_input(self):
         """Encodes this MDP in a format well-suited for deep models."""
-        return None, self.feature_matrix, None
+        return self.feature_matrix
 
 class NStateMdpRandomGaussianFeatures(NStateMdp):
     """
@@ -341,7 +341,7 @@ class NStateMdpRandomGaussianFeatures(NStateMdp):
 
     def convert_to_numpy_input(self):
         """Encodes this MDP in a format well-suited for deep models."""
-        return None, self.feature_matrix_mean, None
+        return self.feature_matrix_mean
 
 
 

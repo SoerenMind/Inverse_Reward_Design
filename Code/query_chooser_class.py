@@ -11,8 +11,10 @@ from inference_class import Inference
 import csv
 import os
 import datetime
-from planner import Model
+from planner import Model, BanditsModel, GridworldModel, GridworldModelUsingConvolutions
 import tensorflow as tf
+from itertools import product
+
 
 def random_combination(iterable, r):
     """Random selection from itertools.combinations(iterable, r)"""
@@ -172,7 +174,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
         best_feature_list = []
         feature_dim = self.args.feature_dim
-        desired_outputs = [measure, 'optimal_weights']
+        desired_outputs = [measure, 'other_weights']
         # desired_outputs = [measure]
         best_optimal_weights = None
         while len(best_feature_list) < query_size:
@@ -218,7 +220,11 @@ class Query_Chooser_Subclass(Query_Chooser):
         """
         mdp = self.inference.agent.mdp
         num_iters = 50 if high_iters else self.args.num_iters_optim
-        proxy_reward_space = [[-1],[0],[1]]
+
+        'Proxy space with all weights free'
+        # feature_list = range(self.args.feature_dim)
+        # proxy_reward_space = [list(proxy) for proxy in self.reward_space_proxy]
+        proxy_reward_space = list(product(*[[-1, 0, 1] for _ in range(len(feature_list))]))
 
         if mdp.type == 'bandits':
             model = BanditsModel(
@@ -235,31 +241,9 @@ class Query_Chooser_Subclass(Query_Chooser):
             raise ValueError('Unknown model type: ' + str(mdp.type))
 
         with tf.Session() as sess:
-            feature_exp_true = self.inference.feature_exp_matrix   # For testing purposes (wrong dimension)
-            assert feature_exp_true is not None
+            sess.run(model.initialize_op)
+            model_outputs = model.compute(desired_outputs, sess, mdp, self.inference.prior)
 
-            desired_outputs = ['entropy', 'optimal_weights', 'features', 'weights_unsorted', 'state_probs',
-                               'reward_per_state', 'feature_exps']
-            model_outputs = model.compute(desired_outputs, sess, mdp, self.inference.prior, init, feature_exp_true)
-            print desired_outputs
-            print desired_outputs[0], model_outputs[0]
-            print desired_outputs[1], model_outputs[1]
-            print desired_outputs[2], model_outputs[2]
-            print desired_outputs[3], model_outputs[3]
-            print desired_outputs[4], model_outputs[4]
-            print desired_outputs[5], model_outputs[5]
-            print desired_outputs[6], model_outputs[6]
-
-            # print model_outputs[1]
-            # print model_outputs[2]
-            # print model_outputs[3]
-            # print model_outputs[4]
-            # print model_outputs[5]
-            # print model_outputs[6]
-
-            # if 'answer' in desired_outputs:
-            #     answer = model.sample_human_answer()
-            #     return model_outputs, answer
         return model_outputs
 
 
@@ -287,13 +271,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         exp_regrets = np.dot(regrets * posterior, np.ones(posterior.shape[1]))  # Make sure there's no broadcasting
         exp_exp_regret = np.dot(probs_proxy_choice, exp_regrets)
 
-        # # Old approach
-        # exp_exp_regret = 0
-        # for proxy in query:
-        #     self.inference.calc_and_save_posterior(proxy, query)
-        #     p_proxy_chosen = self.inference.get_prob_proxy_choice(proxy, query)
-        #     exp_regret = self.get_exp_regret()
-        #     exp_exp_regret += p_proxy_chosen * exp_regret
         return exp_exp_regret
 
     def get_conditional_entropy(self, query):

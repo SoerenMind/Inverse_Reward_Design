@@ -174,7 +174,7 @@ if __name__=='__main__':
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=int,default=1)
     parser.add_argument('--beta',type=float,default=2.)
-    parser.add_argument('--num_states',type=int,default=100)
+    parser.add_argument('--num_states',type=int,default=6)
     parser.add_argument('--dist_scale',type=float,default=0.5)
     parser.add_argument('--num_traject',type=int,default=1)
     parser.add_argument('--num_queries_max',type=int,default=500)

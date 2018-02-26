@@ -15,7 +15,7 @@ class Model(object):
         # [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]
         self.proxy_reward_space = proxy_reward_space
         self.K = len(self.proxy_reward_space)
-        self.true_reward_matrix = true_reward_matrix
+        self.true_reward_matrix = np.array(true_reward_matrix, dtype=np.float32)
         self.true_reward = true_reward
         self.beta = beta
         self.build_tf_graph(objective)
@@ -32,9 +32,9 @@ class Model(object):
     def build_weights(self):
         query_size, dim, K = len(self.query), self.feature_dim, self.K
         num_fixed = dim - query_size
-        self.query_weights= tf.constant(self.proxy_reward_space, dtype=tf.float32)
-        self.other_weights = tf.Variable(tf.zeros([num_fixed]))
-        self.weight_inputs = tf.placeholder(tf.float32, shape=[num_fixed])
+        self.query_weights= tf.constant(self.proxy_reward_space, dtype=tf.float32, name="query_weights")
+        self.other_weights = tf.Variable(tf.zeros([num_fixed]), name="other_weights")
+        self.weight_inputs = tf.placeholder(tf.float32, shape=[num_fixed], name="weight_inputs")
         self.assign_op = self.other_weights.assign(self.weight_inputs)
 
         # Let's say query is [1, 3] and there are 6 features.
@@ -50,6 +50,7 @@ class Model(object):
         self.permutation = tf.placeholder(tf.int32, shape=[dim])
         self.weights = tf.gather(unordered_weights, self.permutation, axis=-1)
 
+
     def build_planner(self):
         raise NotImplemented('Should be implemented in subclass')
 
@@ -57,15 +58,20 @@ class Model(object):
         """
         Maps self.feature_exp (created by planner) to self.log_posterior.
         """
-        K = self.K
         self.true_reward_tensor = tf.constant(
             self.true_reward_matrix, dtype=tf.float32, name="true_reward_tensor", shape=self.true_reward_matrix.shape)
 
-        true_reward_repeated = tf.stack(
-            [tf.transpose(self.true_reward_tensor)] * K, axis=0)
-        avg_reward_matrix = tf.matmul(
-            self.feature_expectations, true_reward_repeated, name='avg_reward_matrix')
-        log_likelihoods_new = self.beta * avg_reward_matrix
+        # Calculate avg_reward_matrix with fake inputs
+        # K = len(self.proxy_reward_space)
+        # self.feature_expectations_test_input = tf.placeholder(
+        #     tf.float32, shape=[None, self.feature_dim], name="feature_exp_test_input")
+        # # Has no effect
+        # self.features = tf.placeholder(
+        #     tf.float32, name="features")
+        # self.human_weights = tf.placeholder(tf.float32, name="human_weights")
+        self.avg_reward_matrix = tf.tensordot(
+            self.feature_expectations, tf.transpose(self.true_reward_tensor), axes=[-1, -2], name='avg_reward_matrix')
+        log_likelihoods_new = self.beta * self.avg_reward_matrix
 
         # Calculate posterior
         self.prior = tf.placeholder(tf.float32, name="prior", shape=(len(self.true_reward_matrix)))
@@ -75,31 +81,49 @@ class Model(object):
         self.log_posterior = log_P_q_z + tf.log(self.prior) - self.log_Z_q
         self.posterior = tf.exp(self.log_posterior, name="posterior")
 
-        post_sum_to_1 = tf.reduce_sum(tf.exp(self.log_posterior), axis=1, name='post_sum_to_1')
-        tf.assert_equal(post_sum_to_1, 1., name='posteriors_normalized')
+        self.post_sum_to_1 = tf.reduce_sum(tf.exp(self.log_posterior), axis=1, name='post_sum_to_1')
 
         # Fill name to ops dict
+        self.name_to_op['avg_reward_matrix'] = self.avg_reward_matrix
         self.name_to_op['true_reward_tensor'] = self.true_reward_tensor
         self.name_to_op['prior'] = self.prior
+        self.name_to_op['features'] = self.features
+        self.name_to_op['other_weights'] = self.other_weights
         self.name_to_op['posterior'] = self.posterior
+        self.name_to_op['post_sum_to_1'] = self.post_sum_to_1
+
 
     def build_map_to_objective(self, objective):
         """
-
-        :param objective:
+        :param objective: string that specifies the objective function
         """
         if 'entropy' in objective:
             post_ent = - tf.reduce_sum(
-                tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent')
+                tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keepdims=True, name='post_ent')
             self.exp_post_ent = tf.reduce_sum(
-                tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='exp_post_entropy')
+                tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keepdims=True, name='exp_post_entropy')
             self.name_to_op['entropy'] = self.exp_post_ent
 
         if 'variance' in objective:
-            posterior = tf.exp(self.log_posterior, name="posterior")
-            post_avg, post_var = tf.nn.moments(posterior, axes=[1], keep_dims=False)
-            self.generalized_var = tf.matrix_determinant(post_var, name="generalized_variance")
-            self.name_to_op['variance'] = self.generalized_var
+            true_rewards = tf.constant(self.true_reward_matrix, dtype=tf.float32, name='true_rewards')
+            # post_avg, post_var = tf.nn.moments(true_rewards, axes=[0], keep_dims=False)
+            posterior_stack = tf.stack([self.posterior[0]] * self.feature_dim, axis=1)
+            posterior_stack = tf.expand_dims(self.posterior[0], axis=1)
+
+            # true_rewards_stack = tf.stack([true_rewards] * self.K, axis=0)
+            post_avg, post_var = tf.nn.weighted_moments(
+                true_rewards, [0, 0], posterior_stack, name="moments", keep_dims=False)
+
+            data = tf.constant([[0.,2.,4.],[0.,2.,4.]], dtype=tf.float32)
+            avg, var = tf.nn.moments(data, axes=[1,0])
+
+            # self.generalized_var = tf.matrix_determinant(post_var, name="generalized_variance")
+            # self.name_to_op['variance'] = self.generalized_var
+            self.name_to_op['post_avg'] = post_avg
+            self.name_to_op['post_var'] = post_var
+            self.name_to_op['posterior_stack'] = posterior_stack
+            self.name_to_op['var'] = var
+
 
         if 'regret' in objective:
             pass
@@ -110,7 +134,6 @@ class Model(object):
         if 'query_entropy' in objective:
             pass
 
-    # @profile
     # TODO: Remove the feature_expectations_test_input argument
     def compute(self, outputs, sess, mdp, prior=None, weight_inits=None, feature_expectations_test_input = None, gradient_steps=0):
         """
@@ -134,8 +157,7 @@ class Model(object):
         if prior is not None:
             fd[self.prior] = prior
         fd[self.permutation] = self.get_permutation_from_query(self.query)
-        if feature_expectations_test_input is not None:
-            fd[self.feature_expectations] = feature_expectations_test_input
+
 
         def get_op(name):
             K = len(self.proxy_reward_space)
@@ -143,12 +165,10 @@ class Model(object):
                 return self.proxy_reward_space[np.random.choice(K)]
             elif name == 'true_posterior':
                 N = len(self.true_reward_matrix)
-                result = np.random.rand(N, K)
+                result = np.random.rand(N)
                 return (result / result.sum(0)).T
-            elif name == 'optimal_weights':
-                return np.zeros(self.feature_dim - len(self.query))
-            elif name == 'feature_exps':
-                return np.random.rand(K, self.height, self.width, self.feature_dim)
+            # elif name == 'optimal_weights':
+            #     return np.zeros(self.feature_dim - len(self.query))
             elif name not in self.name_to_op:
                 raise ValueError("Unknown op name: " + str(name))
             return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
@@ -180,26 +200,48 @@ class Model(object):
 
 
 class BanditsModel(Model):
+    def build_tf_graph(self, objective):
+        self.build_weights()
+        self.build_planner()
+        self.build_map_to_posterior()
+        self.build_map_to_objective(objective)
+        # Initializing the variables
+        self.initialize_op = tf.global_variables_initializer()
+
+        self.name_to_op = {}
+        self.build_weights()
+        self.build_planner()
+        self.build_map_to_posterior()
+        self.build_map_to_objective(objective)
+        # Initializing the variables
+        self.initialize_op = tf.global_variables_initializer()
+
     def build_planner(self):
+        self.name_to_op = {}
         self.features = tf.placeholder(
             tf.float32, name="features", shape=[None, self.feature_dim])
-
-        intermediate_tensor = tf.multiply(self.features, self.weights)
-        self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
-
-        # (This is for one particular setting of the weights)
-        self.state_probs = tf.nn.softmax(self.reward_per_state, axis=-1, name="state_probs")
-        self.feature_expectations = tf.reduce_sum(
-            tf.multiply(self.features, self.state_probs), axis=-2 ,name="feature_expectations")
-
         self.name_to_op['features'] = self.features
-        self.name_to_op['weights_unsorted'] = self.weights
-        self.name_to_op['state_probs'] = self.state_probs
+
+        # Calculate state probabilities
+        # TODO(soerenmind): Calculate q-values instead of rewards
+        weights_expand = tf.expand_dims(self.weights,axis=0)
+        weights_reshaped = tf.transpose(weights_expand, perm=[0,2,1])
+        intermediate_tensor = tf.multiply(tf.stack([self.features]*self.K,axis=2), weights_reshaped)
+        self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
         self.name_to_op['reward_per_state'] = self.reward_per_state
+        self.state_probs = tf.nn.softmax(self.reward_per_state, axis=0, name="state_probs")
+        self.name_to_op['state_probs'] = self.state_probs
+
+        # Calculate feature expectations
+        probs_stack = tf.stack([self.state_probs] * self.feature_dim, axis=1)
+        features_stack = tf.multiply(tf.stack([self.features] * self.K, axis=2), probs_stack, name='multi')
+        self.feature_expectations = tf.reduce_sum(features_stack, axis=0, keepdims=False, name="feature_exps")
+        self.feature_expectations = tf.transpose(self.feature_expectations)
         self.name_to_op['feature_exps'] = self.feature_expectations
 
+
     def create_mdp_feed_dict(self, mdp):
-        return {}
+        return {self.features: mdp.convert_to_numpy_input()}
 
 
 class GridworldModel(Model):
