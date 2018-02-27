@@ -3,6 +3,7 @@ from agent_runner import run_agent
 from utils import Distribution
 from scipy.misc import logsumexp
 from gradient_descent_test import get_likelihoods_from_feature_expectations
+from planner import GridworldModel, BanditsModel
 
 
 
@@ -123,9 +124,7 @@ class Inference:
         self.true_reward_avg_reward_matrix = np.matmul(self.feature_exp_matrix_true_rewards, self.true_reward_matrix.T)
         self.true_reward_avg_reward_vec = self.true_reward_avg_reward_matrix.diagonal()
 
-        # log_Z_w, log_P_q_z, P_q_z, sum_to_1, Z_q, posterior, log_Z_q, post_ent, post_sum_to_1, log_post_ent, log_posterior \
-        #     = get_likelihoods_from_feature_expectations(self.feature_exp_matrix, self.true_reward_matrix,
-        #                                               self.beta, self.prior, self.feature_exp_matrix_true_rewards)
+
 
 
     # @profile

@@ -91,9 +91,10 @@ class Query_Chooser_Subclass(Query_Chooser):
         """
         set_of_queries = self.generate_set_of_queries(query_size)
         best_query = []
-        if test_before_query:
-            best_exp_exp_post_regret = self.get_exp_exp_post_regret([])
-        else: best_exp_exp_post_regret = float("inf")
+        # if test_before_query:
+        #     best_exp_exp_post_regret = self.get_exp_exp_post_regret([])
+        # else:
+        best_exp_exp_post_regret = float("inf")
         best_regret_plus_cost = best_exp_exp_post_regret
         # Find query with minimal regret
         for query in set_of_queries:
@@ -193,7 +194,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                 objective_unoptimized, optimal_weights = model.compute(
                     desired_outputs, sess, mdp, query, self.inference.prior, weights)
                 objective, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, query, self.inference.prior, weights, gradient_steps=100)
+                    desired_outputs, sess, mdp, query, self.inference.prior, weights, gradient_steps=15)
                 print objective_unoptimized, objective, objective_unoptimized - objective, objective_unoptimized >= objective
             query_cost = self.cost_of_asking * len(query)
             objective_plus_cost = objective + query_cost
@@ -209,7 +210,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         mdp = self.inference.mdp
         num_iters = 50 if high_iters else self.args.num_iters_optim
         # proxy_space = list(product([-1, 0, 1], repeat=len(query)))
-        proxy_space = list(product(range(-3, 2), repeat=len(query)))
+        # proxy_space = list(product(range(-3, 2), repeat=len(query)))
+        proxy_space = np.random.randint(-4,3,size=[30 * len(query), len(query)])
         print 'Proxy space size: '+str(len(proxy_space))
 
 
@@ -226,6 +228,8 @@ class Query_Chooser_Subclass(Query_Chooser):
                 num_iters)
         else:
             raise ValueError('Unknown model type: ' + str(mdp.type))
+
+
 
     def find_random_query(self, query_size):
         query = [choice(self.reward_space_proxy) for _ in range(query_size)]

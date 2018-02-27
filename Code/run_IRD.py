@@ -162,24 +162,26 @@ if __name__=='__main__':
     # parser.add_argument('choosers',type=list,default='[greedy_entropy]')
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
     parser.add_argument('--query_size_feature',type=int,default=3)
-    parser.add_argument('--num_experiments',type=int,default=1)
+    parser.add_argument('--num_experiments',type=int,default=1) # 3-5
     parser.add_argument('--num_iter',type=int,default=5)
     # TODO: Values are computed as if trajectories are infinite. Problem?
-    parser.add_argument('--gamma',type=float,default=0.95)
-    parser.add_argument('--size_true_space',type=int,default=200)
-    parser.add_argument('--size_proxy_space',type=int,default=50)
+    parser.add_argument('--gamma',type=float,default=1.) # otherwise 0.98
+    parser.add_argument('--size_true_space',type=int,default=1000)
+    parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=int,default=1)
-    parser.add_argument('--beta',type=float,default=2.)
-    parser.add_argument('--num_states',type=int,default=6)
-    parser.add_argument('--dist_scale',type=float,default=0.5)
+    parser.add_argument('--beta',type=float,default=1.) # 1 for small version of results
+    parser.add_argument('--num_states',type=int,default=6)  # 10 options if env changes over time, 100 otherwise
+    parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
     parser.add_argument('--num_traject',type=int,default=1)
-    parser.add_argument('--num_queries_max',type=int,default=500)
-    parser.add_argument('--height',type=int,default=8)
-    parser.add_argument('--width',type=int,default=8)
-    parser.add_argument('--num_iters_optim',type=int,default=5)
-    parser.add_argument('--value_iters',type=int,default=25)
+    parser.add_argument('--num_queries_max',type=int,default=500)   # x10 the number tried for greedy
+    parser.add_argument('--is_greedy',type=bool,default=True)
+    parser.add_argument('--height',type=int,default=12)
+    parser.add_argument('--width',type=int,default=12)
+    parser.add_argument('--num_iters_optim',type=int,default=10)
+    parser.add_argument('--value_iters',type=int,default=25)    # max_reward / (1-gamma) or height+width
     parser.add_argument('--mdp_type',type=str,default='gridworld')
+    parser.add_argument('--feature_dim',type=int,default=10)    # 10 if positions fixed, 100 otherwise
 
 
     args = parser.parse_args()
