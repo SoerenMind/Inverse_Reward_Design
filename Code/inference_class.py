@@ -103,18 +103,19 @@ class InferenceDiscrete(Inference):
         self.prior = np.ones(num_rewards) / num_rewards
 
     def get_likelihood(self, true_reward, query, answer):
-        true_reward = tuple(true_reward)
+        key = tuple([(tuple(x) for x in query)]), tuple(answer)
+        true_reward_key = tuple(true_reward)
         result = self.cache['likelihoods']
-        if (query, answer) in result:
-            result = result[(query, answer)]
-        if true_reward in result:
-            return result[(true_reward)]
+        if key in result:
+            result = result[key]
+        if true_reward_key in result:
+            return result[true_reward_key]
 
         result = self.calc_likelihood(true_reward, query, answer)
         lcache = self.cache['likelihoods']
-        if (query, answer) not in lcache:
-            lcache[(query, answer)] = {}
-        lcache[(query, answer)][true_reward] = result
+        if key not in lcache:
+            lcache[key] = {}
+        lcache[key][true_reward_key] = result
         return result
 
     # TODO(rohinmshah): Convert everything to log space
@@ -130,12 +131,13 @@ class InferenceDiscrete(Inference):
         return lhood
 
     def get_evidence(self, query, answer):
+        query_key, answer_key = tuple([(tuple(x) for x in query)]), tuple(answer)
         result = self.cache['evidence']
-        if (query, answer) in result:
-            return result[(query, answer)]
+        if (query_key, answer_key) in result:
+            return result[(query_key, answer_key)]
 
-        result = self.calc_evidence(true_reward, query, answer)
-        self.cache['evidence'][(query, answer)] = result
+        result = self.calc_evidence(query, answer)
+        self.cache['evidence'][(query_key, answer_key)] = result
         return result
 
     def calc_evidence(self, query, answer):

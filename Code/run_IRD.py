@@ -168,7 +168,6 @@ if __name__=='__main__':
     parser.add_argument('--gamma',type=float,default=0.95)
     parser.add_argument('--size_true_space',type=int,default=200)
     parser.add_argument('--size_proxy_space',type=int,default=50)
-    parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=int,default=1)
     parser.add_argument('--beta',type=float,default=2.)
     parser.add_argument('--num_states',type=int,default=6)
@@ -223,9 +222,26 @@ if __name__=='__main__':
     # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
     # choosers = ['greedy_entropy', 'random', 'no_query']
 
-    exp_params = 'qsize'+str(query_size) + '-' + 'expnum' + str(num_experiments)
-    exp_name = 'compare-choosers'
-
+    exp_params = {
+        'qsize': query_size,
+        'num_experiments': num_experiments,
+        'mdp': args.mdp_type,
+        'dim': args.feature_dim,
+        'num_iter': args.num_iter,
+        'gamma': gamma,
+        'size_true': size_reward_space_true,
+        'size_proxy': size_reward_space_proxy,
+        'seed': SEED,
+        'beta': beta,
+        'num_states': num_states,
+        'dist_scale': dist_scale,
+        'num_traject': num_traject,
+        'num_queries_max': num_queries_max,
+        'height': height,
+        'width': width,
+        'num_iters_optim': num_iters_optim,
+        'value_iters': args.value_iters
+    }
 
     # # Set up env and agent for NStateMdp
     if args.mdp_type == 'bandits':
@@ -326,7 +342,7 @@ if __name__=='__main__':
         # print 'Mean actual -reduction and std(mean) over random query: {r}'.format(r=mean_std_actual)
         # print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
         # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
-        experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params, exp_name)
+        experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params)
         # experiment.run_experiment(num_iter_per_experiment)
         avg_post_exp_regrets, avg_post_regrets, \
         std_post_exp_regrets, std_post_regrets, \
