@@ -42,12 +42,9 @@ class TestPlanner(unittest.TestCase):
 
         np.random.seed(1)
         random.seed(1)
-        grid = GridworldMdp.generate_random(8, 8, 0.1, 0.1)
-        mdp = GridworldMdpWithDistanceFeatures(grid)
         dim = 4
-        while len(mdp.goals) != dim:
-            grid = GridworldMdp.generate_random(8, 8, 0.1, 0.1)
-            mdp = GridworldMdpWithDistanceFeatures(grid)
+        grid = GridworldMdp.generate_random(8, 8, 0.1, dim)
+        mdp = GridworldMdpWithDistanceFeatures(grid)
 
         mdp.rewards = np.random.randn(dim)
         mdp.feature_weights = mdp.rewards
