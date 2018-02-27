@@ -163,7 +163,7 @@ if __name__=='__main__':
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
     parser.add_argument('--query_size_feature',type=int,default=3)
     parser.add_argument('--num_experiments',type=int,default=1) # 3-5
-    parser.add_argument('--num_iter',type=int,default=5)
+    parser.add_argument('--num_iter',type=int,default=10)    # number of queries asked
     # TODO: Values are computed as if trajectories are infinite. Problem?
     parser.add_argument('--gamma',type=float,default=1.) # otherwise 0.98
     parser.add_argument('--size_true_space',type=int,default=1000)
@@ -171,6 +171,7 @@ if __name__=='__main__':
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=int,default=1)
     parser.add_argument('--beta',type=float,default=1.) # 1 for small version of results
+    parser.add_argument('--beta_bandits_planner',type=float,default=50.) # 1 for small version of results
     parser.add_argument('--num_states',type=int,default=6)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
     parser.add_argument('--num_traject',type=int,default=1)
@@ -179,9 +180,10 @@ if __name__=='__main__':
     parser.add_argument('--height',type=int,default=12)
     parser.add_argument('--width',type=int,default=12)
     parser.add_argument('--num_iters_optim',type=int,default=10)
-    parser.add_argument('--value_iters',type=int,default=25)    # max_reward / (1-gamma) or height+width
+    parser.add_argument('--value_iters',type=int,default=40)    # max_reward / (1-gamma) or height+width
+    # parser.add_argument('--value_iters_discrete',type=int,default=50)
     parser.add_argument('--mdp_type',type=str,default='gridworld')
-    parser.add_argument('--feature_dim',type=int,default=10)    # 10 if positions fixed, 100 otherwise
+    parser.add_argument('--feature_dim',type=int,default=7)    # 10 if positions fixed, 100 otherwise
 
 
     args = parser.parse_args()
@@ -197,7 +199,6 @@ if __name__=='__main__':
     # TODO: Randomize goal positions per experiment
     goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
     # goals = [(1,1), (2,6), (3,3)]
-    # feature_dim = args.feature_dim
     args.feature_dim = len(goals)   # Overwriting arg input
     # Set parameters
     choosers = args.c
@@ -271,7 +272,7 @@ if __name__=='__main__':
     elif args.mdp_type == 'gridworld':
         grid = GridworldMdp.generate_random(height,width,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
         mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
-        agent = OptimalAgent(gamma, num_iters=args.value_iters)
+        agent = OptimalAgent(gamma, num_iters=args.value_iters_discrete)
 
 
 

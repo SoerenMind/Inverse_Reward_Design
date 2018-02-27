@@ -51,6 +51,52 @@ class Query_Chooser_Subclass(Query_Chooser):
     #     for proxy in self.reward_space_proxy:
     #         feature_expectations = self.inference.get_feature_expectations(proxy)
 
+    def cache_feature_expectations(self, reward_space):
+        """Is run in self.__init__. Computes feature expectations for each proxy using TF and stores them in
+        inference.feature_expectations_matrix."""
+        proxy_space = [list(reward) for reward in reward_space]
+        print('building graph...')
+        model = self.get_model(
+            query_size=0, proxy_space=proxy_space, num_iters_discrete=self.args.value_iters)
+
+        desired_outputs = ['feature_exps']
+        mdp = self.inference.mdp
+        with tf.Session() as sess:
+            print('computing model outputs...')
+            sess.run(model.initialize_op)
+            [feature_exp_matrix] = model.compute(
+                desired_outputs, sess, mdp, [], self.inference.prior)
+            self.inference.feature_exp_matrix = feature_exp_matrix
+            print('done computing model outputs...')
+        del model
+
+    def get_model(self, query_size, true_reward=None, high_iters=False, proxy_space=None, num_iters_discrete=None):
+        mdp = self.inference.mdp
+
+        if proxy_space is None:
+            # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
+            proxy_space = list(product(range(-3, 2), repeat=query_size))
+            num_iters = 50 if high_iters else self.args.num_iters_optim
+        else:
+            # Iterations must be given if proxy space is
+            num_iters = num_iters_discrete
+
+
+        print 'Proxy space size: ' + str(len(proxy_space))
+        if mdp.type == 'bandits':
+            return BanditsModel(
+                self.args.feature_dim, self.args.gamma, query_size,
+                proxy_space, self.inference.true_reward_matrix,
+                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy')
+        elif mdp.type == 'gridworld':
+            return GridworldModel(
+                self.args.feature_dim, self.args.gamma, query_size,
+                proxy_space, self.inference.true_reward_matrix,
+                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy', mdp.height, mdp.width,
+                num_iters)
+        else:
+            raise ValueError('Unknown model type: ' + str(mdp.type))
+
     def generate_set_of_queries(self, query_size=4):
         num_queries = comb(len(self.reward_space_proxy), query_size)
         if num_queries > self.num_queries_max:
@@ -115,6 +161,9 @@ class Query_Chooser_Subclass(Query_Chooser):
         :param query_size: int
         :return: best_query, corresponding regret and regret plus cost of asking (which grows with query size).
         """
+        print('Saving feature exps...')
+        self.cache_feature_expectations(self.reward_space_proxy)
+        print('Done saving feature exps')
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
         best_query = []  # Initialize randomly
         while len(best_query) < query_size:
@@ -204,26 +253,26 @@ class Query_Chooser_Subclass(Query_Chooser):
                     best_query = query
         return best_query, best_optimal_weights
 
-    def get_model(self, query_size, true_reward=None, high_iters=False):
-        mdp = self.inference.mdp
-        num_iters = 50 if high_iters else self.args.num_iters_optim
-        # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
-        proxy_space = list(product(range(-3, 2), repeat=query_size))
-
-        print 'Proxy space size: '+str(len(proxy_space))
-        if mdp.type == 'bandits':
-            return BanditsModel(
-                self.args.feature_dim, self.args.gamma, query_size,
-                proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, 'entropy')
-        elif mdp.type == 'gridworld':
-            return GridworldModel(
-                self.args.feature_dim, self.args.gamma, query_size,
-                proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, 'entropy', mdp.height, mdp.width,
-                num_iters)
-        else:
-            raise ValueError('Unknown model type: ' + str(mdp.type))
+    # def get_model(self, query_size, true_reward=None, high_iters=False):
+    #     mdp = self.inference.mdp
+    #     num_iters = 50 if high_iters else self.args.num_iters_optim
+    #     # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
+    #     proxy_space = list(product(range(-3, 2), repeat=query_size))
+    #
+    #     print 'Proxy space size: '+str(len(proxy_space))
+    #     if mdp.type == 'bandits':
+    #         return BanditsModel(
+    #             self.args.feature_dim, self.args.gamma, query_size,
+    #             proxy_space, self.inference.true_reward_matrix,
+    #             true_reward, self.args.beta, 'entropy')
+    #     elif mdp.type == 'gridworld':
+    #         return GridworldModel(
+    #             self.args.feature_dim, self.args.gamma, query_size,
+    #             proxy_space, self.inference.true_reward_matrix,
+    #             true_reward, self.args.beta, 'entropy', mdp.height, mdp.width,
+    #             num_iters)
+    #     else:
+    #         raise ValueError('Unknown model type: ' + str(mdp.type))
 
 
 
@@ -356,10 +405,11 @@ class Experiment(object):
         post_regret_per_chooser = []
 
         # Cache lhoods
-        print 'NOT CACHING FEATURES FOR TRUE REWARDS!'
+        # print 'NOT CACHING FEATURES FOR TRUE REWARDS!'
         print('caching likelihoods...')
-        self.inference.cache_lhoods()
-        print('done caching')
+        self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
+        self.inference.cache_lhoods() # Only run this if the environment isn't changed each iteration
+        print('done caching likelihoods')
 
         perf_measure = float('inf')
         post_exp_regret = float('inf')
@@ -372,15 +422,22 @@ class Experiment(object):
             self.inference.reset_prior()
 
             for i in range(num_iter):
-                # print "Iteration: {i}/{m}. Total time: {t}".format(i=i+1,m=num_iter,t=time.clock()-self.t_0)
+                print "Iteration: {i}/{m}. Total time: {t}".format(i=i+1,m=num_iter,t=time.clock()-self.t_0)
                 # Do iteration for feature-based choosers:
                 if chooser in ['feature_entropy']:
                     query, objective, true_posterior = self.query_chooser.find_query(self.query_size_feature, chooser, true_reward)
                     self.inference.update_prior(None, None, true_posterior)
                 else:
+                    # Cache feature expectations and likelihoods
+                    # # TODO: Automatically move these outside the loop if the env isn't changing
+                    # self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
+                    # self.inference.cache_lhoods()
+
+                    # Find best query
                     query, perf_measure, _ \
                         = self.query_chooser.find_query(self.query_size_discrete, chooser, true_reward)
 
+                    # Update posterior
                     _, post_cond_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)
                     proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
                     self.inference.update_prior(query, proxy_choice)

@@ -5,7 +5,7 @@ from gridworld import Direction
 
 class Model(object):
     def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
-                 true_reward_matrix, true_reward, beta, objective):
+                 true_reward_matrix, true_reward, beta, beta_bandits_planner, objective):
         self.feature_dim = feature_dim
         self.gamma = gamma
         self.query_size = query_size
@@ -18,6 +18,7 @@ class Model(object):
         self.true_reward_matrix = np.array(true_reward_matrix, dtype=np.float32)
         self.true_reward = true_reward
         self.beta = beta
+        self.beta_bandits_planner = beta_bandits_planner
         self.build_tf_graph(objective)
 
     def build_tf_graph(self, objective):
@@ -119,10 +120,11 @@ class Model(object):
                 tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='exp_post_entropy')
             self.name_to_op['entropy'] = self.exp_post_ent
 
-            optimizer = tf.train.AdamOptimizer(learning_rate=0.1)    # TODO: adjust inputs if needed
-            self.minimize_op = optimizer.minimize(
-                self.exp_post_ent, var_list=[self.name_to_op['other_weights']])
-            self.name_to_op['minimize'] = self.minimize_op
+            if self.query_size < self.feature_dim:
+                optimizer = tf.train.AdamOptimizer(learning_rate=0.1)    # TODO: adjust inputs if needed
+                self.minimize_op = optimizer.minimize(
+                    self.exp_post_ent, var_list=[self.name_to_op['other_weights']])
+                self.name_to_op['minimize'] = self.minimize_op
 
         if 'variance' in objective:
             true_rewards = tf.constant(self.true_reward_matrix, dtype=tf.float32, name='true_rewards')
@@ -239,7 +241,7 @@ class BanditsModel(Model):
         self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
         self.name_to_op['reward_per_state'] = self.reward_per_state
         self.name_to_op['q_values'] = self.reward_per_state
-        self.state_probs = tf.nn.softmax(self.reward_per_state, dim=0, name="state_probs")
+        self.state_probs = tf.nn.softmax(self.beta_bandits_planner * self.reward_per_state, dim=0, name="state_probs")
         self.name_to_op['state_probs'] = self.state_probs
 
         # Calculate feature expectations
@@ -256,13 +258,14 @@ class BanditsModel(Model):
 
 class GridworldModel(Model):
     def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
-                 true_reward_matrix, true_reward, beta, objective,
+                 true_reward_matrix, true_reward, beta, beta_bandits_planner, objective,
                  height, width, num_iters):
         self.height = height
         self.width = width
         self.num_iters = num_iters
         self.num_actions = 4
-        super(GridworldModel, self).__init__(feature_dim, gamma, query_size, proxy_reward_space, true_reward_matrix, true_reward, beta, objective)
+        super(GridworldModel, self).__init__(feature_dim, gamma, query_size, proxy_reward_space, true_reward_matrix,
+                                             true_reward, beta, beta_bandits_planner, objective)
 
     def build_planner(self):
         height, width, dim = self.height, self.width, self.feature_dim

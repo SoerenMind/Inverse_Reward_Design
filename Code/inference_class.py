@@ -197,10 +197,11 @@ class InferenceDiscrete(Inference):
         feature_dim = len(self.reward_space_true[0])
         K = len(self.reward_space_true)
 
-        # Make feature_exp matrix
-        self.feature_exp_matrix = np.zeros([N,feature_dim])
-        for n, proxy in enumerate(self.reward_space_proxy):
-            self.feature_exp_matrix[n,:] = self.get_feature_expectations(proxy)
+        # # Make feature_exp matrix (done by query_chooser.cache_feature_expectations now)
+        # self.feature_exp_matrix_correct = np.zeros([N,feature_dim])
+        # for n, proxy in enumerate(self.reward_space_proxy):
+        #     self.feature_exp_matrix_correct[n,:] = self.get_feature_expectations(proxy)
+
 
         self.avg_reward_matrix = np.matmul(self.feature_exp_matrix, self.true_reward_matrix.T)
         self.log_lhood_numerator_matrix = self.beta * self.avg_reward_matrix
