@@ -64,7 +64,7 @@ class TestPlanner(unittest.TestCase):
         def check_model_equivalent(model, query, weights, mdp, num_iters):
             with tf.Session() as sess:
                 sess.run(model.initialize_op)
-                (qvals,features,weights,query_weights) = model.compute(['q_values'], sess, mdp, query, weight_inits=weights)
+                (qvals,) = model.compute(['q_values'], sess, mdp, query, weight_inits=weights)
 
             agent = ImmediateRewardAgent(gamma=model.gamma)
             for i, proxy in enumerate(model.proxy_reward_space):

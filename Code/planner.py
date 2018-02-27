@@ -110,9 +110,19 @@ class Model(object):
         if 'entropy' in objective:
             post_ent = - tf.reduce_sum(
                 tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent')
+            # post_ent = tf.Variable(- tf.reduce_sum(
+            #     tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent'), name='post_ent')
+
+            # post_ent = tf.Variable(tf.zeros([self.K]), name="other_weights")
+
             self.exp_post_ent = tf.reduce_sum(
                 tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='exp_post_entropy')
             self.name_to_op['entropy'] = self.exp_post_ent
+
+            optimizer = tf.train.AdamOptimizer(learning_rate=0.1)    # TODO: adjust inputs if needed
+            self.minimize_op = optimizer.minimize(
+                self.exp_post_ent, var_list=[self.name_to_op['other_weights']])
+            self.name_to_op['minimize'] = self.minimize_op
 
         if 'variance' in objective:
             true_rewards = tf.constant(self.true_reward_matrix, dtype=tf.float32, name='true_rewards')
@@ -144,6 +154,7 @@ class Model(object):
         if 'query_entropy' in objective:
             pass
 
+
     # TODO: Remove the feature_expectations_test_input argument
     def compute(self, outputs, sess, mdp, query, prior=None, weight_inits=None, feature_expectations_test_input = None, gradient_steps=0):
         """
@@ -168,6 +179,10 @@ class Model(object):
             fd[self.prior] = prior
         fd[self.permutation] = self.get_permutation_from_query(query)
 
+        if gradient_steps > 0:
+            for step in range(gradient_steps):
+                # print sess.run(self.name_to_op['entropy'], feed_dict=fd)
+                sess.run(self.minimize_op, feed_dict=fd)
 
         def get_op(name):
             K = len(self.proxy_reward_space)

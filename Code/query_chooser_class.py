@@ -140,33 +140,14 @@ class Query_Chooser_Subclass(Query_Chooser):
                 assert found_new
 
         posteriors, post_cond_entropy, evidence = self.inference.calc_posterior(query, get_entropy=True)
-        proxy_choice = best_query[int(np.argwhere(np.random.multinomial(1, evidence) == 1))]
+        try: proxy_choice = best_query[int(np.argwhere(np.random.multinomial(1, evidence) == 1))]
+        except: raise ValueError('evidence: '+str(evidence)+' does not sum to 1')
         # proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
 
         self.inference.update_prior(query, proxy_choice)  # TODO: Still uses calc_and_save_posterior
 
         return best_query, best_objective, best_objective_plus_cost
 
-    # def find_query_feature_diff(self, query_size=4):
-    #     cost_of_asking = self.cost_of_asking    # could use this to decide query length
-    #     prior_avg = np.array(sum([self.inference.get_prior(true_reward) * true_reward
-    #                      for true_reward in self.inference.reward_space_true]))
-    #     # Find query with minimal regret
-    #     best_query = [choice(self.reward_space_proxy)]  # Initialize randomly
-    #     while len(best_query) < query_size:
-    #         max_min_diff = -float('inf')
-    #         for proxy in self.reward_space_proxy:
-    #             feature_exp_new = self.inference.get_feature_expectations(proxy)
-    #             feature_exp_query = np.array([self.inference.get_feature_expectations(proxy2) for proxy2 in best_query])
-    #             feature_exp_diffs = feature_exp_new - feature_exp_query
-    #             feature_exp_diffs = feature_exp_diffs * prior_avg    # weighted diffs by prior. Doesn't make sense, try prior variance.
-    #             feature_exp_diffs_norm = np.linalg.norm(feature_exp_diffs, 1, axis=1)
-    #             min_diff = feature_exp_diffs_norm.min()
-    #             if min_diff > max_min_diff:
-    #                 max_min_diff = min_diff
-    #                 best_new_proxy = proxy
-    #         best_query = best_query + [best_new_proxy]
-    #     return best_query, max_min_diff, None
 
     # @profile
     def find_feature_query_greedy(self, query_size, measure, true_reward):
@@ -188,10 +169,9 @@ class Query_Chooser_Subclass(Query_Chooser):
         model = self.get_model(best_query, true_reward)
         with tf.Session() as sess:
             sess.run(model.initialize_op)
-            # TODO: self.inference.feature_exp_matrix should be something else?
             objective, true_posterior = model.compute(
                 desired_outputs, sess, mdp, best_query, self.inference.prior,
-                best_optimal_weights, self.inference.feature_exp_matrix)
+                best_optimal_weights)
         return best_query, objective, true_posterior
 
     def find_next_feature(self, curr_query, curr_weights, measure, true_reward):
@@ -210,8 +190,11 @@ class Query_Chooser_Subclass(Query_Chooser):
 
             with tf.Session() as sess:
                 sess.run(model.initialize_op)
-                objective, optimal_weights = model.compute(
+                objective_unoptimized, optimal_weights = model.compute(
                     desired_outputs, sess, mdp, query, self.inference.prior, weights)
+                objective, optimal_weights = model.compute(
+                    desired_outputs, sess, mdp, query, self.inference.prior, weights, gradient_steps=100)
+                print objective_unoptimized, objective, objective_unoptimized - objective, objective_unoptimized >= objective
             query_cost = self.cost_of_asking * len(query)
             objective_plus_cost = objective + query_cost
             print('Model outputs calculated')
@@ -225,7 +208,10 @@ class Query_Chooser_Subclass(Query_Chooser):
     def get_model(self, query, true_reward=None, high_iters=False):
         mdp = self.inference.mdp
         num_iters = 50 if high_iters else self.args.num_iters_optim
-        proxy_space = list(product([-1, 0, 1], repeat=len(query)))
+        # proxy_space = list(product([-1, 0, 1], repeat=len(query)))
+        proxy_space = list(product(range(-3, 2), repeat=len(query)))
+        print 'Proxy space size: '+str(len(proxy_space))
+
 
         if mdp.type == 'bandits':
             return BanditsModel(

@@ -193,8 +193,8 @@ if __name__=='__main__':
     # Set parameters
     dummy_rewards = np.zeros(3)
     # TODO: Randomize goal positions per experiment
-    # goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
-    goals = [(1,1), (2,6), (3,3)]
+    goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
+    # goals = [(1,1), (2,6), (3,3)]
     # feature_dim = args.feature_dim
     args.feature_dim = len(goals)   # Overwriting arg input
     # Set parameters
