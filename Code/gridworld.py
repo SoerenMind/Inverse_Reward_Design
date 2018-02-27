@@ -483,12 +483,12 @@ class GridworldMdp(Mdp):
         # Set rewarded states and walls
         for y in range(1, height - 1):
             for x in range(1, width - 1):
-                if random.random() >= pr_wall:
+                if random.random() >= pr_wall and grid[y][x] == 'X':
                     grid[y][x] = ' '
 
         def set_random_position_to(token):
             current_val = None
-            while current_val not in ['X', ' ', 'A']:
+            while current_val not in ['X', ' ']:
                 y = random.randint(1, height - 2)
                 x = random.randint(1, width - 2)
                 current_val = grid[y][x]
