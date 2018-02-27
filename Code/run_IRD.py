@@ -4,7 +4,7 @@ print('importing')
 
 start = time.clock()
 import numpy as np
-from inference_class import Inference
+from inference_class import InferenceDiscrete
 from gridworld import GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
 from agents import ImmediateRewardAgent, DirectionalAgent, OptimalAgent
@@ -55,8 +55,8 @@ def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, p
         for proxy in omega:
             # TODO: Extremely costly to get posterior for all proxy choices. Save repeated computations?
             # Do I have to do (and thus save) the planning for every proxy here?
-            inference.calc_and_save_posterior(proxy, reward_space_proxy=omega)    # Do only once per reward
-            posterior = dict([(tuple(true_reward), inference.get_posterior(true_reward))
+            inference.get_full_posterior(omega, proxy)    # Do only once per reward
+            posterior = dict([(tuple(true_reward), inference.get_posterior(true_reward, omega, proxy))
                               for true_reward in reward_space_true])
             post_avg = sum([posterior[tuple(reward)] * reward for reward in reward_space_true]) # Over whole reward_space
             # Calculate expected regret from optimizing post_avg (expectation over posterior true rewards)
@@ -129,7 +129,7 @@ def get_regret_from_query(inference_eval, best_query, num_true_rewards=500):
     for true_reward in reward_space_true:
         lhoods = []
         for i, proxy in enumerate(best_query):
-            lhood = inference_eval.get_likelihood(true_reward, proxy, best_query)
+            lhood = inference_eval.get_likelihood(true_reward, best_query, proxy)
             lhoods.append(lhood)
         # chosen_proxy_number = np.array(lhoods).argmax()  # Replace argmax with sampling
         d = {i: lhood for i, lhood in enumerate(lhoods)}
@@ -137,8 +137,8 @@ def get_regret_from_query(inference_eval, best_query, num_true_rewards=500):
         except:
             chosen_proxy_number = np.array(lhoods).argmax()  # Replace argmax with sampling
         chosen_proxy = best_query[chosen_proxy_number]
-        inference_eval.calc_and_save_posterior(chosen_proxy, best_query)
-        post_avg = inference_eval.get_posterior_avg()
+        inference_eval.get_full_posterior(best_query, chosen_proxy)
+        post_avg = inference_eval.get_posterior_avg(best_query, chosen_proxy)
         # TODO: Make a query_chooser / inference.function from query to regret or so
         optimal_reward = inference_eval.get_avg_reward(true_reward, true_reward)
         post_reward = inference_eval.get_avg_reward(post_avg, true_reward)
@@ -225,9 +225,26 @@ if __name__=='__main__':
     # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
     # choosers = ['greedy_entropy', 'random', 'no_query']
 
-    exp_params = 'qsize'+str(query_size) + '-' + 'expnum' + str(num_experiments)
-    exp_name = 'compare-choosers'
-
+    exp_params = {
+        'qsize': query_size,
+        'num_experiments': num_experiments,
+        'mdp': args.mdp_type,
+        'dim': args.feature_dim,
+        'num_iter': args.num_iter,
+        'gamma': gamma,
+        'size_true': size_reward_space_true,
+        'size_proxy': size_reward_space_proxy,
+        'seed': SEED,
+        'beta': beta,
+        'num_states': num_states,
+        'dist_scale': dist_scale,
+        'num_traject': num_traject,
+        'num_queries_max': num_queries_max,
+        'height': height,
+        'width': width,
+        'num_iters_optim': num_iters_optim,
+        'value_iters': args.value_iters
+    }
 
     # # Set up env and agent for NStateMdp
     if args.mdp_type == 'bandits':
@@ -276,8 +293,9 @@ if __name__=='__main__':
 
     # Set up inference
     env = GridworldEnvironment(mdp)
-    inference = Inference(agent, mdp, env, beta, reward_space_true, reward_space_proxy,
-                          num_traject=num_traject, prior=None)
+    inference = InferenceDiscrete(
+        agent, mdp, env, beta, reward_space_true, reward_space_proxy,
+        num_traject=num_traject, prior=None)
 
     'Print derived parameters'
     # print('Size of reward_space_true:{size}'.format(size=size_reward_space_true))
@@ -302,15 +320,15 @@ if __name__=='__main__':
 
     'Set up test environment (not used)'
     # print 'starting posterior calculation'
-    # inference.calc_and_save_posterior(proxy_given, reward_space_proxy)
-    # prior = dict([(tuple(true_reward), inference.get_posterior(true_reward))
+    # inference.get_full_posterior(reward_space_proxy, proxy_given)
+    # prior = dict([(tuple(true_reward), inference.get_posterior(true_reward, reward_space_proxy, proxy_given))
     #               for true_reward in reward_space_true])
     # print('new prior: {prior}'.format(prior=prior))
     # mdp_test = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],   # proxy_given should have no effect
     #                                      feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
     # mdp_test.add_feature_map(mdp.features)
     # env_test = GridworldEnvironment(mdp_test)
-    # inference_test = Inference(agent, mdp_test, env_test, beta=1., reward_space_true=reward_space_true, num_traject=1, prior=prior)
+    # inference_test = InferenceDiscrete(agent, mdp_test, env_test, beta=1., reward_space_true=reward_space_true, num_traject=1, prior=prior)
 
 
 
@@ -327,7 +345,7 @@ if __name__=='__main__':
         # print 'Mean actual -reduction and std(mean) over random query: {r}'.format(r=mean_std_actual)
         # print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
         # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
-        experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params, exp_name)
+        experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params)
         # experiment.run_experiment(num_iter_per_experiment)
         avg_post_exp_regrets, avg_post_regrets, \
         std_post_exp_regrets, std_post_regrets, \
@@ -382,104 +400,3 @@ if __name__=='__main__':
     # omega = [choice(reward_space_true) for _ in range(4)] # replace with chosen omega
     # interface = Interface(omega, agent, env, num_states=num_states)
     # interface.plot()
-
-    """Todo:
-        -Implement new choosing methods
-            -Combineable with sliders / interface
-                -Feature weights
-                -
-
-            -Entropy
-
-                -Non-greedy entropy - cheap!
-                -Why don't other methods reduce entropy? Focus on regret.
-                    -Do they?
-                -Results:
-                    -Random:0.6, regret/reward: ca 0.2, entropy: 0.36
-                    -Hard mode: Entropy: .86, regret: .5, reward: .73, random:. 1.6 (5 iter, 5 exp)
-                -Try on hard problem. Maybe entropy tries too hard to distinguish between weights that lead to the same behavior once other options are sufficiently unlikely (p=0.01
-                    -More states to make same behavior unlikely
-                        -Hypothesis: Entropy works better to reduce the search space, regret better to exclude remaining choices that are merely somewhat unlikely.
-                    -Optimize with regret at the end?
-                        -Check if post_regret drops equally fast initially for entropy
-                    -
-                -Compare to only H(Q) or H(Q|W)
-        -New environment:
-            -Desiderata:
-            -Features = distance from different (weighted) locations
-                -Incentivize a path rather than directly finding location (sq distance?)
-            -Ask Rohin/Daniel
-            -Dorsa: Too slow to plan?
-            -Racecar: Same?
-            -With test env...
-            -Distance to goals gridworld
-                -Run a test, e.g. with Value iteration (first by caching reward and not using features)
-
-        -List parameters and sensitivity to them (remember: messed up last time!)
-        -Test new environment
-            -Initial test
-
-                -Test final post avg on different environment
-                -Why is entropy increasing?
-                    -Try bigger proxy space
-                        -Result: Helps to have >50-60 but high variance.
-                    -Try uniform weights (not right-skewed)
-                        -Beta = 2.
-                        -Result: Entropy goes 7, then 14 if dividing by 9! Repeats with different seed.
-                            -0/-1 rewards due to int division. So trajectories are similar.
-                                -But why the huge entropy?
-                            -Check w/ float division
-                                -Familiar slow decline of ent
-                            -WHICH BETA IS REASONABLE?
-                                -Check probabilities
-                        -Result: Entropy way down when not dividing by 9!
-
-                    -What does the (small) posterior look like?
-
-                    -!!!!!!!!!!!!!! WHY NEGATIVE REGRET?
-                        -subspace and convergence for VI don't help
-                        -find out what feature_exp for proxy are better than for true reward
-                    -Why does entropy go back up sometimes? Maybe bad proxy choice.
-                    -Why tiny differences in entropy?
-                        -INCREASE BETA! - Check effect for really high in computations
-                        -Compare avg_reward_matrix for NStateMdp
-                        -There are so many true rewards that maybe a pairwise query
-                            -Try exhaustive search (cheap for entropy!)
-                        -Maybe a slight change in behavior changes feature exp a lot?
-                -Adapt reward space
-                    -Constrain vector L1-norm by sampling multinomial sum vector, or Dir(1,1,1,1,1) (may slow planning).
-                        -Not the same as independent draws but it's about the ratios.
-
-                -Think about 'discrete' measure from Dorsa paper
-                -Change map between experiments
-            -Notes:
-                -Query mostly just tells you which of the 4 rewards leads to the true final goal. That's easy to
-                replicate with an algorithm that asks about final goals. Decrease dist_scale, increase #goals & size to
-                make it about path selection.
-
-        -Idea: Use queries to reduce entropy to perform do well in test environment.
-            -Keep asking queries which won't improve our optimal behavior in the training env but might in test.
-                -Maybe entropy performs worse because it wastes time on this!
-                -This is kind of like the 'lookahead' provided by entropy over classification error in RF.
-                -Idea: Try getting regret from max likelihood r_true to save time. Or weighted feature exp from top r_true's.
-            -Is this the right approach for that problem? Is this an interesting problem?
-            -Could also do multiple iterations through multiple environments for transfer or lifelong reward-learning.
-                -Pro: Better generalization. Like repeated IRL paper.
-
-        -TODOs in run_experiment (finish posterior vectorization)
-            -Replace old methods completely (making inference much smaller)
-        -ssh run the whole thing from now on
-
-        -Measure: Total planning vs belief updating
-            ==> Both ca 1.5s with quick planning, greedy only, 500/50 spaces
-        -Implement greedy with quadratic and compare
-        -Efficiency: Vectorize chooser all the way across queries
-        -Note: Don't delete old posteriors if needed again (across choosers)
-        -Random features
-        - Compare minimizer against random query
-        -Measure effect of adjusting parameters
-
-
-    -Try not sampling actions - Change back!
-    -Implement Race car / Dorsa domain with between-track generalization
-    """

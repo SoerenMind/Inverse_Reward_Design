@@ -7,7 +7,7 @@ import time
 from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
 from agents import ImmediateRewardAgent, DirectionalAgent, OptimalAgent
-from inference_class import Inference
+from inference_class import InferenceDiscrete
 import csv
 import os
 import datetime
@@ -61,9 +61,9 @@ class Query_Chooser_Subclass(Query_Chooser):
     # @profile
     def find_query(self, query_size, chooser, true_reward):
         """Calls query chooser specified by chooser (string)."""
-        if chooser == 'maxmin':
-            return self.find_query_feature_diff(query_size)
-        elif chooser == 'exhaustive':
+        # if chooser == 'maxmin':
+        #     return self.find_query_feature_diff(query_size)
+        if chooser == 'exhaustive':
             return self.find_regret_minimizing_query(query_size)
         elif chooser == 'greedy_regret':
             return self.find_best_query_greedy(query_size)
@@ -116,13 +116,14 @@ class Query_Chooser_Subclass(Query_Chooser):
         :return: best_query, corresponding regret and regret plus cost of asking (which grows with query size).
         """
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
-        best_query = [choice(self.reward_space_proxy)]  # Initialize randomly
+        best_query = []  # Initialize randomly
         while len(best_query) < query_size:
-            found_new = False
             best_objective = float("inf")
             best_objective_plus_cost = best_objective
             # TODO: Use a function for this
             for proxy in self.reward_space_proxy:    #TODO: vectorize - worth the time?
+                if any(list(proxy) == list(option) for option in best_query):
+                    continue
                 query = best_query+[proxy]
                 if entropy:
                     _, objective, _ = self.inference.calc_posterior(query, get_entropy=True)
@@ -134,18 +135,14 @@ class Query_Chooser_Subclass(Query_Chooser):
                     best_objective_plus_cost = objective_plus_cost
                     best_objective = objective
                     best_query_new = query
-                    found_new = True
             best_query = best_query_new
-            try: assert found_new # If no better query was found the while loop will go forever. Use <= instead.
-            except:
-                assert found_new
 
         posteriors, post_cond_entropy, evidence = self.inference.calc_posterior(query, get_entropy=True)
         try: proxy_choice = best_query[int(np.argwhere(np.random.multinomial(1, evidence) == 1))]
         except: raise ValueError('evidence: '+str(evidence)+' does not sum to 1')
         # proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
 
-        self.inference.update_prior(query, proxy_choice)  # TODO: Still uses calc_and_save_posterior
+        self.inference.update_prior(query, proxy_choice)
 
         return best_query, best_objective, best_objective_plus_cost
 
@@ -167,7 +164,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         # Add: Get all measures for data recording?
         desired_outputs = [measure,'true_posterior']
-        model = self.get_model(best_query, true_reward)
+        model = self.get_model(len(best_query), true_reward)
         with tf.Session() as sess:
             sess.run(model.initialize_op)
             objective, true_posterior = model.compute(
@@ -182,47 +179,46 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         best_objective, best_objective_plus_cost = float("inf"), float("inf")
         best_query, best_optimal_weights = None, None
-        for i, feature in enumerate(features):
-            query = curr_query+[feature]
-            weights = None
-            if curr_weights is not None:
-                weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
-            model = self.get_model(query, true_reward)
+        model = self.get_model(len(curr_query) + 1, true_reward)
 
-            with tf.Session() as sess:
-                sess.run(model.initialize_op)
+        with tf.Session() as sess:
+            sess.run(model.initialize_op)
+            for i, feature in enumerate(features):
+                query = curr_query+[feature]
+                weights = None
+                if curr_weights is not None:
+                    weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
+
                 objective_unoptimized, optimal_weights = model.compute(
                     desired_outputs, sess, mdp, query, self.inference.prior, weights)
                 objective, optimal_weights = model.compute(
                     desired_outputs, sess, mdp, query, self.inference.prior, weights, gradient_steps=15)
                 print objective_unoptimized, objective, objective_unoptimized - objective, objective_unoptimized >= objective
-            query_cost = self.cost_of_asking * len(query)
-            objective_plus_cost = objective + query_cost
-            print('Model outputs calculated')
-            if objective_plus_cost <= best_objective_plus_cost + 1e-14:
-                best_objective = objective
-                best_objective_plus_cost = objective_plus_cost
-                best_optimal_weights = optimal_weights
-                best_query = query
+                query_cost = self.cost_of_asking * len(query)
+                objective_plus_cost = objective + query_cost
+                print('Model outputs calculated')
+                if objective_plus_cost <= best_objective_plus_cost + 1e-14:
+                    best_objective = objective
+                    best_objective_plus_cost = objective_plus_cost
+                    best_optimal_weights = optimal_weights
+                    best_query = query
         return best_query, best_optimal_weights
 
-    def get_model(self, query, true_reward=None, high_iters=False):
+    def get_model(self, query_size, true_reward=None, high_iters=False):
         mdp = self.inference.mdp
         num_iters = 50 if high_iters else self.args.num_iters_optim
-        # proxy_space = list(product([-1, 0, 1], repeat=len(query)))
-        # proxy_space = list(product(range(-3, 2), repeat=len(query)))
-        proxy_space = np.random.randint(-4,3,size=[30 * len(query), len(query)])
+        # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
+        proxy_space = list(product(range(-3, 2), repeat=query_size))
+
         print 'Proxy space size: '+str(len(proxy_space))
-
-
         if mdp.type == 'bandits':
             return BanditsModel(
-                self.args.feature_dim, self.args.gamma, len(query),
+                self.args.feature_dim, self.args.gamma, query_size,
                 proxy_space, self.inference.true_reward_matrix,
                 true_reward, self.args.beta, 'entropy')
         elif mdp.type == 'gridworld':
             return GridworldModel(
-                self.args.feature_dim, self.args.gamma, len(query),
+                self.args.feature_dim, self.args.gamma, query_size,
                 proxy_space, self.inference.true_reward_matrix,
                 true_reward, self.args.beta, 'entropy', mdp.height, mdp.width,
                 num_iters)
@@ -242,7 +238,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         The calculation is done by calculating the probability of each answer and then the regret conditioned on it."""
 
         if len(query) == 0:
-            return self.get_exp_regret(no_query=True)
+            return self.get_exp_regret_from_prior()
 
         posterior, post_averages, probs_proxy_choice = self.inference.calc_posterior(query)
         avg_reward_matrix = self.inference.get_avg_reward_for_post_averages(post_averages)
@@ -261,44 +257,22 @@ class Query_Chooser_Subclass(Query_Chooser):
         posteriors, conditional_entropy, probs_proxy_choice = self.inference.calc_posterior(query, get_entropy=True)
         return conditional_entropy
 
-    # # @profile
-    def get_exp_regret(self, no_query=False):
-        """Returns the expected regret if proxy is the answer chosen from query.
-        Proxy and query are not used here because the likelihoods in self.inference are already conditioned on them!
-        Calculates the posterior over true rewards. Assumes that the posterior average will be optimized (greedy assumption).
-        Then calculates the expected regret which is the expected difference between the reward if optimizing the true
-        reward and the reward if optimizing the posterior average.
-        """
+    # @profile
+    def get_exp_regret_from_prior(self):
+        """Returns the expected regret from the prior."""
         # inference has to have cached the posterior for the right proxy & query here.
         exp_regret = 0
-
-        # If no query, return prior regret
-        if no_query:
-            prior_avg = sum([self.inference.get_prior(true_reward) * true_reward
-                             for true_reward in self.inference.reward_space_true])
-            for true_reward in self.inference.reward_space_true:
-                p_true_reward = self.inference.get_prior(true_reward)
-                optimal_reward = self.inference.get_avg_reward(true_reward,true_reward)
-                prior_reward = self.inference.get_avg_reward(prior_avg, true_reward)
-                regret = optimal_reward - prior_reward
-                exp_regret += regret * p_true_reward
-            return exp_regret
-
-        # Get expected regret for query
-        post_avg = self.inference.get_posterior_avg()   # uses cached posterior
-        for true_reward in self.inference.reward_space_true:    # Vectorize
-            p_true_reward = self.inference.get_posterior(true_reward)
-            optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)    # Cache to save 9%
-            # True reward for optimizing post_avg
-            post_reward = self.inference.get_avg_reward(post_avg, true_reward)
-            regret = optimal_reward - post_reward
+        prior_avg = sum([self.inference.get_prior(true_reward) * true_reward
+                         for true_reward in self.inference.reward_space_true])
+        for true_reward in self.inference.reward_space_true:
+            p_true_reward = self.inference.get_prior(true_reward)
+            optimal_reward = self.inference.get_avg_reward(true_reward,true_reward)
+            prior_reward = self.inference.get_avg_reward(prior_avg, true_reward)
+            regret = optimal_reward - prior_reward
             exp_regret += regret * p_true_reward
         return exp_regret
-        # posterior = {tuple(true_reward): self.inference.get_posterior(true_reward)
-        #                   for true_reward in self.inference.reward_space_true}
-        # exp_regret = self.get_regret(posterior, query)
 
-    # # @profile
+    # @profile
     def get_regret(self, proxy, true_reward):
         """Gets difference of reward under true_reward-function for optimizing for true_reward vs proxy."""
         optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)  # Cache to save 9%
@@ -306,7 +280,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         regret = optimal_reward - proxy_reward
         return regret
 
-    # # @profile
+    # @profile
     def get_exp_regret_from_query(self, query):
         """Calculates the actual regret from a query by looping through (and weighting) true rewards."""
         if len(query) == 0:
@@ -318,7 +292,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         else:
             raise NotImplementedError
 
-    # # @profile
+    # @profile
     def get_regret_from_query_and_true_reward(self, query, true_reward):
         if len(query) == 0:
             prior_avg = self.inference.get_prior_avg()
@@ -331,7 +305,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 class Experiment(object):
     """"""
-    def __init__(self, inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params, exp_name):
+    def __init__(self, inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params):
         self.inference = inference  # TODO: Possibly create inference here and maybe input params as a dict
         self.reward_space_proxy = reward_space_proxy
         self.query_size_discrete = query_size
@@ -343,9 +317,8 @@ class Experiment(object):
         self.results = {}
         # Add variance
         self.measures = ['post_exp_regret','test_regret','norm post_avg-true','post_regret','perf_measure']
-        self.exp_params = exp_params
-        self.exp_name = exp_name
-        self.time = str(datetime.datetime.now())[:-6]
+        curr_time = str(datetime.datetime.now())[:-6]
+        self.folder_name = curr_time + '-' + '-'.join([key+'='+str(val) for key, val in sorted(exp_params.items())])
 
     # @profile
     def get_experiment_stats(self, num_iter, num_experiments):
@@ -382,13 +355,7 @@ class Experiment(object):
         post_exp_regret_per_chooser = []
         post_regret_per_chooser = []
 
-        # Cache feature exp and lhoods
-        # function = self.inference.calc_and_save_feature_expectations
-        # input = self.reward_space_proxy
-        # print('caching feature exp for proxies...')
-        # self.inference.calc_and_save_feature_expectations(self.reward_space_proxy)
-        # print('caching feature exp for true rewards...')
-        # self.inference.calc_and_save_feature_expectations(self.inference.reward_space_true)
+        # Cache lhoods
         print 'NOT CACHING FEATURES FOR TRUE REWARDS!'
         print('caching likelihoods...')
         self.inference.cache_lhoods()
@@ -416,7 +383,7 @@ class Experiment(object):
 
                     _, post_cond_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)
                     proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
-                    self.inference.update_prior(query, proxy_choice)    # TODO: Still uses calc_and_save_posterior
+                    self.inference.update_prior(query, proxy_choice)
 
                 # Outcome measures
                 post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
@@ -467,8 +434,10 @@ class Experiment(object):
 
             # Set up inference
             env = GridworldEnvironment(mdp)
-            inference = Inference(agent, mdp, env, beta, self.inference.reward_space_true, self.inference.reward_space_proxy,
-                                  num_traject=num_traject, prior=None)
+            inference = Inference(
+                agent, mdp, env, beta, self.inference.reward_space_true,
+                self.inference.reward_space_proxy, num_traject=num_traject,
+                prior=None)
 
             post_reward = inference.get_avg_reward(post_avg, true_reward)
             optimal_reward = inference.get_avg_reward(true_reward, true_reward)
@@ -482,13 +451,12 @@ class Experiment(object):
     def write_experiment_results_to_csv(self, exp_num, num_iter):
         """Writes a CSV for every chooser for every experiment. The CSV's columns are 'iteration' and all measures in
         self.measures."""
-        folder_name = self.time + ' ' + self.exp_name + '--'  + ' ' + self.exp_params
-        if not os.path.exists('data/'+folder_name):
-            os.mkdir('data/'+folder_name)
+        if not os.path.exists('data/'+self.folder_name):
+            os.mkdir('data/'+self.folder_name)
         else:
             Warning('Existing experiment stats overwritten')
         for chooser in self.choosers:
-            f = open('data/'+folder_name+'/'+chooser+str(exp_num)+'.csv','w')  # Open CSV in folder with name exp_params
+            f = open('data/'+self.folder_name+'/'+chooser+str(exp_num)+'.csv','w')  # Open CSV in folder with name exp_params
             writer = csv.DictWriter(f, fieldnames=['iteration']+self.measures)
             writer.writeheader()
             rows = []
@@ -506,18 +474,17 @@ class Experiment(object):
         """Writes a CSV for every chooser averaged (and median-ed) across experiments. Saves in the same folder as
         CSVs per experiment. Columns are 'iteration' and all measures in self.measures."""
         time = str(datetime.datetime.now())[:-13]
-        folder_name = self.time + ' ' + self.exp_name + '--'  + ' ' + self.exp_params
-        if not os.path.exists('data/'+folder_name):
-            os.mkdir('data/'+folder_name)
+        if not os.path.exists('data/' + self.folder_name):
+            os.mkdir('data/' + self.folder_name)
         else:
             Warning('Existing experiment stats overwritten')
 
-        f_mean_all = open('data/'+folder_name+'/'+'all choosers'+'-means-'+'.csv','w')
+        f_mean_all = open('data/'+self.folder_name+'/'+'all choosers'+'-means-'+'.csv','w')
         writer_mean_all_choosers = csv.DictWriter(f_mean_all, fieldnames=['iteration']+self.measures)
 
         for chooser in self.choosers:
-            f_mean = open('data/'+folder_name+'/'+chooser+'-means-'+'.csv','w')
-            f_median = open('data/'+folder_name+'/'+chooser+'-medians-'+'.csv','w')
+            f_mean = open('data/'+self.folder_name+'/'+chooser+'-means-'+'.csv','w')
+            f_median = open('data/'+self.folder_name+'/'+chooser+'-medians-'+'.csv','w')
             writer_mean = csv.DictWriter(f_mean, fieldnames=['iteration']+self.measures)
             writer_median = csv.DictWriter(f_median, fieldnames=['iteration']+self.measures)
             writer_mean.writeheader()
