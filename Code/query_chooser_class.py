@@ -170,7 +170,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         posteriors, post_cond_entropy, evidence, true_posterior = self.inference.calc_posterior(
                                                                 query, get_entropy=True, true_reward=true_reward)
 
-        return best_query, best_objective, true_posterior
+        return best_query, best_objective, true_posterior, None
 
 
     def find_discrete_query_greedy(self, query_size, measure, true_reward):
@@ -493,7 +493,7 @@ class Experiment(object):
                 self.results[chooser, 'true_entropy', i, exp_num], \
                 self.results[chooser,'perf_measure', i, exp_num], \
                 self.results[chooser, 'post_regret', i, exp_num], \
-                self.results[chooser, 'test_regret', i, exp_num] \
+                self.results[chooser, 'test_regret', i, exp_num], \
                 self.results[chooser, 'norm post_avg-true', i, exp_num],   \
                 self.results[chooser, 'query', i, exp_num], \
                     = true_entropy, perf_measure, post_regret, test_regret, np.linalg.norm(post_avg-true_reward,1), query

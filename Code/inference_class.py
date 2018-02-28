@@ -90,7 +90,7 @@ class InferenceDiscrete(Inference):
         if true_posterior is not None:
             self.cache['prior_avg'] = None
             self.prior = true_posterior
-        # TODO(rohinmshah): Can the elif case be removed?
+        # TODO(rohinmshah): Can the elif case be removed? (soerenmind): It would break if query is None
         elif len(query) == 0: # Do nothing for empty query
             return
         else:

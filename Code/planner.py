@@ -227,16 +227,7 @@ class Model(object):
                 sess.run(self.minimize_op, feed_dict=fd)
 
         def get_op(name):
-            K = len(self.proxy_reward_space)
-            if name == 'answer':
-                return self.proxy_reward_space[np.random.choice(K)]
-            elif name == 'true_posterior':
-                N = len(self.true_reward_matrix)
-                result = np.random.rand(N)
-                return (result / result.sum(0)).T
-            # elif name == 'optimal_weights':
-            #     return np.zeros(self.feature_dim - len(self.query))
-            elif name not in self.name_to_op:
+            if name not in self.name_to_op:
                 raise ValueError("Unknown op name: " + str(name))
             return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
 
