@@ -69,20 +69,13 @@ class Model(object):
         """
         Maps self.feature_exp (created by planner) to self.log_posterior.
         """
-        self.true_reward_tensor = tf.constant(
-            self.true_reward_matrix, dtype=tf.float32, name="true_reward_tensor", shape=self.true_reward_matrix.shape)
-
-        # Calculate avg_reward_matrix with fake inputs
-        # K = len(self.proxy_reward_space)
-        # self.feature_expectations_test_input = tf.placeholder(
-        #     tf.float32, shape=[None, self.feature_dim], name="feature_exp_test_input")
-        # # Has no effect
-        # self.features = tf.placeholder(
-        #     tf.float32, name="features")
-        # self.human_weights = tf.placeholder(tf.float32, name="human_weights")
+        # Get log likelihoods for true reward matrix
+        self.true_reward_matrix_tensor = tf.constant(
+            self.true_reward_matrix, dtype=tf.float32, name="true_reward_matrix_tensor", shape=self.true_reward_matrix.shape)
         self.avg_reward_matrix = tf.tensordot(
-            self.feature_expectations, tf.transpose(self.true_reward_tensor), axes=[-1, -2], name='avg_reward_matrix')
+            self.feature_expectations, tf.transpose(self.true_reward_matrix_tensor), axes=[-1, -2], name='avg_reward_matrix')
         log_likelihoods_new = self.beta * self.avg_reward_matrix
+
 
         # Calculate posterior
         self.prior = tf.placeholder(tf.float32, name="prior", shape=(len(self.true_reward_matrix)))
@@ -94,9 +87,44 @@ class Model(object):
 
         self.post_sum_to_1 = tf.reduce_sum(tf.exp(self.log_posterior), axis=1, name='post_sum_to_1')
 
+
+        # Get log likelihoods for actual true reward
+        if self.true_reward is not None:
+            self.true_reward_tensor = tf.constant(
+                self.true_reward.reshape(1,-1), dtype=tf.float32, name="true_reward_tensor", shape=[1, self.feature_dim])
+            self.avg_true_rewards = tf.tensordot(
+                self.feature_expectations, tf.transpose(self.true_reward_tensor), axes=[-1, -2], name='avg_true_rewards')
+            true_log_likelihoods = self.beta * self.avg_true_rewards
+            log_true_Z_w = tf.reduce_logsumexp(true_log_likelihoods, axis=0, name='log_true_Z_w')
+            log_answer_probs = true_log_likelihoods - log_true_Z_w
+
+            self.name_to_op['true_reward_tensor'] = self.true_reward_tensor
+            self.name_to_op['avg_true_rewards'] = self.avg_true_rewards
+            self.name_to_op['true_log_likelihoods'] = true_log_likelihoods
+            self.name_to_op['log_answer_probs'] = log_answer_probs
+            self.name_to_op['log_true_Z_w'] = log_true_Z_w
+            self.name_to_op['log_answer_probs'] = log_answer_probs
+
+            # # Sample answer
+            log_answer_probs = tf.reshape(log_answer_probs, shape=[1,-1])
+            sample = tf.multinomial(log_answer_probs, num_samples=1)
+            sample = sample[0][0]
+            self.true_log_posterior = self.log_posterior[sample]
+            self.true_posterior = self.posterior[sample]
+
+            self.name_to_op['sample'] = sample
+            self.name_to_op['true_posterior'] = self.true_posterior
+            self.name_to_op['true_log_posterior'] = self.true_log_posterior
+            self.name_to_op['probs'] = tf.exp(log_answer_probs)
+
+            # Get true posterior entropy
+            interm_tensor = tf.exp(self.true_log_posterior + tf.log(- self.true_log_posterior))
+            self.true_ent = tf.reduce_sum(interm_tensor, axis=0, name="true_entropy", keepdims=True)
+            self.name_to_op['true_entropy'] = self.true_ent
+
         # Fill name to ops dict
         self.name_to_op['avg_reward_matrix'] = self.avg_reward_matrix
-        self.name_to_op['true_reward_tensor'] = self.true_reward_tensor
+        self.name_to_op['true_reward_matrix_tensor'] = self.true_reward_matrix_tensor
         self.name_to_op['prior'] = self.prior
         self.name_to_op['features'] = self.features
         self.name_to_op['other_weights'] = self.other_weights
@@ -109,19 +137,23 @@ class Model(object):
         :param objective: string that specifies the objective function
         """
         if 'entropy' in objective:
-            post_ent = - tf.reduce_sum(
-                tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent')
+            # # Calculate exp entropy without log space trick
+            # post_ent = - tf.reduce_sum(
+            #     tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent')
+            # self.exp_post_ent = tf.reduce_sum(
+            #     tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='exp_post_entropy')
+            # self.name_to_op['entropy'] = self.exp_post_ent
 
-            # # Calculate entropy as sum exp (log p + log (-log p))
-            # interm_tensor = tf.exp(self.log_posterior + tf.log(- self.log_posterior))
-            # self.exp_post_ent_new = tf.reduce_sum(interm_tensor, axis=-1, name="exp_post_ent_new")
-            # self.name_to_op['entropy_new'] = self.exp_post_ent_new
 
+            # Calculate entropy as sum exp (log p + log (-log p))
+            interm_tensor = tf.exp(self.log_posterior + tf.log(- self.log_posterior))
+            self.post_ent_new = tf.reduce_sum(interm_tensor, axis=1, name="entropy_per_answer", keepdims=True)
+            self.name_to_op['entropy_per_answer'] = self.post_ent_new
+            self.exp_post_ent_new = tf.reduce_sum(
+                tf.multiply(self.post_ent_new, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='entropy')
+            self.name_to_op['entropy'] = self.exp_post_ent_new
 
-            self.exp_post_ent = tf.reduce_sum(
-                tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='exp_post_entropy')
-            self.name_to_op['entropy'] = self.exp_post_ent
-
+            # # Set up optimizer
             # if self.query_size < self.feature_dim:
             #     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)    # TODO: adjust inputs if needed
             #     self.minimize_op = optimizer.minimize(
@@ -160,7 +192,8 @@ class Model(object):
 
 
     # TODO: Remove the feature_expectations_test_input argument
-    def compute(self, outputs, sess, mdp, query, prior=None, weight_inits=None, feature_expectations_test_input = None, gradient_steps=0):
+    def compute(self, outputs, sess, mdp, query, prior=None, weight_inits=None, feature_expectations_test_input = None,
+                gradient_steps=0, discrete_query=None):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -174,13 +207,18 @@ class Model(object):
         :param gradient_steps: Number of gradient steps to take.
         :return: List of the same length as parameter `outputs`.
         """
-        if weight_inits is not None:
-            fd = {self.weight_inputs: weight_inits}
-            sess.run([self.assign_op], feed_dict=fd)
-
         fd = self.create_mdp_feed_dict(mdp)
+
+        if weight_inits is not None:
+            fd[self.weight_inputs] = weight_inits   # Should this be done after running assign_op?
+            # fd = {self.weight_inputs: weight_inits}
+            sess.run([self.assign_op], feed_dict=fd)
+        elif discrete_query is not None:
+            fd[self.query_weights] = discrete_query   # Should this be done with another assign op?
+
         if prior is not None:
             fd[self.prior] = prior
+
         fd[self.permutation] = self.get_permutation_from_query(query)
 
         if gradient_steps > 0:

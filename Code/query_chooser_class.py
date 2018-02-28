@@ -58,7 +58,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         proxy_space = [list(reward) for reward in reward_space]
         print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
         model = self.get_model(
-            query_size=self.args.feature_dim, proxy_space=proxy_space, num_iters_discrete=self.args.value_iters)
+            query_size=self.args.feature_dim, proxy_space=proxy_space, num_iters_discrete=self.args.value_iters,
+            true_reward=np.zeros(self.args.feature_dim))
 
         desired_outputs = ['feature_exps']
         mdp = self.inference.mdp
@@ -71,32 +72,9 @@ class Query_Chooser_Subclass(Query_Chooser):
             print('Done computing model outputs.Total experiment time: {t}'.format(t=time.clock()-self.t_0))
         del model
 
-    def get_model(self, query_size, true_reward=None, high_iters=False, proxy_space=None, num_iters_discrete=None):
-        mdp = self.inference.mdp
-
-        if proxy_space is None:
-            # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
-            proxy_space = list(product(range(-3, 2), repeat=query_size))
-            num_iters = 50 if high_iters else self.args.num_iters_optim
-        else:
-            # Iterations must be given if proxy space is
-            num_iters = num_iters_discrete
 
 
-        print 'Proxy space size: ' + str(len(proxy_space))
-        if mdp.type == 'bandits':
-            return BanditsModel(
-                self.args.feature_dim, self.args.gamma, query_size,
-                proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy')
-        elif mdp.type == 'gridworld':
-            return GridworldModel(
-                self.args.feature_dim, self.args.gamma, query_size,
-                proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy', mdp.height, mdp.width,
-                num_iters)
-        else:
-            raise ValueError('Unknown model type: ' + str(mdp.type))
+
 
     def generate_set_of_queries(self, query_size=4):
         num_queries = comb(len(self.reward_space_proxy), query_size)
@@ -120,6 +98,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             return [], self.get_exp_regret_from_query([]), None
         elif chooser == 'greedy_exp_reward':
             return self.find_best_query_greedy(query_size, total_reward=True, true_reward=true_reward)
+        elif chooser == 'greedy_entropy_discrete_tf':
+            return self.find_discrete_query_greedy(query_size, 'entropy', true_reward)
         elif chooser == 'greedy_entropy':
             return self.find_best_query_greedy(query_size, entropy=True, true_reward=true_reward)
         elif chooser == 'feature_entropy':
@@ -190,38 +170,59 @@ class Query_Chooser_Subclass(Query_Chooser):
         posteriors, post_cond_entropy, evidence, true_posterior = self.inference.calc_posterior(
                                                                 query, get_entropy=True, true_reward=true_reward)
 
-
-
-
-
-
         return best_query, best_objective, true_posterior
 
 
-    # @profile
-    def find_feature_query_greedy(self, query_size, measure, true_reward):
-        """Returns feature query of size query_size that minimizes the objective (e.g. posterior entropy)."""
-        mdp = self.inference.mdp
-        cost_of_asking = self.cost_of_asking    # could use this to decide query length
+    def find_discrete_query_greedy(self, query_size, measure, true_reward):
         best_query = []
         feature_dim = self.args.feature_dim
-        best_optimal_weights = None
-        while len(best_query) < query_size:
-            best_query, best_optimal_weights = self.find_next_feature(
-                best_query, best_optimal_weights, measure, true_reward)
-            print 'Query length increased to {s}'.format(s=len(best_query))
 
-        print('query found')
-        # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
-        # Add: Get all measures for data recording?
-        desired_outputs = [measure,'true_posterior']
-        model = self.get_model(len(best_query), true_reward)
+        # Find best query
+        while len(best_query) < query_size:
+            best_query, best_objective = self.find_next_bigger_discrete_query(best_query, measure, true_reward=None)
+        print('query found, computing true posterior...')
+
+        # Evaluate its posterior (do above if building model takes time)
+        desired_outputs = [measure,'true_posterior','true_entropy']
+        mdp = self.inference.mdp
+        model = self.get_model(0, true_reward, proxy_space=best_query, num_iters_discrete=self.args.value_iters)
         with tf.Session() as sess:
             sess.run(model.initialize_op)
-            objective, true_posterior = model.compute(
-                desired_outputs, sess, mdp, best_query, self.inference.prior,
-                best_optimal_weights)
-        return best_query, objective, true_posterior
+            best_objective, true_posterior, true_entropy = model.compute(
+                                desired_outputs, sess, mdp, [], self.inference.prior, discrete_query=best_query)
+        # TODO: Should we use the log posterior here because a prior with zeros would crash the log prior?
+        print('Best objective found: ' + str(best_objective))
+
+        return best_query, best_objective, true_posterior, true_entropy[0]
+
+    def find_next_bigger_discrete_query(self, curr_query, measure, true_reward):
+        mdp = self.inference.mdp
+        desired_outputs = [measure]
+        best_objective, best_objective_plus_cost = float("inf"), float("inf")
+        best_query = None
+        feature_dim = self.args.feature_dim
+        dummy_proxy_space = [list(np.zeros(feature_dim)) for _ in range(len(curr_query) + 1)]
+        print('building model...')
+        model = self.get_model(0, true_reward, proxy_space=dummy_proxy_space, num_iters_discrete=self.args.value_iters)
+
+        with tf.Session() as sess:
+            sess.run(model.initialize_op)
+            print('computing outputs for each query extension...')
+            for proxy in self.reward_space_proxy:
+                if any(list(proxy) == list(option) for option in curr_query):
+                    continue
+                query = curr_query+[list(proxy)]
+                objective = model.compute(
+                    desired_outputs, sess, mdp, [], self.inference.prior, discrete_query=query)
+                if objective[0][0][0] < best_objective:
+                    best_objective = objective
+                    best_query = query
+            print('Objective for size {s}: '.format(s=len(best_query)) +str(best_objective[0][0][0]))
+
+
+        return best_query, best_objective[0][0][0]
+
+
 
     def find_next_feature(self, curr_query, curr_weights, measure, true_reward):
         mdp = self.inference.mdp
@@ -255,6 +256,59 @@ class Query_Chooser_Subclass(Query_Chooser):
                     best_query = query
         return best_query, best_optimal_weights
 
+
+
+    # @profile
+    def find_feature_query_greedy(self, query_size, measure, true_reward):
+        """Returns feature query of size query_size that minimizes the objective (e.g. posterior entropy)."""
+        mdp = self.inference.mdp
+        cost_of_asking = self.cost_of_asking    # could use this to decide query length
+        best_query = []
+        feature_dim = self.args.feature_dim
+        best_optimal_weights = None
+        while len(best_query) < query_size:
+            best_query, best_optimal_weights = self.find_next_feature(
+                best_query, best_optimal_weights, measure, true_reward)
+            print 'Query length increased to {s}'.format(s=len(best_query))
+
+        print('query found')
+        # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
+        # Add: Get all measures for data recording?
+        desired_outputs = [measure,'true_posterior']
+        model = self.get_model(len(best_query), true_reward)
+        with tf.Session() as sess:
+            sess.run(model.initialize_op)
+            objective, true_posterior = model.compute(
+                desired_outputs, sess, mdp, best_query, self.inference.prior,
+                best_optimal_weights)
+        return best_query, objective, true_posterior
+
+
+    def get_model(self, query_size, true_reward=None, high_iters=False, proxy_space=None, num_iters_discrete=None):
+        mdp = self.inference.mdp
+
+        if proxy_space is None:
+            # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
+            proxy_space = list(product(range(-3, 2), repeat=query_size))
+            num_iters = 50 if high_iters else self.args.num_iters_optim
+        else:
+            # Iterations must be given if proxy space is
+            num_iters = num_iters_discrete
+
+
+        if mdp.type == 'bandits':
+            return BanditsModel(
+                self.args.feature_dim, self.args.gamma, query_size,
+                proxy_space, self.inference.true_reward_matrix,
+                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy')
+        elif mdp.type == 'gridworld':
+            return GridworldModel(
+                self.args.feature_dim, self.args.gamma, query_size,
+                proxy_space, self.inference.true_reward_matrix,
+                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy', mdp.height, mdp.width,
+                num_iters)
+        else:
+            raise ValueError('Unknown model type: ' + str(mdp.type))
 
 
     def find_random_query(self, query_size):
@@ -348,7 +402,7 @@ class Experiment(object):
         self.query_chooser = Query_Chooser_Subclass(inference, reward_space_proxy, num_queries_max, args, t_0=self.t_0)
         self.results = {}
         # Add variance
-        self.measures = ['post_exp_regret','test_regret','norm post_avg-true','post_regret','perf_measure']
+        self.measures = ['true_entropy','test_regret','norm post_avg-true','post_regret','perf_measure']
         curr_time = str(datetime.datetime.now())[:-6]
         self.folder_name = curr_time + '-' + '-'.join([key+'='+str(val) for key, val in sorted(exp_params.items())])
 
@@ -387,7 +441,7 @@ class Experiment(object):
         post_regret_per_chooser = []
 
         # Cache lhoods
-        # print 'NOT CACHING FEATURES FOR TRUE REWARDS!'
+        # print 'NOT CACHING FEATURES!'
         if 'greedy_entropy' in self.choosers:
             print('caching likelihoods. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
             self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
@@ -401,7 +455,7 @@ class Experiment(object):
 
         # Run experiment for each query chooser
         for chooser in self.choosers:
-            print "=========Experiment {n}/{N} for {chooser}=========".format(chooser=chooser,n=exp_num+1,N=num_experiments)
+            print "=====================Experiment {n}/{N} for {chooser}=====================".format(chooser=chooser,n=exp_num+1,N=num_experiments)
             self.inference.reset_prior()
 
             for i in range(num_iter):
@@ -418,10 +472,12 @@ class Experiment(object):
 
                     # Find best query
                     print('Finding best query greedily. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-                    query, perf_measure, true_posterior \
+                    query, perf_measure, true_posterior, true_entropy \
                         = self.query_chooser.find_query(self.query_size_discrete, chooser, true_reward)
                     print('Found best query greedily. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-                    _, exp_post_entropy, _, _ = self.inference.calc_posterior(query, get_entropy=True)  # Do before posterior update
+                    query = [np.array(proxy) for proxy in query]
+                    # TODO: this line still suffers from overflow
+                    # _, exp_post_entropy, _, _ = self.inference.calc_posterior(query, get_entropy=True)  # Do before posterior update
 
                     # Update posterior
                     self.inference.update_prior(None, None, true_posterior)
@@ -434,12 +490,13 @@ class Experiment(object):
 
                 # Save results
                 # self.results[chooser, 'post_exp_regret', i, exp_num],\
-                self.results[chooser, 'exp_post_entropy', i, exp_num], \
-                self.results[chooser, 'query', i, exp_num], self.results[chooser,'perf_measure', i, exp_num], \
+                self.results[chooser, 'true_entropy', i, exp_num], \
+                self.results[chooser,'perf_measure', i, exp_num], \
                 self.results[chooser, 'post_regret', i, exp_num], \
-                self.results[chooser, 'norm post_avg-true', i, exp_num],   \
                 self.results[chooser, 'test_regret', i, exp_num] \
-                    = exp_post_entropy, query, perf_measure, post_regret, np.linalg.norm(post_avg-true_reward,1), test_regret
+                self.results[chooser, 'norm post_avg-true', i, exp_num],   \
+                self.results[chooser, 'query', i, exp_num], \
+                    = true_entropy, perf_measure, post_regret, test_regret, np.linalg.norm(post_avg-true_reward,1), query
 
 
             print('post_exp_regret: {p}'.format(p=post_exp_regret))

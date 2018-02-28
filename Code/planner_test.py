@@ -10,14 +10,17 @@ from gridworld import GridworldMdp, GridworldMdpWithDistanceFeatures
 from gridworld import NStateMdpGaussianFeatures
 from agents import OptimalAgent, ImmediateRewardAgent
 
+
 class TestPlanner(unittest.TestCase):
 
 
     def test_gridworld_planner(self):
         def check_model_equivalent(model, query, weights, mdp, num_iters):
+            prior = np.ones(3) / 3.
             with tf.Session() as sess:
                 sess.run(model.initialize_op)
-                (qvals,) = model.compute(['q_values'], sess, mdp, query, weight_inits=weights)
+                (qvals,) \
+                    = model.compute(['q_values'], sess, mdp, query, prior, weight_inits=weights)
 
             agent = OptimalAgent(gamma=model.gamma, num_iters=num_iters)
             for i, proxy in enumerate(model.proxy_reward_space):
@@ -53,7 +56,7 @@ class TestPlanner(unittest.TestCase):
 
 
 
-    def bandits_planner(self):
+    def test_bandits_planner(self):
         def check_model_equivalent(model, query, weights, mdp, num_iters):
             with tf.Session() as sess:
                 sess.run(model.initialize_op)

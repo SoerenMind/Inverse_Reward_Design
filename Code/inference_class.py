@@ -231,7 +231,8 @@ class InferenceDiscrete(Inference):
             return self.prior, ent_w, None
 
         idx = [self.reward_index_proxy[tuple(reward)] for reward in query]   # indexes of rewards in query
-        log_Z = logsumexp(self.beta * self.avg_reward_matrix[idx, :], axis=0)   # log normalizer of likelihood
+        try: log_Z = logsumexp(self.beta * self.avg_reward_matrix[idx, :], axis=0)   # log normalizer of likelihood
+        except: raise ValueError("Probably forgot to cache feature expectations")
         log_numerators = self.log_lhood_numerator_matrix[idx, :]
         log_probs = log_numerators - log_Z
         probs = np.exp(log_probs)
