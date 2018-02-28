@@ -470,7 +470,7 @@ class GridworldMdp(Mdp):
         return walls, self.feature_matrix, self.start_state
 
     @staticmethod
-    def generate_random(height, width, pr_wall, pr_reward, goals=None, living_reward=0, noise=0, print_grid = False):
+    def generate_random(height, width, pr_wall, num_goals, goals=None, living_reward=0, noise=0, print_grid = False):
         """Generates a random instance of a Gridworld.
 
         Note that based on the generated walls and start position, it may be
@@ -478,22 +478,13 @@ class GridworldMdp(Mdp):
         """
         grid = [['X'] * width for _ in range(height)]
 
+        grid[height // 2][width // 2] = 'A'
+
         # Set rewarded states and walls
         for y in range(1, height - 1):
             for x in range(1, width - 1):
-                if goals is not None:
-                    if (x,y) in goals:
-                        grid[y][x] = random.randint(-9, 9)
-                    elif random.random() >= pr_wall:
-                        grid[y][x] = ' '
-                else:
-                    if random.random() < pr_reward:
-                        grid[y][x] = random.randint(-9, 9)
-                        # Don't allow 0 rewards
-                        while grid[y][x] == 0:
-                            grid[y][x] = random.randint(-9, 9)
-                    elif random.random() >= pr_wall:
-                        grid[y][x] = ' '
+                if random.random() >= pr_wall and grid[y][x] == 'X':
+                    grid[y][x] = ' '
 
         def set_random_position_to(token):
             current_val = None
@@ -503,9 +494,15 @@ class GridworldMdp(Mdp):
                 current_val = grid[y][x]
             grid[y][x] = token
 
-        # set_random_position_to(3)
-        # set_random_position_to('A')
-        grid[2][2] = 'A'
+        if goals is not None:
+            for x, y in goals:
+                grid[y][x] = random.randint(-9, 9)
+        else:
+            for _ in range(num_goals):
+                r = random.randint(-9, 9)
+                while r == 0:
+                    r = random.randint(-9, 9)
+                set_random_position_to(r)
 
         # Print grid
         if print_grid:
@@ -780,12 +777,6 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
                     # reward += weight / (distance ** distance_exponent)
                 self.feature_matrix[y,x,:] = np.array(features)
 
-
-
-
-if __name__ == '__main__':
-    grid = GridworldMdp.generate_random(8,8,0.1,0.1)
-    mdp = GridworldMdpWithDistanceFeatures(grid)
 
 
 

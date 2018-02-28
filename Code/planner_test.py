@@ -21,8 +21,6 @@ class TestPlanner(unittest.TestCase):
 
             agent = OptimalAgent(gamma=model.gamma, num_iters=num_iters)
             for i, proxy in enumerate(model.proxy_reward_space):
-                mdp.change_reward(proxy)
-
                 for idx, val in zip(query, proxy):
                     mdp.rewards[idx] = val
                 agent.set_mdp(mdp)
@@ -38,19 +36,14 @@ class TestPlanner(unittest.TestCase):
                     action_num = Direction.get_number_from_direction(action)
                     actual_q = qvals[y, x, action_num]
                     # self.assertEqual(expected_q, actual_q)
-                    self.assertAlmostEqual(expected_q, actual_q, places=2)
+                    self.assertAlmostEqual(expected_q, actual_q, places=5)
 
         np.random.seed(1)
         random.seed(1)
-        grid = GridworldMdp.generate_random(8, 8, 0.1, 0.1)
-        mdp = GridworldMdpWithDistanceFeatures(grid)
         dim = 4
-        while len(mdp.goals) != dim:
-            grid = GridworldMdp.generate_random(8, 8, 0.1, 0.1)
-            mdp = GridworldMdpWithDistanceFeatures(grid)
-
+        grid = GridworldMdp.generate_random(8, 8, 0.1, dim)
+        mdp = GridworldMdpWithDistanceFeatures(grid)
         mdp.rewards = np.random.randn(dim)
-        mdp.feature_weights = mdp.rewards
         query = [0, 3]
         other_weights = mdp.rewards[1:3]
         proxy_space = list(product(range(-1, 2), repeat=len(query)))
@@ -60,7 +53,7 @@ class TestPlanner(unittest.TestCase):
 
 
 
-    def test_bandits_planner(self):
+    def bandits_planner(self):
         def check_model_equivalent(model, query, weights, mdp, num_iters):
             with tf.Session() as sess:
                 sess.run(model.initialize_op)
@@ -82,7 +75,7 @@ class TestPlanner(unittest.TestCase):
                 expected_q = agent.qvalue(state, state)
                 print qvals.shape, state
                 actual_q = qvals[state]
-                self.assertAlmostEqual(expected_q, actual_q, places=2)
+                self.assertAlmostEqual(expected_q, actual_q, places=5)
 
         dim = 5
         weights = np.random.randn(dim)

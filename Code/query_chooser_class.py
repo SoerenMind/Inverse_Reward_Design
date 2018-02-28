@@ -470,7 +470,7 @@ class Experiment(object):
 
         for _ in range(reps):
             # Set environment and agent
-            grid = GridworldMdp.generate_random(8, 8, 0.1, 0.2, goals, living_reward=-0.01)
+            grid = GridworldMdp.generate_random(8, 8, 0.1, len(goals), goals, living_reward=-0.01)
             mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=post_avg)
             agent = OptimalAgent(gamma, num_iters=50)
 

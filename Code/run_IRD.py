@@ -196,10 +196,7 @@ if __name__=='__main__':
 
     # Set parameters
     dummy_rewards = np.zeros(3)
-    # TODO: Randomize goal positions per experiment
-    goals = [(1,1), (2,6), (3,3), (3,4), (4,5), (6,4), (6,6)]
-    # goals = [(1,1), (2,6), (3,3)]
-    args.feature_dim = len(goals)   # Overwriting arg input
+    feature_dim = args.feature_dim
     # Set parameters
     choosers = args.c
     SEED = args.seed
@@ -230,7 +227,7 @@ if __name__=='__main__':
         'qsize': query_size,
         'num_experiments': num_experiments,
         'mdp': args.mdp_type,
-        'dim': args.feature_dim,
+        'dim': feature_dim,
         'num_iter': args.num_iter,
         'gamma': gamma,
         'size_true': size_reward_space_true,
@@ -270,7 +267,7 @@ if __name__=='__main__':
 
     # Set up env and agent for gridworld
     elif args.mdp_type == 'gridworld':
-        grid = GridworldMdp.generate_random(height,width,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
+        grid = GridworldMdp.generate_random(height,width,0.1,feature_dim,None,living_reward=-0.01, print_grid=True)
         mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
         agent = OptimalAgent(gamma, num_iters=args.value_iters)
 

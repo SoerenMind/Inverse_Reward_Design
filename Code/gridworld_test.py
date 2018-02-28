@@ -244,7 +244,7 @@ class TestGridworld(unittest.TestCase):
 
     def test_random_gridworld_generation(self):
         random.seed(314159)
-        mdp = GridworldMdp.generate_random(8, 8, 0, 0)
+        mdp = GridworldMdp.generate_random(8, 8, 0, 1)
         self.assertEqual(mdp.height, 8)
         self.assertEqual(mdp.width, 8)
         mdp_string = str(mdp)
