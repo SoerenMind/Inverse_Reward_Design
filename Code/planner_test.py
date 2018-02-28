@@ -55,7 +55,7 @@ class TestPlanner(unittest.TestCase):
         other_weights = mdp.rewards[1:3]
         proxy_space = list(product(range(-1, 2), repeat=len(query)))
         dummy_true_reward_matrix = np.random.rand(3, dim)
-        model = GridworldModel(dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 'entropy', 8, 8, 10)
+        model = GridworldModel(dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 1., 'entropy', 8, 8, 10)
         check_model_equivalent(model, query, other_weights, mdp, 10)
 
 
@@ -96,7 +96,7 @@ class TestPlanner(unittest.TestCase):
         proxy_space = list(product(range(1, 3), repeat=len(query)))
         print 'proxy_space', proxy_space
         dummy_true_reward_matrix = np.random.rand(3, dim)
-        model = BanditsModel(dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 'entropy')
+        model = BanditsModel(dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 1, 'entropy')
         check_model_equivalent(model, query, other_weights, mdp, 20)
 
 

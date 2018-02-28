@@ -170,7 +170,7 @@ if __name__=='__main__':
     parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=int,default=1)
-    parser.add_argument('--beta',type=float,default=1.) # 1 for small version of results
+    parser.add_argument('--beta',type=float,default=2.) # 1 for small version of results
     parser.add_argument('--beta_bandits_planner',type=float,default=50.) # 1 for small version of results
     parser.add_argument('--num_states',type=int,default=6)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
@@ -272,7 +272,7 @@ if __name__=='__main__':
     elif args.mdp_type == 'gridworld':
         grid = GridworldMdp.generate_random(height,width,0.1,0.2,goals,living_reward=-0.01, print_grid=True)
         mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
-        agent = OptimalAgent(gamma, num_iters=args.value_iters_discrete)
+        agent = OptimalAgent(gamma, num_iters=args.value_iters)
 
 
 

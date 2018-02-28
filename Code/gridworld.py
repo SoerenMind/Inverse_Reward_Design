@@ -725,7 +725,7 @@ class GridworldMdpWithFeatures(GridworldMdp):
 
 class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
     """Features are based on distance to places with reward."""
-    def __init__(self, grid, dist_scale=-1, living_reward=-0.01, noise=0, rewards=None):
+    def __init__(self, grid, dist_scale=0.5, living_reward=-0.01, noise=0, rewards=None):
         self.dist_scale = dist_scale
         # self.feature_weights = None
         super(GridworldMdpWithDistanceFeatures, self).__init__(

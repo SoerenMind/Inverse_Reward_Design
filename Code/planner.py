@@ -111,20 +111,22 @@ class Model(object):
         if 'entropy' in objective:
             post_ent = - tf.reduce_sum(
                 tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent')
-            # post_ent = tf.Variable(- tf.reduce_sum(
-            #     tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent'), name='post_ent')
 
-            # post_ent = tf.Variable(tf.zeros([self.K]), name="other_weights")
+            # # Calculate entropy as sum exp (log p + log (-log p))
+            # interm_tensor = tf.exp(self.log_posterior + tf.log(- self.log_posterior))
+            # self.exp_post_ent_new = tf.reduce_sum(interm_tensor, axis=-1, name="exp_post_ent_new")
+            # self.name_to_op['entropy_new'] = self.exp_post_ent_new
+
 
             self.exp_post_ent = tf.reduce_sum(
                 tf.multiply(post_ent, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='exp_post_entropy')
             self.name_to_op['entropy'] = self.exp_post_ent
 
-            if self.query_size < self.feature_dim:
-                optimizer = tf.train.AdamOptimizer(learning_rate=0.1)    # TODO: adjust inputs if needed
-                self.minimize_op = optimizer.minimize(
-                    self.exp_post_ent, var_list=[self.name_to_op['other_weights']])
-                self.name_to_op['minimize'] = self.minimize_op
+            # if self.query_size < self.feature_dim:
+            #     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)    # TODO: adjust inputs if needed
+            #     self.minimize_op = optimizer.minimize(
+            #         self.exp_post_ent, var_list=[self.name_to_op['other_weights']])
+            #     self.name_to_op['minimize'] = self.minimize_op
 
         if 'variance' in objective:
             true_rewards = tf.constant(self.true_reward_matrix, dtype=tf.float32, name='true_rewards')

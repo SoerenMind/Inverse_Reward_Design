@@ -36,7 +36,7 @@ class Query_Chooser(object):
         pass
 
 class Query_Chooser_Subclass(Query_Chooser):
-    def __init__(self, inference, reward_space_proxy, num_queries_max, args, prior=None, cost_of_asking=0):
+    def __init__(self, inference, reward_space_proxy, num_queries_max, args, prior=None, cost_of_asking=0, t_0 = None):
         super(Query_Chooser_Subclass, self).__init__()
         self.inference = inference
         self.reward_space_proxy = reward_space_proxy
@@ -44,6 +44,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         self.cost_of_asking = cost_of_asking
         self.num_queries_max = num_queries_max
         self.args = args    # all args
+        self.t_0 = t_0
 
     # def cache_feature_expectations(self):
     #     """Calculates feature expectations for all proxies and stores them in the dictionary
@@ -55,19 +56,19 @@ class Query_Chooser_Subclass(Query_Chooser):
         """Is run in self.__init__. Computes feature expectations for each proxy using TF and stores them in
         inference.feature_expectations_matrix."""
         proxy_space = [list(reward) for reward in reward_space]
-        print('building graph...')
+        print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
         model = self.get_model(
-            query_size=0, proxy_space=proxy_space, num_iters_discrete=self.args.value_iters)
+            query_size=self.args.feature_dim, proxy_space=proxy_space, num_iters_discrete=self.args.value_iters)
 
         desired_outputs = ['feature_exps']
         mdp = self.inference.mdp
         with tf.Session() as sess:
-            print('computing model outputs...')
+            print('Computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
             sess.run(model.initialize_op)
             [feature_exp_matrix] = model.compute(
                 desired_outputs, sess, mdp, [], self.inference.prior)
             self.inference.feature_exp_matrix = feature_exp_matrix
-            print('done computing model outputs...')
+            print('Done computing model outputs.Total experiment time: {t}'.format(t=time.clock()-self.t_0))
         del model
 
     def get_model(self, query_size, true_reward=None, high_iters=False, proxy_space=None, num_iters_discrete=None):
@@ -112,7 +113,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         if chooser == 'exhaustive':
             return self.find_regret_minimizing_query(query_size)
         elif chooser == 'greedy_regret':
-            return self.find_best_query_greedy(query_size)
+            return self.find_best_query_greedy(query_size, true_reward=true_reward)
         elif chooser == 'random':
             return self.find_random_query(query_size)
         elif chooser == 'no_query':
@@ -120,7 +121,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         elif chooser == 'greedy_exp_reward':
             return self.find_best_query_greedy(query_size, total_reward=True, true_reward=true_reward)
         elif chooser == 'greedy_entropy':
-            return self.find_best_query_greedy(query_size, entropy=True)
+            return self.find_best_query_greedy(query_size, entropy=True, true_reward=true_reward)
         elif chooser == 'feature_entropy':
             return self.find_feature_query_greedy(query_size, 'entropy', true_reward)
         elif chooser == 'feature_variance':
@@ -130,7 +131,9 @@ class Query_Chooser_Subclass(Query_Chooser):
 
     # @profile
     def find_regret_minimizing_query(self, query_size, test_before_query=True):
-        """Calculates the expected posterior regret after asking for each query of size query_size. Returns the query
+        """
+        Exhaustive search query chooser.
+        Calculates the expected posterior regret after asking for each query of size query_size. Returns the query
         that minimizes this quantity plus the cost for asking (which is constant for fixed-size queries).
         :param query_size: number of reward functions in each query considered
         :return: best query
@@ -161,21 +164,19 @@ class Query_Chooser_Subclass(Query_Chooser):
         :param query_size: int
         :return: best_query, corresponding regret and regret plus cost of asking (which grows with query size).
         """
-        print('Saving feature exps...')
-        self.cache_feature_expectations(self.reward_space_proxy)
-        print('Done saving feature exps')
+
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
         best_query = []  # Initialize randomly
         while len(best_query) < query_size:
             best_objective = float("inf")
             best_objective_plus_cost = best_objective
             # TODO: Use a function for this
-            for proxy in self.reward_space_proxy:    #TODO: vectorize - worth the time?
+            for proxy in self.reward_space_proxy:    # TODO: vectorize - worth the time?
                 if any(list(proxy) == list(option) for option in best_query):
                     continue
                 query = best_query+[proxy]
                 if entropy:
-                    _, objective, _ = self.inference.calc_posterior(query, get_entropy=True)
+                    _, objective, _, _ = self.inference.calc_posterior(query, get_entropy=True)
                 else:
                     objective = self.get_exp_exp_post_regret(query, total_reward)
                 query_cost = self.cost_of_asking * len(query)
@@ -186,14 +187,15 @@ class Query_Chooser_Subclass(Query_Chooser):
                     best_query_new = query
             best_query = best_query_new
 
-        posteriors, post_cond_entropy, evidence = self.inference.calc_posterior(query, get_entropy=True)
-        try: proxy_choice = best_query[int(np.argwhere(np.random.multinomial(1, evidence) == 1))]
-        except: raise ValueError('evidence: '+str(evidence)+' does not sum to 1')
-        # proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
+        posteriors, post_cond_entropy, evidence, true_posterior = self.inference.calc_posterior(
+                                                                query, get_entropy=True, true_reward=true_reward)
 
-        self.inference.update_prior(query, proxy_choice)
 
-        return best_query, best_objective, best_objective_plus_cost
+
+
+
+
+        return best_query, best_objective, true_posterior
 
 
     # @profile
@@ -253,27 +255,6 @@ class Query_Chooser_Subclass(Query_Chooser):
                     best_query = query
         return best_query, best_optimal_weights
 
-    # def get_model(self, query_size, true_reward=None, high_iters=False):
-    #     mdp = self.inference.mdp
-    #     num_iters = 50 if high_iters else self.args.num_iters_optim
-    #     # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
-    #     proxy_space = list(product(range(-3, 2), repeat=query_size))
-    #
-    #     print 'Proxy space size: '+str(len(proxy_space))
-    #     if mdp.type == 'bandits':
-    #         return BanditsModel(
-    #             self.args.feature_dim, self.args.gamma, query_size,
-    #             proxy_space, self.inference.true_reward_matrix,
-    #             true_reward, self.args.beta, 'entropy')
-    #     elif mdp.type == 'gridworld':
-    #         return GridworldModel(
-    #             self.args.feature_dim, self.args.gamma, query_size,
-    #             proxy_space, self.inference.true_reward_matrix,
-    #             true_reward, self.args.beta, 'entropy', mdp.height, mdp.width,
-    #             num_iters)
-    #     else:
-    #         raise ValueError('Unknown model type: ' + str(mdp.type))
-
 
 
     def find_random_query(self, query_size):
@@ -289,7 +270,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         if len(query) == 0:
             return self.get_exp_regret_from_prior()
 
-        posterior, post_averages, probs_proxy_choice = self.inference.calc_posterior(query)
+        posterior, post_averages, probs_proxy_choice, _ = self.inference.calc_posterior(query)
         avg_reward_matrix = self.inference.get_avg_reward_for_post_averages(post_averages)
         if total_reward:    # Optimizes total reward instead of regret
             regrets = -avg_reward_matrix
@@ -303,7 +284,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         return exp_exp_regret
 
     def get_conditional_entropy(self, query):
-        posteriors, conditional_entropy, probs_proxy_choice = self.inference.calc_posterior(query, get_entropy=True)
+        posteriors, conditional_entropy, probs_proxy_choice, _ = self.inference.calc_posterior(query, get_entropy=True)
         return conditional_entropy
 
     # @profile
@@ -324,7 +305,7 @@ class Query_Chooser_Subclass(Query_Chooser):
     # @profile
     def get_regret(self, proxy, true_reward):
         """Gets difference of reward under true_reward-function for optimizing for true_reward vs proxy."""
-        optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)  # Cache to save 9%
+        optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)
         proxy_reward = self.inference.get_avg_reward(proxy, true_reward)
         regret = optimal_reward - proxy_reward
         return regret
@@ -343,6 +324,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
     # @profile
     def get_regret_from_query_and_true_reward(self, query, true_reward):
+        """Calculates the regret given the current prior. Only implemented for query lenget zero."""
         if len(query) == 0:
             prior_avg = self.inference.get_prior_avg()
             regret = self.get_regret(prior_avg, true_reward)
@@ -362,7 +344,8 @@ class Experiment(object):
         self.num_queries_max = num_queries_max
         self.choosers = choosers
         self.seed = SEED
-        self.query_chooser = Query_Chooser_Subclass(inference, reward_space_proxy, num_queries_max, args)
+        self.t_0 = time.clock()
+        self.query_chooser = Query_Chooser_Subclass(inference, reward_space_proxy, num_queries_max, args, t_0=self.t_0)
         self.results = {}
         # Add variance
         self.measures = ['post_exp_regret','test_regret','norm post_avg-true','post_regret','perf_measure']
@@ -372,7 +355,6 @@ class Experiment(object):
     # @profile
     def get_experiment_stats(self, num_iter, num_experiments):
         self.results = {}
-        self.t_0 = time.clock()
         post_exp_regret_measurements = []; post_regret_measurements = []
         for exp_num in range(num_experiments):
             post_exp_regrets, post_regrets = self.run_experiment(num_iter, exp_num, num_experiments)
@@ -406,10 +388,11 @@ class Experiment(object):
 
         # Cache lhoods
         # print 'NOT CACHING FEATURES FOR TRUE REWARDS!'
-        print('caching likelihoods...')
-        self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
-        self.inference.cache_lhoods() # Only run this if the environment isn't changed each iteration
-        print('done caching likelihoods')
+        if 'greedy_entropy' in self.choosers:
+            print('caching likelihoods. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+            self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
+            self.inference.cache_lhoods() # Only run this if the environment isn't changed each iteration
+            print('done caching likelihoods. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
         perf_measure = float('inf')
         post_exp_regret = float('inf')
@@ -425,7 +408,7 @@ class Experiment(object):
                 print "Iteration: {i}/{m}. Total time: {t}".format(i=i+1,m=num_iter,t=time.clock()-self.t_0)
                 # Do iteration for feature-based choosers:
                 if chooser in ['feature_entropy']:
-                    query, objective, true_posterior = self.query_chooser.find_query(self.query_size_feature, chooser, true_reward)
+                    query, exp_post_entropy, true_posterior = self.query_chooser.find_query(self.query_size_feature, chooser, true_reward)
                     self.inference.update_prior(None, None, true_posterior)
                 else:
                     # Cache feature expectations and likelihoods
@@ -434,27 +417,29 @@ class Experiment(object):
                     # self.inference.cache_lhoods()
 
                     # Find best query
-                    query, perf_measure, _ \
+                    print('Finding best query greedily. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+                    query, perf_measure, true_posterior \
                         = self.query_chooser.find_query(self.query_size_discrete, chooser, true_reward)
+                    print('Found best query greedily. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+                    _, exp_post_entropy, _, _ = self.inference.calc_posterior(query, get_entropy=True)  # Do before posterior update
 
                     # Update posterior
-                    _, post_cond_entropy, _ = self.inference.calc_posterior(query, get_entropy=True)
-                    proxy_choice = self.inference.get_proxy_from_query(query, true_reward)
-                    self.inference.update_prior(query, proxy_choice)
+                    self.inference.update_prior(None, None, true_posterior)
 
                 # Outcome measures
-                post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
+                # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])     # TODO: Still plans with Python (may lead to different results?)
                 post_regret = self.query_chooser.get_regret_from_query_and_true_reward([], true_reward) # TODO: Still uses old get_regret, get_avg_reward, get_feature_exp
                 post_avg = self.inference.get_prior_avg()
                 test_regret = float('inf')  # self.test_post_avg(post_avg, true_reward)
 
                 # Save results
-                # self.results[chooser, 'post_entropy', i, exp_num], \
+                # self.results[chooser, 'post_exp_regret', i, exp_num],\
+                self.results[chooser, 'exp_post_entropy', i, exp_num], \
                 self.results[chooser, 'query', i, exp_num], self.results[chooser,'perf_measure', i, exp_num], \
-                self.results[chooser, 'post_exp_regret', i, exp_num], self.results[chooser, 'post_regret', i, exp_num], \
+                self.results[chooser, 'post_regret', i, exp_num], \
                 self.results[chooser, 'norm post_avg-true', i, exp_num],   \
                 self.results[chooser, 'test_regret', i, exp_num] \
-                    = query, perf_measure, post_exp_regret, post_regret, np.linalg.norm(post_avg-true_reward,1), test_regret
+                    = exp_post_entropy, query, perf_measure, post_regret, np.linalg.norm(post_avg-true_reward,1), test_regret
 
 
             print('post_exp_regret: {p}'.format(p=post_exp_regret))
@@ -569,6 +554,3 @@ class Experiment(object):
             writer_mean_all_choosers.writerow({measure: chooser for measure in self.measures})
             writer_mean_all_choosers.writeheader()
             writer_mean_all_choosers.writerows(rows_mean)
-
-        'Also compare choosers: '
-        'Also get std'

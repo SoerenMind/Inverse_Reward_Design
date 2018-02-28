@@ -207,19 +207,19 @@ class InferenceDiscrete(Inference):
         self.log_lhood_numerator_matrix = self.beta * self.avg_reward_matrix
         self.lhood_numerator_matrix = np.exp(self.log_lhood_numerator_matrix)
 
-        # Cache results for true rewards
-        num_true_rewards = len(self.reward_space_true)
-        self.feature_exp_matrix_true_rewards = np.zeros([num_true_rewards,feature_dim])
-        for n, true_reward in enumerate(self.reward_space_true):
-            self.feature_exp_matrix_true_rewards[n,:] = self.get_feature_expectations(true_reward)
-        self.true_reward_avg_reward_matrix = np.matmul(self.feature_exp_matrix_true_rewards, self.true_reward_matrix.T)
-        self.true_reward_avg_reward_vec = self.true_reward_avg_reward_matrix.diagonal()
+        # # Cache results for true rewards
+        # num_true_rewards = len(self.reward_space_true)
+        # self.feature_exp_matrix_true_rewards = np.zeros([num_true_rewards,feature_dim])
+        # for n, true_reward in enumerate(self.reward_space_true):
+        #     self.feature_exp_matrix_true_rewards[n,:] = self.get_feature_expectations(true_reward)
+        # self.true_reward_avg_reward_matrix = np.matmul(self.feature_exp_matrix_true_rewards, self.true_reward_matrix.T)
+        # self.true_reward_avg_reward_vec = self.true_reward_avg_reward_matrix.diagonal()
 
 
 
 
     # @profile
-    def calc_posterior(self, query, get_entropy=False):
+    def calc_posterior(self, query, get_entropy=False, true_reward=None):
         """Returns a K x N array of posteriors and K x M array of posterior averages, where
         K is the query_size, N is the size of reward_space_true and M the number of features.
 
@@ -240,6 +240,18 @@ class InferenceDiscrete(Inference):
         posteriors = probs * self.prior / evidence.reshape([-1, 1])
         assert posteriors.sum(axis=1).round(3).all()    # Sum to 1?
 
+        # Sample answer and return a true posterior if desired
+        true_posterior = None
+        if true_reward is not None:
+            possible_answers = range(len(query))
+            avg_true_rewards = np.dot(self.feature_exp_matrix[idx,:], true_reward)
+            log_true_likelihoods = self.beta * avg_true_rewards
+            log_true_Z = logsumexp(self.beta * avg_true_rewards)
+            log_answer_probs = log_true_likelihoods - log_true_Z
+            answer_probs = np.exp(log_answer_probs)
+            answer = np.random.choice(possible_answers, p=answer_probs)
+            true_posterior = posteriors[answer]
+
         # Calculate entropies and return
         if get_entropy:
             ent_q = -np.dot(evidence, np.log(evidence))
@@ -251,13 +263,13 @@ class InferenceDiscrete(Inference):
             ent_w_given_q = cond_ent - ent_q + ent_w
             if ent_w_given_q < 0:
                 pass
-            return posteriors, ent_w_given_q, evidence
+            return posteriors, ent_w_given_q, evidence, true_posterior
 
         # Calculate posterior averages
         # Do outside this function with returned posterior?
         post_averages = np.matmul(posteriors, self.true_reward_matrix)
 
-        return posteriors, post_averages, evidence
+        return posteriors, post_averages, evidence, true_posterior
 
         # Calculate log posterior
         # log_prior = np.log(self.prior)
@@ -284,7 +296,6 @@ class InferenceDiscrete(Inference):
             feature_expectations = self.get_feature_expectations(proxy)
             reward = np.dot(feature_expectations, true_reward)
             self.avg_reward_dict[tuple(proxy), tuple(true_reward)] = reward
-        # reward = self.mdp.get_reward_from_features(feature_expectations, true_reward)
         return reward
 
     # @profile
