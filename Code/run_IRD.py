@@ -24,135 +24,12 @@ print 'Time to import: {deltat}'.format(deltat=time.clock() - start)
 
 
 
-def powerset(s):
-    x = len(s)
-    masks = [1 << i for i in range(x)]
-    for i in range(1, 1 << x):
-        yield [ss for mask, ss in zip(masks, s) if i & mask]
 
 def pprint(y):
     print(y)
     return y
 
-def choose_regret_minimizing_proposal(set_of_proposal_sets, reward_space_true, prior, inference, cost_of_asking = 0.01):
-    '''Chooses a proposal reward sub space by minimizing the expected regret after asking.'''
-    """Todo:
-    -Functions for looping through sets, exp_post_regret(proxy, omega), get_post_avg(posterior), get_posterior(proxy, omega)
-    """
-    prior_avg = sum([prior[tuple(reward)] * reward for reward in reward_space_true]) # Over whole reward_space (change?)
-    best_r_set = []
-    best_exp_exp_post_regret = np.inf
-    best_regret_plus_cost = np.inf
-    set_of_proposal_sets = list(set_of_proposal_sets)[::-1]
-    for omega in set_of_proposal_sets:
-        # TODO: Restricted to length 2!
-        if not len(omega)==2: continue
-        # if not omega == list(set_of_proposal_sets)[2]: continue
 
-        cost_omega = cost_of_asking*len(omega)
-        prior_regret = 0
-        exp_exp_post_regret = 0
-        for proxy in omega:
-            # TODO: Extremely costly to get posterior for all proxy choices. Save repeated computations?
-            # Do I have to do (and thus save) the planning for every proxy here?
-            inference.get_full_posterior(omega, proxy)    # Do only once per reward
-            posterior = dict([(tuple(true_reward), inference.get_posterior(true_reward, omega, proxy))
-                              for true_reward in reward_space_true])
-            post_avg = sum([posterior[tuple(reward)] * reward for reward in reward_space_true]) # Over whole reward_space
-            # Calculate expected regret from optimizing post_avg (expectation over posterior true rewards)
-            exp_post_regret = sum([posterior[tuple(true_reward)]  # multiply by regret
-                     * (inference.get_avg_reward(true_reward,true_reward) - inference.get_avg_reward(post_avg,true_reward)) for true_reward in reward_space_true])
-            # sum_true posterior(true | prox)* (avg_reward(true | true) - avg_reward(proxy | true))
-            exp_exp_post_regret += exp_post_regret
-        regret_plus_cost = exp_exp_post_regret + cost_omega
-        if regret_plus_cost < best_regret_plus_cost:
-            best_regret_plus_cost = regret_plus_cost
-            best_exp_exp_post_regret = exp_exp_post_regret
-            best_r_set = omega
-            best_posterior = posterior
-            best_post_avg = post_avg
-    return best_r_set, best_exp_exp_post_regret, best_regret_plus_cost, best_posterior, best_post_avg
-
-    query_chooser = Query_Chooser_Subclass(inference, reward_space_proxy, cost_of_asking=0.)
-    set_of_queries = list(query_chooser.generate_set_of_queries(query_size))
-    print(len(set_of_queries))
-    best_query, best_regret, _ = query_chooser.find_regret_minimizing_query(set_of_queries)
-
-# # @profile
-def experiment(inference_sim, reward_space_proxy, query_size, num_queries_max, iterations_random=10,
-               iterations_optimized=20, greedy=True):
-    exp_regret_diff = []
-    exp_regret_gain = []
-    regret_compare = []
-    regret_exp_vs_actual = []
-    inference_sim = copy.deepcopy(inference_sim)
-    for i in range(iterations_optimized):
-        print('Experiment number:{i}/{iter}'.format(i=i,iter=iterations_optimized))
-
-        # Set up query chooser and inference
-        inference_sim.agent.mdp.populate_features()
-        inference_sim.feature_expectations_dict = {}    # Replace these lines with inference.reset()
-        query_chooser = Query_Chooser_Subclass(inference_sim, reward_space_proxy, cost_of_asking=0.)
-        set_of_queries = list(query_chooser.generate_set_of_queries(query_size, max_num_queries=1000))
-        random_query = choice(set_of_queries)
-
-        # Select query and record expected regrets
-        if greedy == True:
-            best_query, best_regret, _     = query_chooser.find_best_query_greedy(query_size)
-        elif greedy == False:
-            best_query, best_regret, _     = query_chooser.find_regret_minimizing_query(set_of_queries)
-        elif greedy == 'maxmin':
-            best_query, best_regret, _ = query_chooser.find_query_feature_diff(query_size)
-        _, random_regret, _ = query_chooser.find_regret_minimizing_query([random_query]) # Sometimes finds lower regret for empty query
-        _, prior_regret, _             = query_chooser.find_regret_minimizing_query([])
-        exp_regret_diff.append(random_regret - best_regret) # This should match the actual regret diff on average
-        exp_regret_gain.append(prior_regret - best_regret)
-
-        # Do inference on chosen query, compare regret to that of random query and prior regret
-        regret_optimized, optimized_actual_std = get_regret_from_query(inference_sim, best_query)
-        regret_random_query, random_actual_std = get_regret_from_query(inference_sim, random_query)
-        print optimized_actual_std
-        print random_actual_std
-        regret_compare.append((regret_optimized, regret_random_query))
-        regret_exp_vs_actual.append((best_regret, regret_optimized))
-
-    regret_diff_actual = np.array([x-y for x,y in regret_compare])
-    mean_std_regret_diff_actual = (regret_diff_actual.mean(), regret_diff_actual.std())
-    return np.array(exp_regret_diff).mean(), np.array(exp_regret_diff).std(), sum(sum([np.array(exp_regret_diff) < 0])), \
-           np.array(exp_regret_gain).mean(), mean_std_regret_diff_actual, regret_compare, regret_exp_vs_actual
-
-
-def get_regret_from_query(inference_eval, best_query, num_true_rewards=500):
-    regrets = []
-    # for j in range(num_true_rewards):
-    #     true_reward = choice(reward_space_true)  # Replace with sample from
-    for true_reward in reward_space_true:
-        lhoods = []
-        for i, proxy in enumerate(best_query):
-            lhood = inference_eval.get_likelihood(true_reward, best_query, proxy)
-            lhoods.append(lhood)
-        # chosen_proxy_number = np.array(lhoods).argmax()  # Replace argmax with sampling
-        d = {i: lhood for i, lhood in enumerate(lhoods)}
-        try: chosen_proxy_number = Distribution(d).sample()
-        except:
-            chosen_proxy_number = np.array(lhoods).argmax()  # Replace argmax with sampling
-        chosen_proxy = best_query[chosen_proxy_number]
-        inference_eval.get_full_posterior(best_query, chosen_proxy)
-        post_avg = inference_eval.get_posterior_avg(best_query, chosen_proxy)
-        # TODO: Make a query_chooser / inference.function from query to regret or so
-        optimal_reward = inference_eval.get_avg_reward(true_reward, true_reward)
-        post_reward = inference_eval.get_avg_reward(post_avg, true_reward)
-        regret = optimal_reward - post_reward
-        regrets.append(regret)
-    avg_regret = np.array(regrets).mean()
-    std_regret = np.array(regrets).std()
-    return avg_regret, std_regret
-
-
-def test_planning_speed(inference, reward_space_proxy):
-    print('testing planning speed')
-    for i, proxy in enumerate(reward_space_proxy):
-        inference.get_feature_expectations(proxy)
 
 # ==================================================================================================== #
 # ==================================================================================================== #
@@ -183,7 +60,7 @@ if __name__=='__main__':
     parser.add_argument('--value_iters',type=int,default=40)    # max_reward / (1-gamma) or height+width
     # parser.add_argument('--value_iters_discrete',type=int,default=50)
     parser.add_argument('--mdp_type',type=str,default='gridworld')
-    parser.add_argument('--feature_dim',type=int,default=7)    # 10 if positions fixed, 100 otherwise
+    parser.add_argument('--feature_dim',type=int,default=25)    # 10 if positions fixed, 100 otherwise
 
 
     args = parser.parse_args()
@@ -218,7 +95,6 @@ if __name__=='__main__':
     height = args.height
     width = args.width
     num_iters_optim = args.num_iters_optim
-    proxy_subspace = True
     # choosers = ['greedy', 'greedy_exp_reward']
     # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
     # choosers = ['greedy_entropy', 'random', 'no_query']
@@ -252,22 +128,26 @@ if __name__=='__main__':
                                         feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
         agent = ImmediateRewardAgent()
 
-        # Reward spaces for N-State-Mdp
-        from itertools import product
-        reward_space_true = list(product([0,1], repeat=args.feature_dim))
-        # reward_space_true.remove((0,0,0,0))
-        # TODO(rohinmshah): These reward spaces have many copies of the same reward function
-        reward_space_true = [np.array(reward) for reward in reward_space_true]
-        reward_space_true = [choice(reward_space_true) for _ in range(size_reward_space_true)]
-        # reward_space_true = [np.array([0, 0, 0, 0]), np.array([0, 0, 0, 1]), np.array([0, 0, 1, 1]), np.array([1, 0, 1, 0])]
-        reward_space_proxy = [choice(reward_space_true) for _ in range(size_reward_space_proxy)]
-        # reward_space_proxy = reward_space_true
-        # len_reward_space = len(reward_space_true)
-        # reward_space = [np.array([1,0]),np.array([0,1]), np.array([1,1])]
+        # Reward spaces
+        reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_true)]
+        reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_proxy)]
+
+
+        # from itertools import product
+        # reward_space_true = list(product([0,1], repeat=args.feature_dim))
+        # # reward_space_true.remove((0,0,0,0))
+        # # TODO(rohinmshah): These reward spaces have many copies of the same reward function
+        # reward_space_true = [np.array(reward) for reward in reward_space_true]
+        # reward_space_true = [choice(reward_space_true) for _ in range(size_reward_space_true)]
+        # # reward_space_true = [np.array([0, 0, 0, 0]), np.array([0, 0, 0, 1]), np.array([0, 0, 1, 1]), np.array([1, 0, 1, 0])]
+        # reward_space_proxy = [choice(reward_space_true) for _ in range(size_reward_space_proxy)]
+        # # reward_space_proxy = reward_space_true
+        # # len_reward_space = len(reward_space_true)
+        # # reward_space = [np.array([1,0]),np.array([0,1]), np.array([1,1])]
 
     # Set up env and agent for gridworld
     elif args.mdp_type == 'gridworld':
-        grid = GridworldMdp.generate_random(height,width,0.1,feature_dim,None,living_reward=-0.01, print_grid=True)
+        grid = GridworldMdp.generate_random(height,width,0.3,feature_dim,None,living_reward=-0.01, print_grid=True)
         mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
         agent = OptimalAgent(gamma, num_iters=args.value_iters)
 
@@ -277,10 +157,7 @@ if __name__=='__main__':
         # reward_space_true = [np.random.multinomial(18, np.ones(args.feature_dim)/18) for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.multinomial(18, np.ones(args.feature_dim)) for _ in xrange(size_reward_space_proxy)]
         reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_true)]
-        if proxy_subspace:
-            reward_space_proxy = [choice(reward_space_true) for _ in xrange(size_reward_space_proxy)]
-        else:
-            reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_proxy)]
+        reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_proxy)]
         # reward_space_true = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
 
@@ -386,7 +263,7 @@ if __name__=='__main__':
         # # print('Best post_avg:{post_avg}').format(post_avg=best_post_avg)
         # # print('Best posterior:{posterior}').format(posterior=best_posterior)
         print 'Total time:{deltat}'.format(deltat=time.clock() - start)
-        print 'Finished experiment: ', exp_description.format(nexp=num_experiments), adapted_description
+        print 'Finished experiment: ', exp_description.format(nexp=num_experiments) + 'Updated description: '+str(adapted_description)
 
     # for q_size in range(2,50):
     #     if q_size % 4 == 0:
