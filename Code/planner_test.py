@@ -54,7 +54,7 @@ class TestPlanner(unittest.TestCase):
         # Use beta_planner = 1000 so that softmax is approximately max
         model = GridworldModel(
             dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix,
-            mdp.rewards, 1, 1000, 'entropy', 0.1, 8, 8, 10)
+            mdp.rewards, 1, 1000, 'entropy', 0.1, False, 8, 8, 10)
         check_model_equivalent(model, query, other_weights, mdp, 10)
 
 
@@ -95,7 +95,7 @@ class TestPlanner(unittest.TestCase):
         dummy_true_reward_matrix = np.random.rand(3, dim)
         model = BanditsModel(
             dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix,
-            mdp.rewards, 1, 1, 'entropy', 0.1)
+            mdp.rewards, 1, 1, 'entropy', 0.1, False)
         check_model_equivalent(model, query, other_weights, mdp, 20)
 
 

@@ -5,7 +5,8 @@ from gridworld import Direction
 
 class Model(object):
     def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
-                 true_reward_matrix, true_reward, beta, beta_planner, objective, lr, no_planning=False):
+                 true_reward_matrix, true_reward, beta, beta_planner, objective,
+                 lr, discrete):
         self.feature_dim = feature_dim
         self.gamma = gamma
         self.query_size = query_size
@@ -20,28 +21,35 @@ class Model(object):
         self.beta = beta
         self.beta_planner = beta_planner
         self.lr = lr
-        self.build_tf_graph(objective, no_planning)
+        self.discrete = discrete
+        self.build_tf_graph(objective)
 
-    def build_tf_graph(self, objective, no_planning):
+    def build_tf_graph(self, objective):
         self.name_to_op = {}
-        if not no_planning:
-            self.build_weights()
-            self.build_planner()
-        else:
-            self.feature_expectations = tf.placeholder(tf.float32, shape=[None, self.feature_dim], name='feature_exps')
-            self.name_to_op['feature_exps'] = self.feature_expectations
+        self.build_weights()
+        self.build_planner()
         self.build_map_to_posterior()
         self.build_map_to_objective(objective)
         # Initializing the variables
         self.initialize_op = tf.global_variables_initializer()
 
     def build_weights(self):
+        if self.discrete:
+            self.build_discrete_weights()
+        else:
+            self.build_continuous_weights()
+
+    def build_discrete_weights(self):
+        self.weights = tf.placeholder(
+            tf.float32, shape=[self.K, self.feature_dim], name="weights")
+
+    def build_continuous_weights(self):
         query_size, dim, K = self.query_size, self.feature_dim, self.K
         num_fixed = dim - query_size
         self.query_weights= tf.constant(self.proxy_reward_space, dtype=tf.float32, name="query_weights")
-        self.other_weights = tf.Variable(tf.zeros([num_fixed]), name="other_weights")
+        self.weights_to_train = tf.Variable(tf.zeros([num_fixed]), name="weights_to_train")
         self.weight_inputs = tf.placeholder(tf.float32, shape=[num_fixed], name="weight_inputs")
-        self.assign_op = self.other_weights.assign(self.weight_inputs)
+        self.assign_op = self.weights_to_train.assign(self.weight_inputs)
 
 
 
@@ -49,7 +57,7 @@ class Model(object):
         # query_weights = [10, 11] and weight_inputs = [12, 13, 14, 15].
         # Then we want self.weights to be [12, 10, 13, 11, 14, 15].
         # Concatenate to get [10, 11, 12, 13, 14, 15]
-        repeated_weights = tf.stack([self.other_weights] * K, axis=0)
+        repeated_weights = tf.stack([self.weights_to_train] * K, axis=0)
         unordered_weights = tf.concat(
             [self.query_weights, repeated_weights], axis=1)
         # Then permute using gather to get the desired result.
@@ -61,12 +69,7 @@ class Model(object):
         self.name_to_op = {}    # Remove
         self.name_to_op['weights'] = self.weights
         self.name_to_op['query_weights'] = self.query_weights
-        self.name_to_op['other_weights'] = self.other_weights
-
-
-        # print self.query_weights.shape
-        # print self.other_weights.shape
-        # print self.weights.shape
+        self.name_to_op['weights_to_train'] = self.weights_to_train
 
 
     def build_planner(self):
@@ -163,10 +166,10 @@ class Model(object):
             self.name_to_op['entropy'] = self.exp_post_ent
 
             # Set up optimizer
-            if self.query_size < self.feature_dim:
+            if 'weights_to_train' in self.name_to_op:
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
                 self.minimize_op = optimizer.minimize(
-                    self.exp_post_ent, var_list=[self.other_weights])
+                    self.exp_post_ent, var_list=[self.weights_to_train])
                 self.name_to_op['minimize'] = self.minimize_op
 
         if 'variance' in objective:
@@ -200,9 +203,8 @@ class Model(object):
             pass
 
 
-    # TODO: Remove the feature_expectations_test_input argument
-    def compute(self, outputs, sess, mdp, query, prior=None, weight_inits=None, feature_expectations_input = None,
-                gradient_steps=0, discrete_query=None):
+    def compute(self, outputs, sess, mdp, query=None, prior=None, weight_inits=None, feature_expectations_input = None,
+                gradient_steps=0, true_reward=None):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -216,21 +218,26 @@ class Model(object):
         :param gradient_steps: Number of gradient steps to take.
         :return: List of the same length as parameter `outputs`.
         """
-        fd = self.create_mdp_feed_dict(mdp)
-
         if weight_inits is not None:
-            fd[self.weight_inputs] = weight_inits   # Should this be done after running assign_op?
-            # fd = {self.weight_inputs: weight_inits}
+            fd = {self.weight_inputs: weight_inits}
             sess.run([self.assign_op], feed_dict=fd)
-        elif discrete_query is not None:
-            fd[self.query_weights] = discrete_query   # Should this be done with another assign op?
-        elif feature_expectations_input is not None:
+
+        fd = {}
+        self.update_feed_dict_with_mdp(mdp, fd)
+        if feature_expectations_input is not None:
             fd[self.feature_expectations] = feature_expectations_input
 
         if prior is not None:
             fd[self.prior] = prior
 
-        fd[self.permutation] = self.get_permutation_from_query(query)
+        if query is not None:
+            if self.discrete:
+                fd[self.weights] = query
+            else:
+                fd[self.permutation] = self.get_permutation_from_query(query)
+
+        if true_reward is not None:
+            fd[self.true_reward_tensor] = true_reward.reshape(1,-1)
 
         if gradient_steps > 0:
             for step in range(gradient_steps):
@@ -240,39 +247,12 @@ class Model(object):
         def get_op(name):
             if name not in self.name_to_op:
                 raise ValueError("Unknown op name: " + str(name))
-            return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
+            return self.name_to_op[name]
 
-        return [get_op(name) for name in outputs]
-        # output_ops = [get_op(name) for name in outputs]
-        # return sess.run(output_ops, feed_dict=fd)
+        return sess.run([get_op(name) for name in outputs], feed_dict=fd)
 
 
-    # TODO: Remove the feature_expectations_test_input argument
-    def compute_no_planning(self, outputs, sess, mdp, query, prior=None, weight_inits=None, feature_expectations_input = None,
-                gradient_steps=0, discrete_query=None, true_reward=None):
-        """
-        Computes outputs from feature_expectations_input
-        """
-        fd = {}
-
-        fd[self.feature_expectations] = feature_expectations_input
-        if true_reward is not None:
-            fd[self.true_reward_tensor] = true_reward.reshape(1,-1)
-
-        if prior is not None:
-            fd[self.prior] = prior
-
-
-        def get_op(name):
-            if name not in self.name_to_op:
-                raise ValueError("Unknown op name: " + str(name))
-            return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
-
-        return [get_op(name) for name in outputs]
-
-
-
-    def create_mdp_feed_dict(self, mdp):
+    def update_feed_dict_with_mdp(self, mdp, fd):
         raise NotImplemented('Should be implemented in subclass')
 
     def get_permutation_from_query(self, query):
@@ -320,21 +300,22 @@ class BanditsModel(Model):
         self.name_to_op['feature_exps'] = self.feature_expectations
 
 
-    def create_mdp_feed_dict(self, mdp):
-        return {self.features: mdp.convert_to_numpy_input()}
+    def update_feed_dict_with_mdp(self, mdp, fd):
+        fd[self.features] = mdp.convert_to_numpy_input()
 
 
 class GridworldModel(Model):
     def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
                  true_reward_matrix, true_reward, beta, beta_planner, objective,
-                 lr, height, width, num_iters, no_planning=False):
+                 lr, discrete, height, width, num_iters):
         self.height = height
         self.width = width
         self.num_iters = num_iters
         self.num_actions = 4
         super(GridworldModel, self).__init__(
-            feature_dim, gamma, query_size, proxy_reward_space, true_reward_matrix,
-            true_reward, beta, beta_planner, objective, lr, no_planning=no_planning)
+            feature_dim, gamma, query_size, proxy_reward_space,
+            true_reward_matrix, true_reward, beta, beta_planner, objective, lr,
+            discrete)
 
     def build_planner(self):
         height, width, dim = self.height, self.width, self.feature_dim
@@ -398,15 +379,13 @@ class GridworldModel(Model):
         west_fes = features + gamma * west_lookahead
         return tf.stack([north_fes, south_fes, east_fes, west_fes], axis=-1)
 
-    def create_mdp_feed_dict(self, mdp):
+    def update_feed_dict_with_mdp(self, mdp, fd):
         image, features, start_state = mdp.convert_to_numpy_input()
         x, y = start_state
-        return {
-            self.image: image,
-            self.features: features,
-            self.start_x: x,
-            self.start_y: y
-        }
+        fd[self.image] = image
+        fd[self.features] = features
+        fd[self.start_x] = x
+        fd[self.start_y] = y
 
 
 def logdot(a,b):
@@ -418,3 +397,17 @@ def logdot(a,b):
     c = tf.reduce_sum(tf.multiply(exp_a,exp_b), axis=1, keep_dims=True)
     c = tf.log(c) + max_a + max_b
     return c, max_a, max_b
+
+
+class NoPlanningModel(Model):
+
+    def build_weights(self):
+        pass
+
+    def build_planner(self):
+        self.feature_expectations = tf.placeholder(
+            tf.float32, shape=[None, self.feature_dim], name='feature_exps')
+        self.name_to_op['feature_exps'] = self.feature_expectations
+
+    def update_feed_dict_with_mdp(self, mdp, fd):
+        pass
