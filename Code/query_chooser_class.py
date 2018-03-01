@@ -530,8 +530,7 @@ class Experiment(object):
         self.seed += 1
         true_reward = choice(self.inference.reward_space_true)
         self.results['true_reward', exp_num] = true_reward
-        post_exp_regret_per_chooser = []
-        post_regret_per_chooser = []
+
 
         # Cache lhoods
         # print 'NOT CACHING FEATURES!'
@@ -689,8 +688,8 @@ class Experiment(object):
         for chooser in self.choosers:
             f_mean = open('data/'+self.folder_name+'/'+chooser+'-means-'+'.csv','w')
             f_median = open('data/'+self.folder_name+'/'+chooser+'-medians-'+'.csv','w')
-            writer_mean = csv.DictWriter(f_mean, fieldnames=['iteration']+self.measures)
-            writer_median = csv.DictWriter(f_median, fieldnames=['iteration']+self.measures)
+            writer_mean = csv.DictWriter(f_mean, fieldnames=['iteration']+self.measures+self.cum_measures)
+            writer_median = csv.DictWriter(f_median, fieldnames=['iteration']+self.measures+self.cum_measures)
             writer_mean.writeheader()
             writer_median.writeheader()
             rows_mean = []
@@ -722,6 +721,6 @@ class Experiment(object):
             writer_median.writerows(rows_median)
 
             # Also append statistics for this chooser to CSV with all choosers
-            writer_mean_all_choosers.writerow({measure: chooser for measure in self.measures})
+            writer_mean_all_choosers.writerow({'iteration': chooser})
             writer_mean_all_choosers.writeheader()
             writer_mean_all_choosers.writerows(rows_mean)

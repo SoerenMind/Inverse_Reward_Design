@@ -147,6 +147,9 @@ if __name__=='__main__':
 
     # Set up env and agent for gridworld
     elif args.mdp_type == 'gridworld':
+        for i in range(10):
+            test_grid = GridworldMdp.generate_random(height,width,0.3,feature_dim,None,living_reward=-0.01, print_grid=False)
+
         grid = GridworldMdp.generate_random(height,width,0.3,feature_dim,None,living_reward=-0.01, print_grid=True)
         mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
         agent = OptimalAgent(gamma, num_iters=args.value_iters)
