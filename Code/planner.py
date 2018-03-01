@@ -268,8 +268,6 @@ class Model(object):
             return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
 
         return [get_op(name) for name in outputs]
-        # output_ops = [get_op(name) for name in outputs]
-        # return sess.run(output_ops, feed_dict=fd)
 
 
 

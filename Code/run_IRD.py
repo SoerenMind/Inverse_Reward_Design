@@ -47,7 +47,7 @@ if __name__=='__main__':
     parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=int,default=1)
-    parser.add_argument('--beta',type=float,default=2.) # 1 for small version of results
+    parser.add_argument('--beta',type=float,default=.1)
     parser.add_argument('--beta_bandits_planner',type=float,default=50.) # 1 for small version of results
     parser.add_argument('--num_states',type=int,default=6)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
@@ -221,49 +221,46 @@ if __name__=='__main__':
         # print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
         # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
         experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params)
-        # experiment.run_experiment(num_iter_per_experiment)
-        avg_post_exp_regrets, avg_post_regrets, \
-        std_post_exp_regrets, std_post_regrets, \
         results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
 
 
-        'Print results'
-        print "Choosers:                        {c}".format(c=choosers)
-        print "Avg post exp regret per chooser: {x}".format(x=avg_post_exp_regrets)
-        print "Avg post regret per chooser: {x}".format(x=avg_post_regrets)
-        print "Std post exp regret per chooser: {x}".format(x=std_post_exp_regrets)
-        print "Std post regret per chooser: {x}".format(x=std_post_regrets)
-        # print [-results['greedy_exp_reward','perf_measure',4, n] for n in range(num_experiments)]
-        # print [results['greedy_exp_reward','post_exp_regret',4, n] for n in range(num_experiments)]
-        print [results['greedy_entropy','post_exp_regret',num_iter_per_experiment-1, n] for n in range(num_experiments)]
-        print [results['greedy_entropy','perf_measure',num_iter_per_experiment-1, n] for n in range(num_experiments)]
-        # print [results['greedy','perf_measure',4, n] for n in range(num_experiments)]
-
-        print "Entropy per iteration for greedy_entropy:"
-        print [np.array([results['greedy_entropy','perf_measure',i, n] for n in range(num_experiments)]).mean() for i in range(num_iter_per_experiment)]
-        # print "Entropy per iteration for greedy:"
-        # print [[results['greedy','post_entropy',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
-
-        # print("Test environment regret for greedy:")
-        # print [results['greedy','test_regret',num_iter_per_experiment-1,n] for n in range(num_experiments)]
-        print("Test environment regret for greedy_entropy:")
-        print [results['greedy_entropy','test_regret',num_iter_per_experiment-1,n] for n in range(num_experiments)]
-
-        # print "Exp regret per iteration for greedy:"
-        # print [[results['greedy','post_exp_regret',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
-        print "Exp regret per iteration for greedy_entropy:"
-        print [np.array([results['greedy_entropy','post_exp_regret',i, n] for n in range(num_experiments)]).mean() for i in range(num_iter_per_experiment)]
-
-
-        # print 'mdp_features:'
-        # print np.array([np.concatenate([[state], mdp.features[state]]) for state in range(num_states)])
-        # print np.array([np.concatenate([[state], mdp.get_features(state)]) for state in range(num_states)])
-        # # # print('mdp features: {features}'.format(features=mdp_test.features))
-        # print(best_query)
-        # # print('Best post_avg:{post_avg}').format(post_avg=best_post_avg)
-        # # print('Best posterior:{posterior}').format(posterior=best_posterior)
-        print 'Total time:{deltat}'.format(deltat=time.clock() - start)
-        print 'Finished experiment: ', exp_description.format(nexp=num_experiments) + 'Updated description: '+str(adapted_description)
+        # 'Print results'
+        # print "Choosers:                        {c}".format(c=choosers)
+        # print "Avg post exp regret per chooser: {x}".format(x=avg_post_exp_regrets)
+        # print "Avg post regret per chooser: {x}".format(x=avg_post_regrets)
+        # print "Std post exp regret per chooser: {x}".format(x=std_post_exp_regrets)
+        # print "Std post regret per chooser: {x}".format(x=std_post_regrets)
+        # # print [-results['greedy_exp_reward','perf_measure',4, n] for n in range(num_experiments)]
+        # # print [results['greedy_exp_reward','post_exp_regret',4, n] for n in range(num_experiments)]
+        # print [results['greedy_entropy','post_exp_regret',num_iter_per_experiment-1, n] for n in range(num_experiments)]
+        # print [results['greedy_entropy','perf_measure',num_iter_per_experiment-1, n] for n in range(num_experiments)]
+        # # print [results['greedy','perf_measure',4, n] for n in range(num_experiments)]
+        #
+        # print "Entropy per iteration for greedy_entropy:"
+        # print [np.array([results['greedy_entropy','perf_measure',i, n] for n in range(num_experiments)]).mean() for i in range(num_iter_per_experiment)]
+        # # print "Entropy per iteration for greedy:"
+        # # print [[results['greedy','post_entropy',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
+        #
+        # # print("Test environment regret for greedy:")
+        # # print [results['greedy','test_regret',num_iter_per_experiment-1,n] for n in range(num_experiments)]
+        # print("Test environment regret for greedy_entropy:")
+        # print [results['greedy_entropy','test_regret',num_iter_per_experiment-1,n] for n in range(num_experiments)]
+        #
+        # # print "Exp regret per iteration for greedy:"
+        # # print [[results['greedy','post_exp_regret',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
+        # print "Exp regret per iteration for greedy_entropy:"
+        # print [np.array([results['greedy_entropy','post_exp_regret',i, n] for n in range(num_experiments)]).mean() for i in range(num_iter_per_experiment)]
+        #
+        #
+        # # print 'mdp_features:'
+        # # print np.array([np.concatenate([[state], mdp.features[state]]) for state in range(num_states)])
+        # # print np.array([np.concatenate([[state], mdp.get_features(state)]) for state in range(num_states)])
+        # # # # print('mdp features: {features}'.format(features=mdp_test.features))
+        # # print(best_query)
+        # # # print('Best post_avg:{post_avg}').format(post_avg=best_post_avg)
+        # # # print('Best posterior:{posterior}').format(posterior=best_posterior)
+        # print 'Total time:{deltat}'.format(deltat=time.clock() - start)
+        # print 'Finished experiment: ', exp_description.format(nexp=num_experiments) + 'Updated description: '+str(adapted_description)
 
     # for q_size in range(2,50):
     #     if q_size % 4 == 0:
