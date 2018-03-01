@@ -19,8 +19,8 @@ class TestPlanner(unittest.TestCase):
             prior = np.ones(3) / 3.
             with tf.Session() as sess:
                 sess.run(model.initialize_op)
-                (qvals,) \
-                    = model.compute(['q_values'], sess, mdp, query, prior, weight_inits=weights)
+                (qvals,) = model.compute(
+                    ['q_values'], sess, mdp, query, prior, weight_inits=weights)
 
             agent = OptimalAgent(gamma=model.gamma, num_iters=num_iters)
             for i, proxy in enumerate(model.proxy_reward_space):
@@ -38,8 +38,8 @@ class TestPlanner(unittest.TestCase):
                     expected_q = agent.qvalue(state, action)
                     action_num = Direction.get_number_from_direction(action)
                     actual_q = qvals[y, x, action_num]
-                    # self.assertEqual(expected_q, actual_q)
-                    self.assertAlmostEqual(expected_q, actual_q, places=5)
+                    # Using softmax, not max, so expect limited accuracy
+                    self.assertAlmostEqual(expected_q, actual_q, places=2)
 
         np.random.seed(1)
         random.seed(1)
@@ -51,7 +51,10 @@ class TestPlanner(unittest.TestCase):
         other_weights = mdp.rewards[1:3]
         proxy_space = list(product(range(-1, 2), repeat=len(query)))
         dummy_true_reward_matrix = np.random.rand(3, dim)
-        model = GridworldModel(dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 1., 'entropy', 8, 8, 10)
+        # Use beta_planner = 1000 so that softmax is approximately max
+        model = GridworldModel(
+            dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix,
+            mdp.rewards, 1, 1000, 'entropy', 0.1, 8, 8, 10)
         check_model_equivalent(model, query, other_weights, mdp, 10)
 
 
@@ -76,7 +79,6 @@ class TestPlanner(unittest.TestCase):
                 if mdp.is_terminal(state):
                     return
                 expected_q = agent.qvalue(state, state)
-                print qvals.shape, state
                 actual_q = qvals[state]
                 self.assertAlmostEqual(expected_q, actual_q, places=5)
 
@@ -90,9 +92,10 @@ class TestPlanner(unittest.TestCase):
         # other_weights = np.array([weights[1], weights[4]])
         other_weights = np.zeros(0)
         proxy_space = list(product(range(1, 3), repeat=len(query)))
-        print 'proxy_space', proxy_space
         dummy_true_reward_matrix = np.random.rand(3, dim)
-        model = BanditsModel(dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix, mdp.rewards, 1, 1, 'entropy')
+        model = BanditsModel(
+            dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix,
+            mdp.rewards, 1, 1, 'entropy', 0.1)
         check_model_equivalent(model, query, other_weights, mdp, 20)
 
 
