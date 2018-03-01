@@ -16,11 +16,10 @@ class TestPlanner(unittest.TestCase):
 
     def test_gridworld_planner(self):
         def check_model_equivalent(model, query, weights, mdp, num_iters):
-            prior = np.ones(3) / 3.
             with tf.Session() as sess:
                 sess.run(model.initialize_op)
                 (qvals,) = model.compute(
-                    ['q_values'], sess, mdp, query, prior, weight_inits=weights)
+                    ['q_values'], sess, mdp, query, weight_inits=weights)
 
             agent = OptimalAgent(gamma=model.gamma, num_iters=num_iters)
             for i, proxy in enumerate(model.proxy_reward_space):
@@ -53,8 +52,8 @@ class TestPlanner(unittest.TestCase):
         dummy_true_reward_matrix = np.random.rand(3, dim)
         # Use beta_planner = 1000 so that softmax is approximately max
         model = GridworldModel(
-            dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix,
-            mdp.rewards, 1, 1000, 'entropy', 0.1, False, 8, 8, 10)
+            dim, 0.9, len(query), 1, 10, None, 1, 1000, 'entropy', 0.1, False,
+            8, 8, 10)
         check_model_equivalent(model, query, other_weights, mdp, 10)
 
 
@@ -91,11 +90,8 @@ class TestPlanner(unittest.TestCase):
         query = [0, 1, 2, 3, 4]
         # other_weights = np.array([weights[1], weights[4]])
         other_weights = np.zeros(0)
-        proxy_space = list(product(range(1, 3), repeat=len(query)))
-        dummy_true_reward_matrix = np.random.rand(3, dim)
         model = BanditsModel(
-            dim, 0.9, len(query), proxy_space, dummy_true_reward_matrix,
-            mdp.rewards, 1, 1, 'entropy', 0.1, False)
+            dim, 0.9, len(query), 1, 10, None, 1, 1000, 'entropy', 0.1, False)
         check_model_equivalent(model, query, other_weights, mdp, 20)
 
 
