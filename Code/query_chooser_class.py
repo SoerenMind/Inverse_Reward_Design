@@ -399,13 +399,14 @@ class Query_Chooser_Subclass(Query_Chooser):
             return BanditsModel(
                 self.args.feature_dim, self.args.gamma, query_size,
                 proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy', no_planning=no_planning)
+                true_reward, self.args.beta, self.args.beta_planner, 'entropy',
+                self.args.lr, no_planning=no_planning)
         elif mdp.type == 'gridworld':
             return GridworldModel(
                 self.args.feature_dim, self.args.gamma, query_size,
                 proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy', mdp.height, mdp.width,
-                num_iters, no_planning=no_planning)
+                true_reward, self.args.beta, self.args.beta_planner, 'entropy',
+                self.args.lr, mdp.height, mdp.width, num_iters, no_planning=no_planning)
         else:
             raise ValueError('Unknown model type: ' + str(mdp.type))
 

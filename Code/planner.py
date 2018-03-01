@@ -5,7 +5,7 @@ from gridworld import Direction
 
 class Model(object):
     def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
-                 true_reward_matrix, true_reward, beta, beta_bandits_planner, objective, no_planning=False):
+                 true_reward_matrix, true_reward, beta, beta_planner, objective, lr, no_planning=False):
         self.feature_dim = feature_dim
         self.gamma = gamma
         self.query_size = query_size
@@ -18,7 +18,8 @@ class Model(object):
         self.true_reward_matrix = np.array(true_reward_matrix, dtype=np.float32)
         self.true_reward = true_reward
         self.beta = beta
-        self.beta_bandits_planner = beta_bandits_planner
+        self.beta_planner = beta_planner
+        self.lr = lr
         self.build_tf_graph(objective, no_planning)
 
     def build_tf_graph(self, objective, no_planning):
@@ -129,7 +130,7 @@ class Model(object):
 
             # Get true posterior entropy
             interm_tensor = tf.exp(self.true_log_posterior + tf.log(- self.true_log_posterior))
-            self.true_ent = tf.reduce_sum(interm_tensor, axis=0, name="true_entropy", keepdims=True)
+            self.true_ent = tf.reduce_sum(interm_tensor, axis=0, name="true_entropy", keep_dims=True)
             self.name_to_op['true_entropy'] = self.true_ent
 
         # Fill name to ops dict
@@ -161,12 +162,12 @@ class Model(object):
                 tf.multiply(self.post_ent_new, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='entropy')
             self.name_to_op['entropy'] = self.exp_post_ent
 
-            # # Set up optimizer
-            # if self.query_size < self.feature_dim:
-            #     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)    # TODO: adjust inputs if needed
-            #     self.minimize_op = optimizer.minimize(
-            #         self.exp_post_ent, var_list=[self.name_to_op['other_weights']])
-            #     self.name_to_op['minimize'] = self.minimize_op
+            # Set up optimizer
+            if self.query_size < self.feature_dim:
+                optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+                self.minimize_op = optimizer.minimize(
+                    self.exp_post_ent, var_list=[self.other_weights])
+                self.name_to_op['minimize'] = self.minimize_op
 
         if 'variance' in objective:
             true_rewards = tf.constant(self.true_reward_matrix, dtype=tf.float32, name='true_rewards')
@@ -308,7 +309,7 @@ class BanditsModel(Model):
         self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
         self.name_to_op['reward_per_state'] = self.reward_per_state
         self.name_to_op['q_values'] = self.reward_per_state
-        self.state_probs = tf.nn.softmax(self.beta_bandits_planner * self.reward_per_state, dim=0, name="state_probs")
+        self.state_probs = tf.nn.softmax(self.beta_planner * self.reward_per_state, dim=0, name="state_probs")
         self.name_to_op['state_probs'] = self.state_probs
 
         # Calculate feature expectations
@@ -325,14 +326,15 @@ class BanditsModel(Model):
 
 class GridworldModel(Model):
     def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
-                 true_reward_matrix, true_reward, beta, beta_bandits_planner, objective,
-                 height, width, num_iters, no_planning=False):
+                 true_reward_matrix, true_reward, beta, beta_planner, objective,
+                 lr, height, width, num_iters, no_planning=False):
         self.height = height
         self.width = width
         self.num_iters = num_iters
         self.num_actions = 4
-        super(GridworldModel, self).__init__(feature_dim, gamma, query_size, proxy_reward_space, true_reward_matrix,
-                                             true_reward, beta, beta_bandits_planner, objective, no_planning=no_planning)
+        super(GridworldModel, self).__init__(
+            feature_dim, gamma, query_size, proxy_reward_space, true_reward_matrix,
+            true_reward, beta, beta_planner, objective, lr, no_planning=no_planning)
 
     def build_planner(self):
         height, width, dim = self.height, self.width, self.feature_dim
@@ -357,22 +359,14 @@ class GridworldModel(Model):
         weights_wall = tf.stack([weights_wall] * height, axis=1)
         dim += 1
 
-        index_prefixes = tf.constant(
-            [[[[[i, j, k, l]
-                for l in range(dim)]
-               for k in range(width)]
-              for j in range(height)]
-             for i in range(K)],
-            dtype=tf.int64)
-
         feature_expectations = tf.zeros([K, height, width, dim])
         for _ in range(self.num_iters):
             q_fes = self.bellman_update(feature_expectations, features_wall)
             q_values = tf.squeeze(tf.matmul(weights_wall, q_fes), [-2])
-            policy = tf.expand_dims(tf.argmax(q_values, axis=-1), -1)
+            policy = tf.nn.softmax(self.beta_planner * q_values, dim=-1)
             repeated_policy = tf.stack([policy] * dim, axis=-2)
-            indexes = tf.concat([index_prefixes, repeated_policy], axis=-1)
-            feature_expectations = tf.gather_nd(q_fes, indexes)
+            feature_expectations = tf.reduce_sum(
+                tf.multiply(repeated_policy, q_fes), axis=-1)
 
         # Remove the wall feature
         self.feature_expectations_grid = feature_expectations[:,:,:,:-1]
