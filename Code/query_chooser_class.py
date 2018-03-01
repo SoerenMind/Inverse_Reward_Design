@@ -156,7 +156,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         else:
             raise NotImplementedError('Calling unimplemented query chooser')
 
-    def find_best_query_exhaustive(self, query_size, measure, sess, true_reward=None):
+    def find_best_query_exhaustive(self, query_size, measure, sess, true_reward=None, full_query=False, random_query=False):
         """
         Exhaustive search query chooser.
         Calculates the expected posterior regret after asking for each query of size query_size. Returns the query
@@ -164,7 +164,12 @@ class Query_Chooser_Subclass(Query_Chooser):
         :param query_size: number of reward functions in each query considered
         :return: best query
         """
-        set_of_queries = self.generate_set_of_queries(query_size)
+        if full_query:
+            set_of_queries = self.reward_space_proxy
+        elif random_query:
+            set_of_queries = [np.random.choice(self.reward_space_proxy)]
+        else:
+            set_of_queries = self.generate_set_of_queries(query_size)
         best_objective = float("inf")
         mdp = self.inference.mdp
         desired_outputs = [measure]
@@ -188,8 +193,6 @@ class Query_Chooser_Subclass(Query_Chooser):
             if objective[0][0][0] < best_objective:
                 best_objective = objective
                 best_query = query
-
-        '''NOTE: Use true posterior here'''
 
         # Get posterior etc for best query
         desired_outputs = [measure,'true_posterior','true_entropy']
@@ -412,8 +415,8 @@ class Query_Chooser_Subclass(Query_Chooser):
 
     def find_random_query(self, query_size):
         query = [choice(self.reward_space_proxy) for _ in range(query_size)]
-        exp_regret = self.get_exp_regret_from_query([])
-        return query, exp_regret, None
+        # exp_regret = self.get_exp_regret_from_query([])
+        return query, None, None
     
     # @profile
     def get_exp_exp_post_regret(self, query, total_reward=False):
@@ -533,19 +536,18 @@ class Experiment(object):
 
         # Set run parameters
         inference = self.train_inferences[exp_num]
-        print(inference.mdp.grid)
         self.query_chooser.inference = inference
         seed(self.seed)
         self.seed += 1
-        # true_reward = choice(inference.reward_space_true)
         'Note: true reward no longer in true reward space'
-        true_reward = np.random.randint(-9, 9, size=[self.query_chooser.args.feature_dim])
+        if self.query_chooser.args.true_rw_random:
+            true_reward = np.random.randint(-9, 9, size=[self.query_chooser.args.feature_dim])
+        else: true_reward = choice(inference.reward_space_true)
         self.results['true_reward', exp_num] = true_reward
 
 
-        # Cache lhoods
+        # Cache feature_exps and lhoods
         # print 'NOT CACHING FEATURES!'
-        # Code below is only used forgreedy_entropy_discrete_tf
         if any(chooser in self.choosers for chooser in ['greedy_entropy_discrete_tf', 'greedy_entropy']):
             print('caching likelihoods. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
             self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
@@ -595,6 +597,7 @@ class Experiment(object):
                 post_regret = self.query_chooser.get_regret_from_query_and_true_reward([], true_reward) # TODO: Still plans with Python. May use wrong gamma, or trajectory normalization?
                 post_avg = inference.get_prior_avg()
                 test_regret = self.compute_test_regret(post_avg, true_reward)
+                print('Test regret: '+str(test_regret)+' | Post regret: '+str(post_regret))
 
                 # Save results
                 # self.results[chooser, 'post_exp_regret', i, exp_num],\

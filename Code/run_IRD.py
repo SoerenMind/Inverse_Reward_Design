@@ -49,7 +49,7 @@ if __name__=='__main__':
     parser.add_argument('--seed',type=int,default=1)
     parser.add_argument('--beta',type=float,default=.1)
     parser.add_argument('--beta_bandits_planner',type=float,default=50.) # 1 for small version of results
-    parser.add_argument('--num_states',type=int,default=6)  # 10 options if env changes over time, 100 otherwise
+    parser.add_argument('--num_states',type=int,default=100)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
     parser.add_argument('--num_traject',type=int,default=1)
     parser.add_argument('--num_queries_max',type=int,default=500)   # x10 the number tried for greedy
@@ -62,6 +62,8 @@ if __name__=='__main__':
     parser.add_argument('--mdp_type',type=str,default='gridworld')
     parser.add_argument('--feature_dim',type=int,default=25)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--num_test_envs',type=int,default=10)    # 10 if positions fixed, 100 otherwise
+    parser.add_argument('--true_rw_random',type=bool,default=False)    # default is true_reward < reward_space_true
+
 
     args = parser.parse_args()
 
@@ -122,16 +124,44 @@ if __name__=='__main__':
 
     # # Set up env and agent for NStateMdp
     if args.mdp_type == 'bandits':
-        # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
-        #                                 feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
-        mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
-                                        feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
-        agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
-
         # Reward spaces
         reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_true)]
         reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_proxy)]
 
+
+        'Note: Switch back to non-random features?'
+
+        'Create train and test MDPs'
+        test_inferences = []
+        for i in range(args.num_test_envs):
+            # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim),
+            #                                       start_state=0, preterminal_states=[],
+            #                                       feature_dim=args.feature_dim, num_states_reachable=num_states,
+            #                                       SEED=SEED)
+            mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
+                                            feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=100)
+            env = GridworldEnvironment(mdp)
+            agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
+            inference = InferenceDiscrete(
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None)
+
+            test_inferences.append(inference)
+
+
+        train_inferences = []
+        for i in range(num_experiments):
+            # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim),
+            #                                       start_state=0, preterminal_states=[],
+            #                                       feature_dim=args.feature_dim, num_states_reachable=num_states,
+            #                                       SEED=SEED)
+            mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
+                                            feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
+            env = GridworldEnvironment(mdp)
+            agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
+            inference = InferenceDiscrete(
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None)
+
+            train_inferences.append(inference)
 
         # from itertools import product
         # reward_space_true = list(product([0,1], repeat=args.feature_dim))
@@ -164,8 +194,7 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             agent = OptimalAgent(gamma, num_iters=args.value_iters)
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy,
-                num_traject=num_traject, prior=None)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=num_traject, prior=None)
 
             test_inferences.append(inference)
 
