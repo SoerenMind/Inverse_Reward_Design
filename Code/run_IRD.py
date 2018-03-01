@@ -48,7 +48,7 @@ if __name__=='__main__':
     parser.add_argument('--num_trajectories',type=int,default=1)
     parser.add_argument('--seed',type=int,default=1)
     parser.add_argument('--beta',type=float,default=.1)
-    parser.add_argument('--beta_bandits_planner',type=float,default=50.) # 1 for small version of results
+    parser.add_argument('--beta_planner',type=float,default=50.) # 1 for small version of results
     parser.add_argument('--num_states',type=int,default=100)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
     parser.add_argument('--num_traject',type=int,default=1)
@@ -56,6 +56,7 @@ if __name__=='__main__':
     parser.add_argument('--is_greedy',type=bool,default=True)
     parser.add_argument('--height',type=int,default=12)
     parser.add_argument('--width',type=int,default=12)
+    parser.add_argument('--lr',type=float,default=0.1)  # Learning rate
     parser.add_argument('--num_iters_optim',type=int,default=10)
     parser.add_argument('--value_iters',type=int,default=25)    # max_reward / (1-gamma) or height+width
     # parser.add_argument('--value_iters_discrete',type=int,default=50)
