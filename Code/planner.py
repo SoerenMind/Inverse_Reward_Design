@@ -5,7 +5,7 @@ from gridworld import Direction
 
 class Model(object):
     def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
-                 true_reward_matrix, true_reward, beta, beta_bandits_planner, objective):
+                 true_reward_matrix, true_reward, beta, beta_bandits_planner, objective, no_planning=False):
         self.feature_dim = feature_dim
         self.gamma = gamma
         self.query_size = query_size
@@ -19,12 +19,16 @@ class Model(object):
         self.true_reward = true_reward
         self.beta = beta
         self.beta_bandits_planner = beta_bandits_planner
-        self.build_tf_graph(objective)
+        self.build_tf_graph(objective, no_planning)
 
-    def build_tf_graph(self, objective):
+    def build_tf_graph(self, objective, no_planning):
         self.name_to_op = {}
-        self.build_weights()
-        self.build_planner()
+        if not no_planning:
+            self.build_weights()
+            self.build_planner()
+        else:
+            self.feature_expectations = tf.placeholder(tf.float32, shape=[None, self.feature_dim], name='feature_exps')
+            self.name_to_op['feature_exps'] = self.feature_expectations
         self.build_map_to_posterior()
         self.build_map_to_objective(objective)
         # Initializing the variables
@@ -56,6 +60,8 @@ class Model(object):
         self.name_to_op = {}    # Remove
         self.name_to_op['weights'] = self.weights
         self.name_to_op['query_weights'] = self.query_weights
+        self.name_to_op['other_weights'] = self.other_weights
+
 
         # print self.query_weights.shape
         # print self.other_weights.shape
@@ -70,6 +76,10 @@ class Model(object):
         Maps self.feature_exp (created by planner) to self.log_posterior.
         """
         # Get log likelihoods for true reward matrix
+
+
+        self.feature_expectations_input = tf.identity(self.feature_expectations, name='feature_expectations_input')
+
         self.true_reward_matrix_tensor = tf.constant(
             self.true_reward_matrix, dtype=tf.float32, name="true_reward_matrix_tensor", shape=self.true_reward_matrix.shape)
         self.avg_reward_matrix = tf.tensordot(
@@ -126,8 +136,6 @@ class Model(object):
         self.name_to_op['avg_reward_matrix'] = self.avg_reward_matrix
         self.name_to_op['true_reward_matrix_tensor'] = self.true_reward_matrix_tensor
         self.name_to_op['prior'] = self.prior
-        self.name_to_op['features'] = self.features
-        self.name_to_op['other_weights'] = self.other_weights
         self.name_to_op['posterior'] = self.posterior
         self.name_to_op['post_sum_to_1'] = self.post_sum_to_1
 
@@ -192,7 +200,7 @@ class Model(object):
 
 
     # TODO: Remove the feature_expectations_test_input argument
-    def compute(self, outputs, sess, mdp, query, prior=None, weight_inits=None, feature_expectations_test_input = None,
+    def compute(self, outputs, sess, mdp, query, prior=None, weight_inits=None, feature_expectations_input = None,
                 gradient_steps=0, discrete_query=None):
         """
         Takes gradient steps to set the non-query features to the values that
@@ -215,6 +223,8 @@ class Model(object):
             sess.run([self.assign_op], feed_dict=fd)
         elif discrete_query is not None:
             fd[self.query_weights] = discrete_query   # Should this be done with another assign op?
+        elif feature_expectations_input is not None:
+            fd[self.feature_expectations] = feature_expectations_input
 
         if prior is not None:
             fd[self.prior] = prior
@@ -234,6 +244,34 @@ class Model(object):
         return [get_op(name) for name in outputs]
         # output_ops = [get_op(name) for name in outputs]
         # return sess.run(output_ops, feed_dict=fd)
+
+
+    # TODO: Remove the feature_expectations_test_input argument
+    def compute_no_planning(self, outputs, sess, mdp, query, prior=None, weight_inits=None, feature_expectations_input = None,
+                gradient_steps=0, discrete_query=None, true_reward=None):
+        """
+        Computes outputs from feature_expectations_input
+        """
+        fd = {}
+
+        fd[self.feature_expectations] = feature_expectations_input
+        if true_reward is not None:
+            fd[self.true_reward_tensor] = true_reward.reshape(1,-1)
+
+        if prior is not None:
+            fd[self.prior] = prior
+
+
+        def get_op(name):
+            if name not in self.name_to_op:
+                raise ValueError("Unknown op name: " + str(name))
+            return sess.run([self.name_to_op[name]], feed_dict=fd)[0]
+
+        return [get_op(name) for name in outputs]
+        # output_ops = [get_op(name) for name in outputs]
+        # return sess.run(output_ops, feed_dict=fd)
+
+
 
     def create_mdp_feed_dict(self, mdp):
         raise NotImplemented('Should be implemented in subclass')
@@ -290,13 +328,13 @@ class BanditsModel(Model):
 class GridworldModel(Model):
     def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
                  true_reward_matrix, true_reward, beta, beta_bandits_planner, objective,
-                 height, width, num_iters):
+                 height, width, num_iters, no_planning=False):
         self.height = height
         self.width = width
         self.num_iters = num_iters
         self.num_actions = 4
         super(GridworldModel, self).__init__(feature_dim, gamma, query_size, proxy_reward_space, true_reward_matrix,
-                                             true_reward, beta, beta_bandits_planner, objective)
+                                             true_reward, beta, beta_bandits_planner, objective, no_planning=no_planning)
 
     def build_planner(self):
         height, width, dim = self.height, self.width, self.feature_dim

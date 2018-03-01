@@ -45,6 +45,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         self.num_queries_max = num_queries_max
         self.args = args    # all args
         self.t_0 = t_0
+        self.qsize_to_discrete_model = {}
 
     # def cache_feature_expectations(self):
     #     """Calculates feature expectations for all proxies and stores them in the dictionary
@@ -109,7 +110,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         else:
             raise NotImplementedError('Calling unimplemented query chooser')
 
-    # @profile
     def find_best_query_exhaustive(self, query_size, measure, true_reward=None):
         """
         Exhaustive search query chooser.
@@ -195,31 +195,47 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_query = []
         # Find best query
         while len(best_query) < query_size:
-            best_query, best_objective, model, sess = self.find_next_bigger_discrete_query(best_query, measure, true_reward=None)
+            best_query, best_objective, model, sess = self.find_next_bigger_discrete_query(best_query, measure)
         print('query found, computing true posterior...')
 
         # Evaluate its posterior (pass model from above if building graph takes time)
         desired_outputs = [measure,'true_posterior','true_entropy']
         mdp = self.inference.mdp
         # model = self.get_model(0, true_reward, proxy_space=best_query, num_iters_discrete=self.args.value_iters)
-        # with tf.Session() as sess:
-        #     sess.run(model.initialize_op)
-        best_objective, true_posterior, true_entropy = model.compute(
-                            desired_outputs, sess, mdp, [], self.inference.prior, discrete_query=best_query)
+        with tf.Session() as sess:
+            sess.run(model.initialize_op)
+            idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
+
+            'Gotta input true reward here somewhere'
+
+            feature_exp_input = self.inference.feature_exp_matrix[idx, :]
+
+            best_objective, true_posterior, true_entropy = model.compute_no_planning(
+                                desired_outputs, sess, None, [], self.inference.prior, feature_expectations_input=feature_exp_input)
         # TODO: Should we use the log posterior here because a prior with zeros would crash the log prior?
         print('Best objective found: ' + str(best_objective))
 
         return best_query, best_objective, true_posterior, true_entropy[0]
 
-    def find_next_bigger_discrete_query(self, curr_query, measure, true_reward):
+
+    def find_next_bigger_discrete_query(self, curr_query, measure):
         mdp = self.inference.mdp
         desired_outputs = [measure]
         best_objective, best_objective_plus_cost = float("inf"), float("inf")
         best_query = None
+        query_size_new = len(curr_query) + 1
         feature_dim = self.args.feature_dim
-        dummy_proxy_space = [list(np.zeros(feature_dim)) for _ in range(len(curr_query) + 1)]
-        print('building model...')
-        model = self.get_model(0, true_reward, proxy_space=dummy_proxy_space, num_iters_discrete=self.args.value_iters)
+        dummy_proxy_space = [list(np.zeros(feature_dim)) for _ in range(query_size_new)]
+        dummy_true_reward = np.zeros(feature_dim)
+
+        # Get model for query size
+        try: model = self.qsize_to_discrete_model[query_size_new]
+        except:
+            print('building model...')
+            model = self.get_model(
+                0, true_reward=dummy_true_reward, proxy_space=dummy_proxy_space, num_iters_discrete=self.args.value_iters, no_planning=True)
+            self.qsize_to_discrete_model[query_size_new] = model
+            '''NOTE: This model does not have a planning graph. true_reward is a dummy.'''
 
         with tf.Session() as sess:
             sess.run(model.initialize_op)
@@ -228,8 +244,14 @@ class Query_Chooser_Subclass(Query_Chooser):
                 if any(list(proxy) == list(option) for option in curr_query):
                     continue
                 query = curr_query+[list(proxy)]
-                objective = model.compute(
-                    desired_outputs, sess, mdp, [], self.inference.prior, discrete_query=query)
+
+                idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
+                feature_exp_input = self.inference.feature_exp_matrix[idx, :]
+
+                # Compute objective
+                objective = model.compute_no_planning(
+                    desired_outputs, sess, None, [], self.inference.prior, feature_expectations_input=feature_exp_input)
+
                 if objective[0][0][0] < best_objective:
                     best_objective = objective
                     best_query = query
@@ -237,6 +259,8 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
         return best_query, best_objective[0][0][0], model, sess
+
+
 
 
 
@@ -300,7 +324,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         return best_query, objective, true_posterior, true_entropy[0]
 
 
-    def get_model(self, query_size, true_reward=None, proxy_space=None, num_iters_discrete=None):
+    def get_model(self, query_size, true_reward=None, proxy_space=None, num_iters_discrete=None, no_planning=False):
         mdp = self.inference.mdp
 
         if proxy_space is None:
@@ -316,13 +340,13 @@ class Query_Chooser_Subclass(Query_Chooser):
             return BanditsModel(
                 self.args.feature_dim, self.args.gamma, query_size,
                 proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy')
+                true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy', no_planning=no_planning)
         elif mdp.type == 'gridworld':
             return GridworldModel(
                 self.args.feature_dim, self.args.gamma, query_size,
                 proxy_space, self.inference.true_reward_matrix,
                 true_reward, self.args.beta, self.args.beta_bandits_planner, 'entropy', mdp.height, mdp.width,
-                num_iters)
+                num_iters, no_planning=no_planning)
         else:
             raise ValueError('Unknown model type: ' + str(mdp.type))
 
@@ -462,8 +486,8 @@ class Experiment(object):
 
         # Cache lhoods
         # print 'NOT CACHING FEATURES!'
-        # Code below is only used for
-        if 'greedy_entropy' in self.choosers:
+        # Code below is only used forgreedy_entropy_discrete_tf
+        if any(chooser in self.choosers for chooser in ['greedy_entropy_discrete_tf', 'greedy_entropy']):
             print('caching likelihoods. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
             self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
             self.inference.cache_lhoods() # Only run this if the environment isn't changed each iteration
@@ -523,8 +547,8 @@ class Experiment(object):
                     = true_entropy, perf_measure, post_regret, test_regret, np.linalg.norm(post_avg-true_reward,1), query
 
 
-            print('post_exp_regret: {p}'.format(p=post_exp_regret))
-            post_exp_regret_per_chooser.append(post_exp_regret)
+            # print('post_exp_regret: {p}'.format(p=post_exp_regret))
+            # post_exp_regret_per_chooser.append(post_exp_regret)
             post_regret_per_chooser.append(post_regret)
 
         return post_exp_regret_per_chooser, post_regret_per_chooser
