@@ -39,10 +39,10 @@ if __name__=='__main__':
     # parser.add_argument('choosers',type=list,default='[greedy_entropy]')
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
     parser.add_argument('--query_size_feature',type=int,default=3)
-    parser.add_argument('--num_experiments',type=int,default=1) # 3-5
+    parser.add_argument('--num_experiments',type=int,default=2) # 3-5
     parser.add_argument('--num_iter',type=int,default=10)    # number of queries asked
     # TODO: Values are computed as if trajectories are infinite. Problem?
-    parser.add_argument('--gamma',type=float,default=1.) # otherwise 0.98
+    parser.add_argument('--gamma',type=float,default=1.) # otherwise 0.98. Values <1 might make test regret inaccurate.
     parser.add_argument('--size_true_space',type=int,default=1000)
     parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--num_trajectories',type=int,default=1)
@@ -57,11 +57,11 @@ if __name__=='__main__':
     parser.add_argument('--height',type=int,default=12)
     parser.add_argument('--width',type=int,default=12)
     parser.add_argument('--num_iters_optim',type=int,default=10)
-    parser.add_argument('--value_iters',type=int,default=40)    # max_reward / (1-gamma) or height+width
+    parser.add_argument('--value_iters',type=int,default=25)    # max_reward / (1-gamma) or height+width
     # parser.add_argument('--value_iters_discrete',type=int,default=50)
     parser.add_argument('--mdp_type',type=str,default='gridworld')
     parser.add_argument('--feature_dim',type=int,default=25)    # 10 if positions fixed, 100 otherwise
-
+    parser.add_argument('--num_test_envs',type=int,default=10)    # 10 if positions fixed, 100 otherwise
 
     args = parser.parse_args()
 
@@ -72,8 +72,8 @@ if __name__=='__main__':
     exp_description = pprint("Comparing to entropy with many states and few true rewards. {nexp} experiments.")
 
     # Set parameters
-    dummy_rewards = np.zeros(3)
     feature_dim = args.feature_dim
+    dummy_rewards = np.zeros(feature_dim)
     # Set parameters
     choosers = args.c
     SEED = args.seed
@@ -126,7 +126,7 @@ if __name__=='__main__':
         #                                 feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
         mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
                                         feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
-        agent = ImmediateRewardAgent()
+        agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
 
         # Reward spaces
         reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_true)]
@@ -147,15 +147,6 @@ if __name__=='__main__':
 
     # Set up env and agent for gridworld
     elif args.mdp_type == 'gridworld':
-        for i in range(10):
-            test_grid = GridworldMdp.generate_random(height,width,0.3,feature_dim,None,living_reward=-0.01, print_grid=False)
-
-        grid = GridworldMdp.generate_random(height,width,0.3,feature_dim,None,living_reward=-0.01, print_grid=True)
-        mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
-        agent = OptimalAgent(gamma, num_iters=args.value_iters)
-
-
-
         # Create reward spaces for gridworld
         # reward_space_true = [np.random.multinomial(18, np.ones(args.feature_dim)/18) for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.multinomial(18, np.ones(args.feature_dim)) for _ in xrange(size_reward_space_proxy)]
@@ -164,16 +155,47 @@ if __name__=='__main__':
         # reward_space_true = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
 
+
+        'Create train and test MDPs'
+        test_inferences = []
+        for i in range(args.num_test_envs):
+            test_grid = GridworldMdp.generate_random(height,width,0.35,feature_dim,None,living_reward=-0.01, print_grid=False)
+            mdp = GridworldMdpWithDistanceFeatures(test_grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
+            env = GridworldEnvironment(mdp)
+            agent = OptimalAgent(gamma, num_iters=args.value_iters)
+            inference = InferenceDiscrete(
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy,
+                num_traject=num_traject, prior=None)
+
+            test_inferences.append(inference)
+
+
+        train_inferences = []
+        for j in range(num_experiments):
+            grid = GridworldMdp.generate_random(height,width,0.35,feature_dim,None,living_reward=-0.01, print_grid=False)
+            mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
+            env = GridworldEnvironment(mdp)
+            agent = OptimalAgent(gamma, num_iters=args.value_iters)
+            inference = InferenceDiscrete(
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy,
+                num_traject=num_traject, prior=None)
+
+            train_inferences.append(inference)
+
+        'Make sure that true_reward is not a sample from reward_space_true'
+        'do this for bandits'
+
+
     else:
         raise ValueError('Unknown MDP type: ' + str(args.mdp_type))
 
 
 
-    # Set up inference
-    env = GridworldEnvironment(mdp)
-    inference = InferenceDiscrete(
-        agent, mdp, env, beta, reward_space_true, reward_space_proxy,
-        num_traject=num_traject, prior=None)
+    # # Set up inference
+    # env = GridworldEnvironment(mdp)
+    # inference = InferenceDiscrete(
+    #     agent, mdp, env, beta, reward_space_true, reward_space_proxy,
+    #     num_traject=num_traject, prior=None)
 
     'Print derived parameters'
     # print('Size of reward_space_true:{size}'.format(size=size_reward_space_true))
@@ -212,7 +234,7 @@ if __name__=='__main__':
 
 
     'Experiment'
-    def experiment(query_size):
+    def experiment(query_size, train_inferences, test_inferences):
         # test_planning_speed(inference, reward_space_proxy); print('tested planning speed')
         # mean, std, failures, gain, mean_std_actual, regret_compare, regret_exp_vs_actual \
         #     = experiment(inference, reward_space_proxy, query_size, iterations_optimized=num_experiments, greedy=greedy,
@@ -223,7 +245,8 @@ if __name__=='__main__':
         # print 'Mean actual -reduction and std(mean) over random query: {r}'.format(r=mean_std_actual)
         # print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
         # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
-        experiment = Experiment(inference, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params)
+        experiment = Experiment(reward_space_proxy, query_size, num_queries_max,
+                                args, choosers, SEED, exp_params, train_inferences, test_inferences)
         results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
 
 
@@ -268,7 +291,7 @@ if __name__=='__main__':
     # for q_size in range(2,50):
     #     if q_size % 4 == 0:
     #         experiment(q_size)
-    experiment(query_size)
+    experiment(query_size, train_inferences, test_inferences)
 
 
     'Create interface'
