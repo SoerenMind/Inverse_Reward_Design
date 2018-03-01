@@ -1,27 +1,29 @@
 import numpy as np
 import tensorflow as tf
+from itertools import product
 
 from gridworld import Direction
 
 class Model(object):
-    def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
-                 true_reward_matrix, true_reward, beta, beta_planner, objective,
-                 lr, discrete):
+    def __init__(self, feature_dim, gamma, query_size, discretization_const,
+                 true_reward_space_size, proxy_reward_space_size, beta,
+                 beta_planner, objective, lr, discrete):
         self.feature_dim = feature_dim
         self.gamma = gamma
         self.query_size = query_size
-        # List of possible settings for the query features
-        # Eg. If we are querying features 1 and 4, and discretizing each into 3
-        # buckets (-1, 0 and 1), the proxy reward space would be
-        # [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]
-        self.proxy_reward_space = proxy_reward_space
-        self.K = len(self.proxy_reward_space)
-        self.true_reward_matrix = np.array(true_reward_matrix, dtype=np.float32)
-        self.true_reward = true_reward
+        self.true_reward_space_size = true_reward_space_size
         self.beta = beta
         self.beta_planner = beta_planner
         self.lr = lr
         self.discrete = discrete
+        if discrete:
+            self.K = proxy_reward_space_size
+        else:
+            assert query_size <= 5
+            f_range = range(-discretization_const, discretization_const + 1)
+            # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
+            self.proxy_reward_space = list(product(f_range, repeat=query_size))
+            self.K = len(self.proxy_reward_space)
         self.build_tf_graph(objective)
 
     def build_tf_graph(self, objective):
@@ -80,19 +82,17 @@ class Model(object):
         Maps self.feature_exp (created by planner) to self.log_posterior.
         """
         # Get log likelihoods for true reward matrix
-
-
-        self.feature_expectations_input = tf.identity(self.feature_expectations, name='feature_expectations_input')
-
-        self.true_reward_matrix_tensor = tf.constant(
-            self.true_reward_matrix, dtype=tf.float32, name="true_reward_matrix_tensor", shape=self.true_reward_matrix.shape)
+        true_reward_space_size = self.true_reward_space_size
+        dim = self.feature_dim
+        self.true_reward_matrix = tf.placeholder(
+            tf.float32, [true_reward_space_size, dim], name="true_reward_matrix")
         self.avg_reward_matrix = tf.tensordot(
-            self.feature_expectations, tf.transpose(self.true_reward_matrix_tensor), axes=[-1, -2], name='avg_reward_matrix')
+            self.feature_expectations, self.true_reward_matrix, axes=[-1, -1], name='avg_reward_matrix')
         log_likelihoods_new = self.beta * self.avg_reward_matrix
 
 
         # Calculate posterior
-        self.prior = tf.placeholder(tf.float32, name="prior", shape=(len(self.true_reward_matrix)))
+        self.prior = tf.placeholder(tf.float32, name="prior", shape=(true_reward_space_size))
         log_Z_w = tf.reduce_logsumexp(log_likelihoods_new, axis=0, name='log_Z_q')
         log_P_q_z = log_likelihoods_new - log_Z_w
         self.log_Z_q, max_a, max_b = logdot(log_P_q_z, tf.log(self.prior))
@@ -103,42 +103,43 @@ class Model(object):
 
 
         # Get log likelihoods for actual true reward
-        if self.true_reward is not None:
-            self.true_reward_tensor = tf.constant(
-                self.true_reward.reshape(1,-1), dtype=tf.float32, name="true_reward_tensor", shape=[1, self.feature_dim])
-            self.avg_true_rewards = tf.tensordot(
-                self.feature_expectations, tf.transpose(self.true_reward_tensor), axes=[-1, -2], name='avg_true_rewards')
-            true_log_likelihoods = self.beta * self.avg_true_rewards
-            log_true_Z_w = tf.reduce_logsumexp(true_log_likelihoods, axis=0, name='log_true_Z_w')
-            log_answer_probs = true_log_likelihoods - log_true_Z_w
+        self.true_reward = tf.placeholder(
+            tf.float32, shape=[dim], name="true_reward")
+        self.true_reward_tensor = tf.expand_dims(
+            self.true_reward, axis=0, name="true_reward_tensor")
+        self.avg_true_rewards = tf.tensordot(
+            self.feature_expectations, tf.transpose(self.true_reward_tensor), axes=[-1, -2], name='avg_true_rewards')
+        true_log_likelihoods = self.beta * self.avg_true_rewards
+        log_true_Z_w = tf.reduce_logsumexp(true_log_likelihoods, axis=0, name='log_true_Z_w')
+        log_answer_probs = true_log_likelihoods - log_true_Z_w
 
-            self.name_to_op['true_reward_tensor'] = self.true_reward_tensor
-            self.name_to_op['avg_true_rewards'] = self.avg_true_rewards
-            self.name_to_op['true_log_likelihoods'] = true_log_likelihoods
-            self.name_to_op['log_answer_probs'] = log_answer_probs
-            self.name_to_op['log_true_Z_w'] = log_true_Z_w
-            self.name_to_op['log_answer_probs'] = log_answer_probs
+        self.name_to_op['true_reward_tensor'] = self.true_reward_tensor
+        self.name_to_op['avg_true_rewards'] = self.avg_true_rewards
+        self.name_to_op['true_log_likelihoods'] = true_log_likelihoods
+        self.name_to_op['log_answer_probs'] = log_answer_probs
+        self.name_to_op['log_true_Z_w'] = log_true_Z_w
+        self.name_to_op['log_answer_probs'] = log_answer_probs
 
-            # # Sample answer
-            log_answer_probs = tf.reshape(log_answer_probs, shape=[1,-1])
-            sample = tf.multinomial(log_answer_probs, num_samples=1)
-            sample = sample[0][0]
-            self.true_log_posterior = self.log_posterior[sample]
-            self.true_posterior = self.posterior[sample]
+        # # Sample answer
+        log_answer_probs = tf.reshape(log_answer_probs, shape=[1,-1])
+        sample = tf.multinomial(log_answer_probs, num_samples=1)
+        sample = sample[0][0]
+        self.true_log_posterior = self.log_posterior[sample]
+        self.true_posterior = self.posterior[sample]
 
-            self.name_to_op['sample'] = sample
-            self.name_to_op['true_posterior'] = self.true_posterior
-            self.name_to_op['true_log_posterior'] = self.true_log_posterior
-            self.name_to_op['probs'] = tf.exp(log_answer_probs)
+        self.name_to_op['sample'] = sample
+        self.name_to_op['true_posterior'] = self.true_posterior
+        self.name_to_op['true_log_posterior'] = self.true_log_posterior
+        self.name_to_op['probs'] = tf.exp(log_answer_probs)
 
-            # Get true posterior entropy
-            interm_tensor = tf.exp(self.true_log_posterior + tf.log(- self.true_log_posterior))
-            self.true_ent = tf.reduce_sum(interm_tensor, axis=0, name="true_entropy", keep_dims=True)
-            self.name_to_op['true_entropy'] = self.true_ent
+        # Get true posterior entropy
+        interm_tensor = tf.exp(self.true_log_posterior + tf.log(- self.true_log_posterior))
+        self.true_ent = tf.reduce_sum(interm_tensor, axis=0, name="true_entropy", keep_dims=True)
+        self.name_to_op['true_entropy'] = self.true_ent
 
         # Fill name to ops dict
         self.name_to_op['avg_reward_matrix'] = self.avg_reward_matrix
-        self.name_to_op['true_reward_matrix_tensor'] = self.true_reward_matrix_tensor
+        self.name_to_op['true_reward_matrix'] = self.true_reward_matrix
         self.name_to_op['prior'] = self.prior
         self.name_to_op['posterior'] = self.posterior
         self.name_to_op['post_sum_to_1'] = self.post_sum_to_1
@@ -173,14 +174,13 @@ class Model(object):
                 self.name_to_op['minimize'] = self.minimize_op
 
         if 'variance' in objective:
-            true_rewards = tf.constant(self.true_reward_matrix, dtype=tf.float32, name='true_rewards')
-            # post_avg, post_var = tf.nn.moments(true_rewards, axes=[0], keep_dims=False)
+            # post_avg, post_var = tf.nn.moments(self.true_reward_matrix, axes=[0], keep_dims=False)
             posterior_stack = tf.stack([self.posterior[0]] * self.feature_dim, axis=1)
             posterior_stack = tf.expand_dims(self.posterior[0], axis=1)
 
-            # true_rewards_stack = tf.stack([true_rewards] * self.K, axis=0)
+            # true_rewards_stack = tf.stack([self.true_reward_matrix] * self.K, axis=0)
             post_avg, post_var = tf.nn.weighted_moments(
-                true_rewards, [0, 0], posterior_stack, name="moments", keep_dims=False)
+                self.true_reward_matrix, [0, 0], posterior_stack, name="moments", keep_dims=False)
 
             data = tf.constant([[0.,2.,4.],[0.,2.,4.]], dtype=tf.float32)
             avg, var = tf.nn.moments(data, axes=[1,0])
@@ -204,7 +204,7 @@ class Model(object):
 
 
     def compute(self, outputs, sess, mdp, query=None, prior=None, weight_inits=None, feature_expectations_input = None,
-                gradient_steps=0, true_reward=None):
+                gradient_steps=0, true_reward=None, true_reward_matrix=None):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -237,11 +237,12 @@ class Model(object):
                 fd[self.permutation] = self.get_permutation_from_query(query)
 
         if true_reward is not None:
-            fd[self.true_reward_tensor] = true_reward.reshape(1,-1)
+            fd[self.true_reward] = true_reward
+        if true_reward_matrix is not None:
+            fd[self.true_reward_matrix] = true_reward_matrix
 
         if gradient_steps > 0:
             for step in range(gradient_steps):
-                # print sess.run(self.name_to_op['entropy'], feed_dict=fd)
                 sess.run(self.minimize_op, feed_dict=fd)
 
         def get_op(name):
@@ -305,17 +306,18 @@ class BanditsModel(Model):
 
 
 class GridworldModel(Model):
-    def __init__(self, feature_dim, gamma, query_size, proxy_reward_space,
-                 true_reward_matrix, true_reward, beta, beta_planner, objective,
-                 lr, discrete, height, width, num_iters):
+    def __init__(self, feature_dim, gamma, query_size, discretization_const,
+                 true_reward_space_size, proxy_reward_space_size, beta,
+                 beta_planner, objective, lr, discrete, height, width,
+                 num_iters):
         self.height = height
         self.width = width
         self.num_iters = num_iters
         self.num_actions = 4
         super(GridworldModel, self).__init__(
-            feature_dim, gamma, query_size, proxy_reward_space,
-            true_reward_matrix, true_reward, beta, beta_planner, objective, lr,
-            discrete)
+            feature_dim, gamma, query_size, discretization_const,
+            true_reward_space_size, proxy_reward_space_size, beta, beta_planner,
+            objective, lr, discrete)
 
     def build_planner(self):
         height, width, dim = self.height, self.width, self.feature_dim

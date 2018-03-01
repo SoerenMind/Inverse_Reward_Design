@@ -45,7 +45,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         self.num_queries_max = num_queries_max
         self.args = args    # all args
         self.t_0 = t_0
-        self.qsize_to_discrete_model = {}
+        self.model_cache = {}
 
     # def cache_feature_expectations(self):
     #     """Calculates feature expectations for all proxies and stores them in the dictionary
@@ -59,8 +59,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         proxy_space = [list(reward) for reward in reward_space]
         print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
         model = self.get_model(
-            query_size=self.args.feature_dim, proxy_space=proxy_space, num_iters_discrete=self.args.value_iters,
-            true_reward=np.zeros(self.args.feature_dim), discrete=True, no_planning=False)
+            query_size=self.args.feature_dim, num_iters=self.args.value_iters,
+            proxy_size=len(proxy_space), discrete=True, no_planning=False)
 
         desired_outputs = ['feature_exps']
         mdp = self.inference.mdp
@@ -86,12 +86,10 @@ class Query_Chooser_Subclass(Query_Chooser):
     #     mdp = self.inference.mdp
     #     desired_outputs = [measure]
     #     best_query = None
-    #     'This small proxy space is cheaper if building the graph is costly. It comes at the cost of having to run compute many times.'
-    #     dummy_proxy_space = [list(np.zeros(self.args.feature_dim)) for _ in range(query_size)]
     #     print('building model for exhaustive...')
     #
     #     model = self.get_model(
-    #         0, true_reward, proxy_space=dummy_proxy_space, num_iters_discrete=self.args.value_iters, discrete=True,no_planning=True)
+    #         0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True,no_planning=True)
     #
     #
     #     # Find query that minimizes objective
@@ -105,7 +103,9 @@ class Query_Chooser_Subclass(Query_Chooser):
     #
     #             # Compute objective
     #             objective = model.compute(
-    #                 desired_outputs, sess, None, None, self.inference.prior, feature_expectations_input=feature_exp_input)
+    #                 desired_outputs, sess, None, None, self.inference.prior,
+    #     feature_expectations_input=feature_exp_input, true_reward=true_reward,
+    #     true_reward_matrix=self.inference.true_reward_matrix)
     #
     #             if objective[0][0][0] < best_objective:
     #                 best_objective = objective
@@ -117,7 +117,8 @@ class Query_Chooser_Subclass(Query_Chooser):
     #         feature_exp_input = self.inference.feature_exp_matrix[idx, :]
     #
     #         best_objective, true_posterior, true_entropy = model.compute(
-    #             desired_outputs, sess, None, None, self.inference.prior, feature_expectations_input=feature_exp_input)
+    #             desired_outputs, sess, None, None, self.inference.prior,
+    #     feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
     #     print('Best objective found exhaustively: ' + str(best_objective[0][0]))
     #
     #     return best_query, best_objective, true_posterior, true_entropy[0]
@@ -169,13 +170,9 @@ class Query_Chooser_Subclass(Query_Chooser):
         mdp = self.inference.mdp
         desired_outputs = [measure]
         best_query = None
-        'This small proxy space is cheaper if building the graph is costly. It comes at the cost of having to run compute many times.'
-        dummy_proxy_space = [list(np.zeros(self.args.feature_dim)) for _ in range(query_size)]
         print('building model for exhaustive...')
         model = self.get_model(
-            0, true_reward, proxy_space=dummy_proxy_space,
-            num_iters_discrete=self.args.value_iters, discrete=True,
-            no_planning=True)
+            0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True, no_planning=True)
 
 
         # Find query that minimizes objective
@@ -186,7 +183,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
             feature_exp_input = self.inference.feature_exp_matrix[idx, :]
             objective = model.compute(
-                desired_outputs, sess, None, None, self.inference.prior, feature_expectations_input=feature_exp_input)
+                desired_outputs, sess, None, None, self.inference.prior,
+                feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
 
             if objective[0][0][0] < best_objective:
                 best_objective = objective
@@ -199,7 +197,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
         feature_exp_input = self.inference.feature_exp_matrix[idx, :]
         best_objective, true_posterior, true_entropy = model.compute(
-            desired_outputs, sess, None, None, self.inference.prior, feature_expectations_input=feature_exp_input, true_reward=true_reward)
+            desired_outputs, sess, None, None, self.inference.prior, feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
         print('Best objective found exhaustively: ' + str(best_objective[0][0]))
 
         return best_query, best_objective, true_posterior, true_entropy[0]
@@ -258,9 +256,6 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # Evaluate its posterior (pass model from above if building graph takes time)
         desired_outputs = [measure,'true_posterior','true_entropy']
-        # mdp = self.inference.mdp
-        # model = self.get_model(0, true_reward, proxy_space=best_query, num_iters_discrete=self.args.value_iters, discrete=True)
-        # with tf.Session() as sess:
         sess.run(model.initialize_op)
         idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
 
@@ -270,7 +265,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         best_objective, true_posterior, true_entropy = model.compute(
             desired_outputs, sess, None, None, self.inference.prior,
-            feature_expectations_input=feature_exp_input, true_reward=true_reward)
+            feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
         # TODO: Should we use the log posterior here because a prior with zeros would crash the log prior?
         print('Best objective found: ' + str(best_objective))
 
@@ -287,19 +282,10 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_query = None
         query_size_new = len(curr_query) + 1
         feature_dim = self.args.feature_dim
-        dummy_proxy_space = [list(np.zeros(feature_dim)) for _ in range(query_size_new)]
-        dummy_true_reward = np.zeros(feature_dim)
 
         # Get model for query size
-        try: model = self.qsize_to_discrete_model[query_size_new]
-        except:
-            print('building model...')
-            model = self.get_model(
-                0, true_reward=dummy_true_reward, proxy_space=dummy_proxy_space,
-                num_iters_discrete=self.args.value_iters, discrete=True,
-                no_planning=True)
-            self.qsize_to_discrete_model[query_size_new] = model
-            '''NOTE: This model does not have a planning graph. true_reward is a dummy.'''
+        model = self.get_model(
+            0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True, no_planning=True)
 
         # with tf.Session() as sess:
         # sess.run(model.initialize_op)
@@ -315,7 +301,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             # Compute objective
             objective = model.compute(
                 desired_outputs, sess, None, None, self.inference.prior,
-                feature_expectations_input=feature_exp_input)
+                feature_expectations_input=feature_exp_input,
+                true_reward_matrix=self.inference.true_reward_matrix)
 
             if objective[0][0][0] < best_objective:
                 best_objective = objective
@@ -337,7 +324,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_objective, best_objective_plus_cost = float("inf"), float("inf")
         best_query, best_optimal_weights = None, None
         model = self.get_model(
-            len(curr_query) + 1, true_reward, discrete=False, no_planning=False)
+            len(curr_query) + 1, self.args.value_iters, discrete=False, no_planning=False)
 
         with tf.Session() as sess:
             sess.run(model.initialize_op)
@@ -348,9 +335,11 @@ class Query_Chooser_Subclass(Query_Chooser):
                     weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
 
                 objective_unoptimized, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, query, self.inference.prior, weights)
+                    desired_outputs, sess, mdp, query, self.inference.prior,
+                    weights, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
                 objective, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, query, self.inference.prior, weights, gradient_steps=self.args.num_iters_optim)
+                    desired_outputs, sess, mdp, query, self.inference.prior,
+                    weights, gradient_steps=self.args.num_iters_optim, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
                 print objective_unoptimized, objective, objective_unoptimized - objective, objective_unoptimized >= objective
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
@@ -382,48 +371,56 @@ class Query_Chooser_Subclass(Query_Chooser):
         # Add: Get all measures for data recording?
         desired_outputs = [measure,'true_posterior','true_entropy']
         model = self.get_model(
-            len(best_query), true_reward, discrete=False, no_planning=False)
+            len(best_query), self.args.value_iters, discrete=False,
+            no_planning=False)
         with tf.Session() as sess:
             sess.run(model.initialize_op)
             objective, true_posterior, true_entropy = model.compute(
                 desired_outputs, sess, mdp, best_query, self.inference.prior,
-                best_optimal_weights)
-        return best_query, objective, true_posterior, true_entropy[0]
+                best_optimal_weights, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
+        #return best_query, objective, true_posterior, true_entropy[0]
+        return best_query, objective, true_posterior
 
 
-    def get_model(self, query_size, true_reward=None, proxy_space=None,
-                  num_iters_discrete=None, discrete=True, no_planning=False):
+    def get_model(self, query_size, num_iters, discretization_const=2,
+                  proxy_size=None, discrete=True, no_planning=False):
         mdp = self.inference.mdp
+        height, width = None, None
+        if mdp.type == 'gridworld':
+            height, width = mdp.height, mdp.width
+        dim, gamma, lr = self.args.feature_dim, self.args.gamma, self.args.lr
+        beta, beta_planner = self.args.beta, self.args.beta_planner
+        true_reward_space_size = len(self.inference.true_reward_matrix)
+        key = (no_planning, mdp.type, dim, gamma, query_size,
+               discretization_const, true_reward_space_size,
+               proxy_size, beta, beta_planner, lr, discrete, height, width,
+               num_iters)
+        if key in self.model_cache:
+            return self.model_cache[key]
 
-        if proxy_space is None:
-            # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
-            proxy_space = list(product(range(-3, 2), repeat=query_size))
-            num_iters = self.args.value_iters
-        else:
-            # Iterations must be given if proxy space is
-            num_iters = num_iters_discrete
-
-
+        print('building model...')
         if no_planning:
-            return NoPlanningModel(
-                self.args.feature_dim, self.args.gamma, query_size,
-                proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, self.args.beta_planner, 'entropy',
-                self.args.lr, discrete)
+            model = NoPlanningModel(
+                dim, gamma, query_size, discretization_const,
+                true_reward_space_size, proxy_size, beta, beta_planner,
+                'entropy', lr, discrete)
         elif mdp.type == 'bandits':
-            return BanditsModel(
-                self.args.feature_dim, self.args.gamma, query_size,
-                proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, self.args.beta_planner, 'entropy',
-                self.args.lr, discrete)
+            print 'Calling BanditsModel'
+            model = BanditsModel(
+                dim, gamma, query_size, discretization_const,
+                true_reward_space_size, proxy_size, beta, beta_planner,
+                'entropy', lr, discrete)
         elif mdp.type == 'gridworld':
-            return GridworldModel(
-                self.args.feature_dim, self.args.gamma, query_size,
-                proxy_space, self.inference.true_reward_matrix,
-                true_reward, self.args.beta, self.args.beta_planner, 'entropy',
-                self.args.lr, discrete, mdp.height, mdp.width, num_iters)
+            model = GridworldModel(
+                dim, gamma, query_size, discretization_const,
+                true_reward_space_size, proxy_size, beta, beta_planner,
+                'entropy', lr, discrete, mdp.height, mdp.width, num_iters)
         else:
             raise ValueError('Unknown model type: ' + str(mdp.type))
+
+        self.model_cache[key] = model
+        print 'Model built and cached!'
+        return model
 
 
     def find_random_query(self, query_size):
