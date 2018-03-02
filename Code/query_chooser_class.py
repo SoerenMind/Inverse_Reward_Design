@@ -579,7 +579,8 @@ class Experiment(object):
             sess = tf.Session()
 
             for i in range(-1,num_iter):
-                print "==========Iteration: {i}/{m}. Total time: {t}==========".format(i=i+1,m=num_iter,t=time.clock()-self.t_0)
+                exp_start_time = time.clock()
+                print "==========Iteration: {i}/{m}. Total time: {t}==========".format(i=i+1,m=num_iter,t=exp_start_time-self.t_0)
                 if i > -1:
                     # Do iteration for feature-based choosers:
                     if chooser in ['feature_entropy']:
@@ -616,14 +617,17 @@ class Experiment(object):
                 print('Test regret: '+str(test_regret)+' | Post regret: '+str(post_regret))
 
                 # Save results
+                exp_end_time = time.clock()
+                duration = exp_end_time - exp_start_time
                 # self.results[chooser, 'post_exp_regret', i, exp_num],\
                 self.results[chooser, 'true_entropy', i, exp_num], \
                 self.results[chooser,'perf_measure', i, exp_num], \
                 self.results[chooser, 'post_regret', i, exp_num], \
                 self.results[chooser, 'test_regret', i, exp_num], \
-                self.results[chooser, 'norm post_avg-true', i, exp_num],   \
+                self.results[chooser, 'norm post_avg-true', i, exp_num], \
                 self.results[chooser, 'query', i, exp_num], \
-                    = true_entropy, perf_measure, post_regret, test_regret, np.linalg.norm(post_avg-true_reward,1), query
+                self.results[chooser, 'time', i, exp_num] \
+                    = true_entropy, perf_measure, post_regret, test_regret, np.linalg.norm(post_avg-true_reward,1), query, duration
 
 
     def compute_test_regret(self, post_avg, true_reward):
@@ -688,14 +692,14 @@ class Experiment(object):
             Warning('Existing experiment stats overwritten')
         for chooser in self.choosers:
             f = open('data/'+self.folder_name+'/'+chooser+str(exp_num)+'.csv','w')  # Open CSV in folder with name exp_params
-            writer = csv.DictWriter(f, fieldnames=['iteration']+self.measures+self.cum_measures)
+            writer = csv.DictWriter(f, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
             writer.writeheader()
             rows = []
             cum_test_regret, cum_post_regret = 0, 0
             for i in range(-1,num_iter):
                 csvdict = {}
                 csvdict['iteration'] = i
-                for measure in self.measures:
+                for measure in self.measures + ['time']:
                     entry = self.results[chooser, measure, i, exp_num]
                     csvdict[measure] = entry
                     if measure == 'test_regret':
@@ -718,13 +722,13 @@ class Experiment(object):
             Warning('Existing experiment stats overwritten')
 
         f_mean_all = open('data/'+self.folder_name+'/'+'all choosers'+'-means-'+'.csv','w')
-        writer_mean_all_choosers = csv.DictWriter(f_mean_all, fieldnames=['iteration']+self.measures+self.cum_measures)
+        writer_mean_all_choosers = csv.DictWriter(f_mean_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
 
         for chooser in self.choosers:
             f_mean = open('data/'+self.folder_name+'/'+chooser+'-means-'+'.csv','w')
             f_median = open('data/'+self.folder_name+'/'+chooser+'-medians-'+'.csv','w')
-            writer_mean = csv.DictWriter(f_mean, fieldnames=['iteration']+self.measures+self.cum_measures)
-            writer_median = csv.DictWriter(f_median, fieldnames=['iteration']+self.measures+self.cum_measures)
+            writer_mean = csv.DictWriter(f_mean, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+            writer_median = csv.DictWriter(f_median, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
             writer_mean.writeheader()
             writer_median.writeheader()
             rows_mean = []
@@ -737,7 +741,7 @@ class Experiment(object):
                 csvdict_median = {}
                 csvdict_mean['iteration'] = i
                 csvdict_median['iteration'] = i
-                for measure in self.measures:
+                for measure in self.measures + ['time']:
                     entries = np.zeros(num_experiments)
                     for exp_num in range(num_experiments):
                         entry = self.results[chooser, measure, i, exp_num]
