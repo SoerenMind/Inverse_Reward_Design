@@ -323,7 +323,6 @@ class InferenceDiscrete(Inference):
             num_plannings_done = len(self.feature_expectations_dict.items())
             if num_plannings_done % 25 == 0:
                 print('Done planning for {num} proxies'.format(num=num_plannings_done))
-                print iters
         return feature_expectations
 
     # # @profile

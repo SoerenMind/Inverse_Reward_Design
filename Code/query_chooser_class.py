@@ -168,9 +168,9 @@ class Query_Chooser_Subclass(Query_Chooser):
         :return: best query
         """
         if full_query:
-            set_of_queries = self.reward_space_proxy
+            set_of_queries = [self.reward_space_proxy]
         elif random_query:
-            set_of_queries = [np.random.choice(self.reward_space_proxy)]
+            set_of_queries = [[choice(self.reward_space_proxy) for _ in range(query_size)]]
         else:
             set_of_queries = self.generate_set_of_queries(query_size)
         best_objective = float("inf")
@@ -189,12 +189,12 @@ class Query_Chooser_Subclass(Query_Chooser):
         for query in set_of_queries:
             idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
             feature_exp_input = self.inference.feature_exp_matrix[idx, :]
-            objective = model.compute(
+            [objective] = model.compute(
                 desired_outputs, sess, None, None, self.inference.prior,
                 feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
 
-            if objective[0][0][0] < best_objective:
-                best_objective = objective[0][0][0]
+            if objective[0][0] < best_objective:
+                best_objective = objective[0][0]
                 best_query = query
 
         # Get posterior etc for best query
@@ -202,10 +202,11 @@ class Query_Chooser_Subclass(Query_Chooser):
         idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
         feature_exp_input = self.inference.feature_exp_matrix[idx, :]
         best_objective, true_posterior, true_entropy = model.compute(
-            desired_outputs, sess, None, None, self.inference.prior, feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
+            desired_outputs, sess, None, None, self.inference.prior, feature_expectations_input=feature_exp_input,
+            true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
         print('Best objective found exhaustively: ' + str(best_objective[0][0]))
 
-        return best_query, best_objective, true_posterior, true_entropy[0]
+        return best_query, best_objective[0][0], true_posterior, true_entropy[0]
 
     # # @profile
     # def find_best_query_greedy(self, query_size, total_reward=False, entropy=False, true_reward=None):
@@ -591,10 +592,10 @@ class Experiment(object):
                         # inference.cache_lhoods()
 
                         # Find best query
-                        print('Finding best query greedily. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+                        print('Finding best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
                         query, perf_measure, true_posterior, true_entropy \
                             = self.query_chooser.find_query(self.query_size_discrete, chooser, true_reward, sess)
-                        print('Found best query greedily. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+                        print('Found best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
                         query = [np.array(proxy) for proxy in query]
                         # TODO: this line still suffers from overflow
                         # _, exp_post_entropy, _, _ = inference.calc_posterior(query, get_entropy=True)  # Do before posterior update

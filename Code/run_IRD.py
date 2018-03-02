@@ -104,21 +104,20 @@ if __name__=='__main__':
 
     exp_params = {
         'qsize': query_size,
-        'num_experiments': num_experiments,
+        'num_exp': num_experiments,
         'mdp': args.mdp_type,
         'dim': feature_dim,
         'num_iter': args.num_iter,
         'gamma': gamma,
         'size_true': size_reward_space_true,
         'size_proxy': size_reward_space_proxy,
+        'true_rw_random' : args.true_rw_random,
         'seed': SEED,
         'beta': beta,
         'num_states': num_states,
         'dist_scale': dist_scale,
         'num_traject': num_traject,
-        'num_queries_max': num_queries_max,
-        'height': height,
-        'width': width,
+        'num_q_max': num_queries_max,
         'num_iters_optim': num_iters_optim,
         'value_iters': args.value_iters
     }
