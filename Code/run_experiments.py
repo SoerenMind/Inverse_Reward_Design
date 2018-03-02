@@ -47,8 +47,7 @@ def run(chooser, qsize, mdp_type):
           '--value_iters', '25',
           '--mdp_type', mdp_type,
           '--feature_dim', dim,
-          '--num_test_envs', '10',
-          '--true_rw_random'])
+          '--num_test_envs', '10'])
 
 if __name__ == '__main__':
     for mdp_type in mdp_types:
