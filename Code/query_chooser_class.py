@@ -515,8 +515,7 @@ class Experiment(object):
                  train_inferences, test_inferences):
         # self.inference = inference  # TODO: Possibly create inference here and maybe input params as a dict
         self.reward_space_proxy = reward_space_proxy
-        self.query_size_discrete = query_size
-        self.query_size_feature = args.query_size_feature
+        self.query_size = query_size
         self.num_queries_max = num_queries_max
         self.choosers = choosers
         self.seed = SEED
@@ -584,7 +583,7 @@ class Experiment(object):
                 if i > -1:
                     # Do iteration for feature-based choosers:
                     if chooser in ['feature_entropy']:
-                        query, exp_post_entropy, true_posterior = self.query_chooser.find_query(self.query_size_feature, chooser, true_reward, sess)
+                        query, exp_post_entropy, true_posterior = self.query_chooser.find_query(self.query_size, chooser, true_reward, sess)
                         inference.update_prior(None, None, true_posterior)
                     else:
                         # Cache feature expectations and likelihoods
@@ -595,7 +594,7 @@ class Experiment(object):
                         # Find best query
                         print('Finding best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
                         query, perf_measure, true_posterior, true_entropy \
-                            = self.query_chooser.find_query(self.query_size_discrete, chooser, true_reward, sess)
+                            = self.query_chooser.find_query(self.query_size, chooser, true_reward, sess)
                         print('Found best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
                         query = [np.array(proxy) for proxy in query]
                         # TODO: this line still suffers from overflow

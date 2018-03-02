@@ -45,16 +45,14 @@ class TestPlanner(unittest.TestCase):
         dim = 4
         grid = GridworldMdp.generate_random(8, 8, 0.1, dim)
         mdp = GridworldMdpWithDistanceFeatures(grid)
-        mdp.rewards = np.random.randn(dim)
+        mdp.rewards = np.random.randint(-9, 9, size=[dim])
         query = [0, 3]
         other_weights = mdp.rewards[1:3]
-        proxy_space = list(product(range(-1, 2), repeat=len(query)))
-        dummy_true_reward_matrix = np.random.rand(3, dim)
         # Use beta_planner = 1000 so that softmax is approximately max
         model = GridworldModel(
-            dim, 0.9, len(query), 1, 10, None, 1, 1000, 'entropy', 0.1, False,
-            8, 8, 10)
-        check_model_equivalent(model, query, other_weights, mdp, 10)
+            dim, 1, len(query), 1, 10, None, 1, 1000, 'entropy', 0.1, False,
+            8, 8, 25)
+        check_model_equivalent(model, query, other_weights, mdp, 25)
 
 
 
@@ -82,7 +80,7 @@ class TestPlanner(unittest.TestCase):
                 self.assertAlmostEqual(expected_q, actual_q, places=5)
 
         dim = 5
-        weights = np.random.randn(dim)
+        weights = np.random.randint(-9, 9, size=[dim])
         mdp = NStateMdpGaussianFeatures(
             num_states=7, rewards=weights, start_state=0,
             preterminal_states=[], feature_dim=dim, num_states_reachable=7)
