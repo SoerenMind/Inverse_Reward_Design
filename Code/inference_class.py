@@ -84,16 +84,18 @@ class InferenceDiscrete(Inference):
         return self.prior[index]
 
     # TODO(rohinmshah): Remove the true_posterior argument, that case should be handled by caching
-    def update_prior(self, query, answer, true_posterior=None):
+    def update_prior(self, query, answer, true_log_posterior=None):
         """Calculates posterior for given query and answer and replaces prior with the outcome. Deletes prior_avg.
         If true_posterior is given, it replaces the prior directly and updates the prior_avg."""
-        if true_posterior is not None:
+        if true_log_posterior is not None:
             self.cache['prior_avg'] = None
-            self.prior = true_posterior
+            self.log_prior = true_log_posterior
+            self.prior = np.exp(true_log_posterior)
         # TODO(rohinmshah): Can the elif case be removed? (soerenmind): It would break if query is None
         elif len(query) == 0: # Do nothing for empty query
             return
         else:
+            raise ValueError('inference.get_full_posterior shouldnt be used')
             self.cache['prior_avg'] = None
             self.prior = self.get_full_posterior(query, answer)
 
@@ -102,6 +104,7 @@ class InferenceDiscrete(Inference):
         self.cache['prior_avg'] = None
         num_rewards = len(self.reward_space_true)
         self.prior = np.ones(num_rewards) / num_rewards
+        self.log_prior = np.log(self.prior)
 
     def get_likelihood(self, true_reward, query, answer):
         key = tuple([(tuple(x) for x in query)]), tuple(answer)
@@ -197,23 +200,11 @@ class InferenceDiscrete(Inference):
         feature_dim = len(self.reward_space_true[0])
         K = len(self.reward_space_true)
 
-        # # Make feature_exp matrix (done by query_chooser.cache_feature_expectations now)
-        # self.feature_exp_matrix_correct = np.zeros([N,feature_dim])
-        # for n, proxy in enumerate(self.reward_space_proxy):
-        #     self.feature_exp_matrix_correct[n,:] = self.get_feature_expectations(proxy)
 
+        # self.avg_reward_matrix = np.matmul(self.feature_exp_matrix, self.true_reward_matrix.T)
+        # self.log_lhood_numerator_matrix = self.beta * self.avg_reward_matrix
+        # self.lhood_numerator_matrix = np.exp(self.log_lhood_numerator_matrix)
 
-        self.avg_reward_matrix = np.matmul(self.feature_exp_matrix, self.true_reward_matrix.T)
-        self.log_lhood_numerator_matrix = self.beta * self.avg_reward_matrix
-        self.lhood_numerator_matrix = np.exp(self.log_lhood_numerator_matrix)
-
-        # # Cache results for true rewards
-        # num_true_rewards = len(self.reward_space_true)
-        # self.feature_exp_matrix_true_rewards = np.zeros([num_true_rewards,feature_dim])
-        # for n, true_reward in enumerate(self.reward_space_true):
-        #     self.feature_exp_matrix_true_rewards[n,:] = self.get_feature_expectations(true_reward)
-        # self.true_reward_avg_reward_matrix = np.matmul(self.feature_exp_matrix_true_rewards, self.true_reward_matrix.T)
-        # self.true_reward_avg_reward_vec = self.true_reward_avg_reward_matrix.diagonal()
 
 
 

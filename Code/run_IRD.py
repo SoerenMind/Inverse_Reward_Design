@@ -39,13 +39,12 @@ if __name__=='__main__':
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
     parser.add_argument('--query_size',type=int,default=3)
     parser.add_argument('--num_experiments',type=int,default=2) # 3-5
-    parser.add_argument('--num_iter',type=int,default=10)    # number of queries asked
-    # TODO: Values are computed as if trajectories are infinite. Problem?
+    parser.add_argument('--num_iter',type=int,default=15)    # number of queries asked
     parser.add_argument('--gamma',type=float,default=1.) # otherwise 0.98. Values <1 might make test regret inaccurate.
     parser.add_argument('--size_true_space',type=int,default=1000)
     parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--seed',type=int,default=1)
-    parser.add_argument('--beta',type=float,default=.1)
+    parser.add_argument('--beta',type=float,default=0.1)
     parser.add_argument('--beta_planner',type=float,default=10.) # 1 for small version of results
     parser.add_argument('--num_states',type=int,default=100)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
@@ -56,12 +55,11 @@ if __name__=='__main__':
     parser.add_argument('--lr',type=float,default=0.1)  # Learning rate
     parser.add_argument('--num_iters_optim',type=int,default=10)
     parser.add_argument('--value_iters',type=int,default=25)    # max_reward / (1-gamma) or height+width
-    # parser.add_argument('--value_iters_discrete',type=int,default=50)
     parser.add_argument('--mdp_type',type=str,default='gridworld')
     parser.add_argument('--feature_dim',type=int,default=10)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--num_test_envs',type=int,default=10)    # 10 if positions fixed, 100 otherwise
-    parser.add_argument('--true_rw_random',type=bool,default=False)    # default is true_reward < reward_space_true
-
+    # parser.add_argument('--true_rw_random',type=bool,default=False)    # default is true_reward < reward_space_true
+    parser.add_argument('--factor_pairs_sampled',type=int,default=3)    # default is true_reward < reward_space_true
 
     args = parser.parse_args()
 
@@ -108,7 +106,7 @@ if __name__=='__main__':
         'gamma': gamma,
         'size_true': size_reward_space_true,
         'size_proxy': size_reward_space_proxy,
-        'true_rw_random' : args.true_rw_random,
+        # 'true_rw_random' : args.true_rw_random,
         'seed': SEED,
         'beta': beta,
         'num_states': num_states,
