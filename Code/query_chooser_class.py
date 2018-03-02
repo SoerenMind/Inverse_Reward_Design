@@ -68,7 +68,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             print('Computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
             sess.run(model.initialize_op)
             [feature_exp_matrix] = model.compute(
-                desired_outputs, sess, mdp, proxy_space, self.inference.prior)
+                desired_outputs, sess, mdp, proxy_space, self.inference.log_prior)
             self.inference.feature_exp_matrix = feature_exp_matrix
             print('Done computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
@@ -86,7 +86,6 @@ class Query_Chooser_Subclass(Query_Chooser):
     #     mdp = self.inference.mdp
     #     desired_outputs = [measure]
     #     best_query = None
-    #     print('building model for exhaustive...')
     #
     #     model = self.get_model(
     #         0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True,no_planning=True)
@@ -177,7 +176,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         mdp = self.inference.mdp
         desired_outputs = [measure]
         best_query = None
-        print('building model for exhaustive...')
         model = self.get_model(
             0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True, no_planning=True)
 
@@ -190,7 +188,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
             feature_exp_input = self.inference.feature_exp_matrix[idx, :]
             [objective] = model.compute(
-                desired_outputs, sess, None, None, self.inference.prior,
+                desired_outputs, sess, None, None, self.inference.log_prior,
                 feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
 
             if objective[0][0] < best_objective:
@@ -198,15 +196,17 @@ class Query_Chooser_Subclass(Query_Chooser):
                 best_query = query
 
         # Get posterior etc for best query
-        desired_outputs = [measure,'true_posterior','true_entropy']
-        idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
+        desired_outputs = [measure,'true_log_posterior','true_entropy', 'post_avg']
+        try: idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
+        except:
+            pass
         feature_exp_input = self.inference.feature_exp_matrix[idx, :]
-        best_objective, true_posterior, true_entropy = model.compute(
-            desired_outputs, sess, None, None, self.inference.prior, feature_expectations_input=feature_exp_input,
+        best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
+            desired_outputs, sess, None, None, self.inference.log_prior, feature_expectations_input=feature_exp_input,
             true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
         print('Best objective found exhaustively: ' + str(best_objective[0][0]))
 
-        return best_query, best_objective[0][0], true_posterior, true_entropy[0]
+        return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
     # # @profile
     # def find_best_query_greedy(self, query_size, total_reward=False, entropy=False, true_reward=None):
@@ -254,14 +254,12 @@ class Query_Chooser_Subclass(Query_Chooser):
         """
         best_query = []
         # Find best query
-
-
         while len(best_query) < query_size:
             best_query, best_objective, model = self.find_next_bigger_discrete_query(best_query, measure, sess)
         print('query found, computing true posterior...')
 
         # Evaluate its posterior (pass model from above if building graph takes time)
-        desired_outputs = [measure,'true_posterior','true_entropy']
+        desired_outputs = [measure,'true_log_posterior','true_entropy', 'post_avg']
         sess.run(model.initialize_op)
         idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
 
@@ -269,13 +267,13 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         feature_exp_input = self.inference.feature_exp_matrix[idx, :]
 
-        best_objective, true_posterior, true_entropy = model.compute(
-            desired_outputs, sess, None, None, self.inference.prior,
+        best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
+            desired_outputs, sess, None, None, self.inference.log_prior,
             feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
         # TODO: Should we use the log posterior here because a prior with zeros would crash the log prior?
         print('Best objective found: ' + str(best_objective))
 
-        return best_query, best_objective, true_posterior, true_entropy[0]
+        return best_query, best_objective, true_log_posterior, true_entropy[0], post_avg
 
 
 
@@ -295,7 +293,37 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # with tf.Session() as sess:
         # sess.run(model.initialize_op)
-        print('computing outputs for each query extension...')
+
+        '''
+        test 3 random first choices with all others first.
+        make the winner the best_query
+        '''
+
+        # At the start, optimize over pairs of queries to test size 2 queries straight away
+        if len(curr_query) == 0:
+            for _ in range(self.args.factor_pairs_sampled * len(self.reward_space_proxy)):
+                query = [list(choice(self.reward_space_proxy)) for _ in range(2)]
+                # for _ in range(num_first_proxies):
+                #     first_proxy = choice(self.reward_space_proxy)
+                #     for proxy in self.reward_space_proxy:
+                #         query = [first_proxy] + [list(proxy)]
+                idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
+                feature_exp_input = self.inference.feature_exp_matrix[idx, :]
+
+                # Compute objective
+                objective = model.compute(
+                    desired_outputs, sess, None, None, self.inference.log_prior,
+                    feature_expectations_input=feature_exp_input,
+                    true_reward_matrix=self.inference.true_reward_matrix)
+
+                if objective[0][0][0] < best_objective:
+                    best_objective = objective
+                    best_query = query
+            print('Objective for size {s}: '.format(s=len(best_query)) + str(best_objective[0][0][0]))
+            return best_query, best_objective[0][0][0], model
+
+
+
         for proxy in self.reward_space_proxy:
             if any(list(proxy) == list(option) for option in curr_query):
                 continue
@@ -306,7 +334,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
             # Compute objective
             objective = model.compute(
-                desired_outputs, sess, None, None, self.inference.prior,
+                desired_outputs, sess, None, None, self.inference.log_prior,
                 feature_expectations_input=feature_exp_input,
                 true_reward_matrix=self.inference.true_reward_matrix)
 
@@ -341,10 +369,10 @@ class Query_Chooser_Subclass(Query_Chooser):
                     weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
 
                 objective_unoptimized, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, query, self.inference.prior,
+                    desired_outputs, sess, mdp, query, self.inference.log_prior,
                     weights, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
                 objective, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, query, self.inference.prior,
+                    desired_outputs, sess, mdp, query, self.inference.log_prior,
                     weights, gradient_steps=self.args.num_iters_optim, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
                 print objective_unoptimized, objective, objective_unoptimized - objective, objective_unoptimized >= objective
                 query_cost = self.cost_of_asking * len(query)
@@ -375,17 +403,17 @@ class Query_Chooser_Subclass(Query_Chooser):
         print('query found')
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         # Add: Get all measures for data recording?
-        desired_outputs = [measure,'true_posterior','true_entropy']
+        desired_outputs = [measure,'true_log_posterior','true_entropy', 'post_avg']
         model = self.get_model(
             len(best_query), self.args.value_iters, discrete=False,
             no_planning=False)
         with tf.Session() as sess:
             sess.run(model.initialize_op)
-            objective, true_posterior, true_entropy = model.compute(
-                desired_outputs, sess, mdp, best_query, self.inference.prior,
+            objective, true_log_posterior, true_entropy, post_avg = model.compute(
+                desired_outputs, sess, mdp, best_query, self.inference.log_prior,
                 best_optimal_weights, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
         #return best_query, objective, true_posterior, true_entropy[0]
-        return best_query, objective, true_posterior
+        return best_query, objective, true_log_posterior, post_avg
 
 
     def get_model(self, query_size, num_iters, discretization_const=2,
@@ -546,7 +574,7 @@ class Experiment(object):
 
     # @profile
     def run_experiment(self, num_iter, exp_num, num_experiments):
-        print "======================Experiment {n}/{N}=======================".format(n=exp_num + 1, N=num_experiments)
+        print "======================================================Experiment {n}/{N}===============================================================".format(n=exp_num + 1, N=num_experiments)
         # Initialize variables
         # self.inference.reset(reset_mdp=True)
 
@@ -556,15 +584,15 @@ class Experiment(object):
         seed(self.seed)
         self.seed += 1
         'Note: true reward no longer in true reward space'
-        if self.query_chooser.args.true_rw_random:
-            true_reward = np.random.randint(-9, 9, size=[self.query_chooser.args.feature_dim])
-        else: true_reward = choice(inference.reward_space_true)
+        # if self.query_chooser.args.true_rw_random:
+        true_reward = np.random.randint(-9, 9, size=[self.query_chooser.args.feature_dim])
+        # else: true_reward = choice(inference.reward_space_true)
         self.results['true_reward', exp_num] = true_reward
 
 
         # Cache feature_exps and lhoods
         # print 'NOT CACHING FEATURES!'
-        if any(chooser in self.choosers for chooser in ['greedy_entropy_discrete_tf', 'greedy_entropy']):
+        if any(chooser in self.choosers for chooser in ['greedy_entropy_discrete_tf','exhaustive_entropy','random','full']):
             print('caching likelihoods. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
             self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
             inference.cache_lhoods() # Only run this if the environment isn't changed each iteration
@@ -584,8 +612,8 @@ class Experiment(object):
                 if i > -1:
                     # Do iteration for feature-based choosers:
                     if chooser in ['feature_entropy']:
-                        query, exp_post_entropy, true_posterior = self.query_chooser.find_query(self.query_size_feature, chooser, true_reward, sess)
-                        inference.update_prior(None, None, true_posterior)
+                        query, exp_post_entropy, true_log_posterior, post_avg = self.query_chooser.find_query(self.query_size_feature, chooser, true_reward, sess)
+                        inference.update_prior(None, None, true_log_posterior)
                     else:
                         # Cache feature expectations and likelihoods
                         # # TODO: Automatically move these outside the loop if the env isn't changing
@@ -594,7 +622,7 @@ class Experiment(object):
 
                         # Find best query
                         print('Finding best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-                        query, perf_measure, true_posterior, true_entropy \
+                        query, perf_measure, true_log_posterior, true_entropy, post_avg \
                             = self.query_chooser.find_query(self.query_size_discrete, chooser, true_reward, sess)
                         print('Found best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
                         query = [np.array(proxy) for proxy in query]
@@ -602,17 +630,19 @@ class Experiment(object):
                         # _, exp_post_entropy, _, _ = inference.calc_posterior(query, get_entropy=True)  # Do before posterior update
 
                         # Update posterior
-                        inference.update_prior(None, None, true_posterior)
+                        inference.update_prior(None, None, true_log_posterior)
                 # Log outcomes before 1st query
                 else:
                     query = None
                     true_entropy = np.log(len(inference.prior))
                     perf_measure = float('inf')
+                    post_avg = inference.get_prior_avg()
+
 
                 # Outcome measures
                 # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
+                # TODO: Use post_avg (from TF) and get_avg_reward for this
                 post_regret = self.query_chooser.get_regret_from_query_and_true_reward([], true_reward) # TODO: Still plans with Python. May use wrong gamma, or trajectory normalization?
-                post_avg = inference.get_prior_avg()
                 test_regret = self.compute_test_regret(post_avg, true_reward)
                 print('Test regret: '+str(test_regret)+' | Post regret: '+str(post_regret))
 

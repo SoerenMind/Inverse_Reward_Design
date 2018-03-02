@@ -86,17 +86,21 @@ class Model(object):
         dim = self.feature_dim
         self.true_reward_matrix = tf.placeholder(
             tf.float32, [true_reward_space_size, dim], name="true_reward_matrix")
+        self.log_true_reward_matrix = tf.log(self.true_reward_matrix, name='log_true_reward_matrix')
         self.avg_reward_matrix = tf.tensordot(
             self.feature_expectations, self.true_reward_matrix, axes=[-1, -1], name='avg_reward_matrix')
         log_likelihoods_new = self.beta * self.avg_reward_matrix
 
 
         # Calculate posterior
-        self.prior = tf.placeholder(tf.float32, name="prior", shape=(true_reward_space_size))
-        log_Z_w = tf.reduce_logsumexp(log_likelihoods_new, axis=0, name='log_Z_q')
+        # self.prior = tf.placeholder(tf.float32, name="prior", shape=(true_reward_space_size))
+        self.log_prior = tf.placeholder(tf.float32, name="log_prior", shape=(true_reward_space_size))
+        log_Z_w = tf.reduce_logsumexp(log_likelihoods_new, axis=0, name='log_Z_w')
         log_P_q_z = log_likelihoods_new - log_Z_w
-        self.log_Z_q, max_a, max_b = logdot(log_P_q_z, tf.log(self.prior))
-        self.log_posterior = log_P_q_z + tf.log(self.prior) - self.log_Z_q
+        # self.log_Z_q, max_a, max_b = logdot(log_P_q_z, tf.log(self.prior))
+        self.log_Z_q = tf.reduce_logsumexp(log_P_q_z + self.log_prior, axis=1, name='log_Z_q', keep_dims=True)
+        # self.log_posterior = log_P_q_z + tf.log(self.prior) - self.log_Z_q
+        self.log_posterior = log_P_q_z + self.log_prior - self.log_Z_q
         self.posterior = tf.exp(self.log_posterior, name="posterior")
 
         self.post_sum_to_1 = tf.reduce_sum(tf.exp(self.log_posterior), axis=1, name='post_sum_to_1')
@@ -137,11 +141,26 @@ class Model(object):
         self.true_ent = tf.reduce_sum(interm_tensor, axis=0, name="true_entropy", keep_dims=True)
         self.name_to_op['true_entropy'] = self.true_ent
 
+        # Get true posterior_avg
+        ## Not in log space
+        self.post_weighted_true_reward_matrix = tf.multiply(self.true_posterior, tf.transpose(self.true_reward_matrix))
+        self.post_avg = tf.reduce_sum(self.post_weighted_true_reward_matrix, axis=1, name='post_avg', keep_dims=False)
+
+        ## In log space (necessary?)
+        # log_true_posterior_times_true_reward = self.true_log_posterior + tf.transpose(self.log_true_reward_matrix) # TODO: log true posteriors are log of negative
+        # self.log_post_avg = tf.reduce_logsumexp(log_true_posterior_times_true_reward, axis=1, keep_dims=False)
+        # self.name_to_op['log_post_avg'] = self.log_post_avg
+        # self.post_avg = tf.exp(self.log_post_avg, name='post_avg')
+
+
         # Fill name to ops dict
+        self.name_to_op['post_avg'] = self.post_avg
         self.name_to_op['avg_reward_matrix'] = self.avg_reward_matrix
         self.name_to_op['true_reward_matrix'] = self.true_reward_matrix
-        self.name_to_op['prior'] = self.prior
+        # self.name_to_op['prior'] = self.prior
+        self.name_to_op['log_prior'] = self.log_prior
         self.name_to_op['posterior'] = self.posterior
+        self.name_to_op['log_posterior'] = self.log_posterior
         self.name_to_op['post_sum_to_1'] = self.post_sum_to_1
 
 
@@ -203,8 +222,8 @@ class Model(object):
             pass
 
 
-    def compute(self, outputs, sess, mdp, query=None, prior=None, weight_inits=None, feature_expectations_input = None,
-                gradient_steps=0, true_reward=None, true_reward_matrix=None):
+    def compute(self, outputs, sess, mdp, query=None, log_prior=None, weight_inits=None, feature_expectations_input = None,
+                gradient_steps=0, true_reward=None, true_reward_matrix=None, test_prior=None):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -227,8 +246,11 @@ class Model(object):
         if feature_expectations_input is not None:
             fd[self.feature_expectations] = feature_expectations_input
 
-        if prior is not None:
-            fd[self.prior] = prior
+        if log_prior is not None:
+            fd[self.log_prior] = log_prior
+        if test_prior is not None:
+            fd[self.prior] = test_prior
+
 
         if query is not None:
             if self.discrete:
@@ -388,17 +410,6 @@ class GridworldModel(Model):
         fd[self.features] = features
         fd[self.start_x] = x
         fd[self.start_y] = y
-
-
-def logdot(a,b):
-    max_a, max_b = tf.reduce_max(a), tf.reduce_max(b)   # TODO: make sure broadcasting is right. Don't let max_a be max over whole matrix.
-    exp_a, exp_b = a - max_a, b - max_b
-    exp_a = tf.exp(exp_a)
-    exp_b = tf.exp(exp_b)
-    # c = tf.tensordot(exp_a, exp_b, axes=1)
-    c = tf.reduce_sum(tf.multiply(exp_a,exp_b), axis=1, keep_dims=True)
-    c = tf.log(c) + max_a + max_b
-    return c, max_a, max_b
 
 
 class NoPlanningModel(Model):
