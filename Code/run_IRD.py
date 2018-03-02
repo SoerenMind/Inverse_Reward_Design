@@ -98,6 +98,7 @@ if __name__=='__main__':
     # choosers = ['greedy_entropy', 'random', 'no_query']
 
     exp_params = {
+        'choosers': ','.join(choosers),
         'qsize': query_size,
         'num_exp': num_experiments,
         'mdp': args.mdp_type,

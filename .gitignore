@@ -1,5 +1,6 @@
 Code/.idea/
 Code/data/
+Code/graph/
 *.swap
 *~
 *.pyc
