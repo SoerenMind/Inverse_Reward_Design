@@ -132,10 +132,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         model = self.get_model(
             0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True, no_planning=True)
 
-
-        # Get true reward sample to optimize with
-        true_reward_samples = self.sample_true_reward_matrix()
-        unif_log_prior = np.log(np.ones(1000) / 1000.)
+        true_reward_matrix, log_prior = self.subsample_true_rewards_if_desired()
 
         print('Computing exhaustive search outputs...')
         for query in set_of_queries:
@@ -143,12 +140,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             feature_exp_input = self.inference.feature_exp_matrix[idx, :]
 
             [objective] = model.compute(
-                desired_outputs, sess, None, None, unif_log_prior,
-                feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=true_reward_samples)
-            # Not using samples:
-            # [objective] = model.compute(
-            #     desired_outputs, sess, None, None, self.inference.log_prior,
-            #     feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
+                desired_outputs, sess, None, None, log_prior,
+                feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=true_reward_matrix)
 
             if objective[0][0] < best_objective_optim:
                 best_objective_optim = objective[0][0]
@@ -158,9 +151,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # Get posterior etc for best query
         desired_outputs = [measure,'true_log_posterior','true_entropy', 'post_avg']
-        try: idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
-        except:
-            pass
+        idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
         feature_exp_input = self.inference.feature_exp_matrix[idx, :]
         best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
             desired_outputs, sess, None, None, self.inference.log_prior, feature_expectations_input=feature_exp_input,
@@ -175,54 +166,15 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
     def sample_true_reward_matrix(self):
-
         # TODO: Do likelihood weighting here to also sample finer regions of the space?
-        # TODO: Add size parameters for space and samples
+        # TODO: Add size parameter for num samples
         # Problem: Samples will be likelihood-weighted in graph. Gotta feed in uniform prior.
         log_probs = self.inference.log_prior
         probs = np.exp(log_probs)
         probs = probs / probs.sum()
-        choices = np.random.choice(self.args.size_true_space, p=probs, size=1000)   # 1000 parameter is set for prior too
+        choices = np.random.choice(self.args.size_true_space, p=probs, size=self.args.num_subsamples)
         return self.inference.true_reward_matrix[choices]
 
-
-    # # @profile
-    # def find_best_query_greedy(self, query_size, total_reward=False, entropy=False, true_reward=None):
-    #     """
-    #     Replaced with TF-based version (find_discrete_query_greedy)!
-    #     Finds query of size query_size that minimizes expected regret by starting with a random proxy and greedily
-    #     adding more proxies to the query.
-    #     Not implemented: Query size could be chosen adaptively based on cost vs gain of bigger queries.
-    #     :param query_size: int
-    #     :return: best_query, corresponding regret and regret plus cost of asking (which grows with query size).
-    #     """
-    #
-    #     cost_of_asking = self.cost_of_asking    # could use this to decide query length
-    #     best_query = []  # Initialize randomly
-    #     while len(best_query) < query_size:
-    #         best_objective = float("inf")
-    #         best_objective_plus_cost = best_objective
-    #         # TODO: Use a function for this
-    #         for proxy in self.reward_space_proxy:    # TODO: vectorize - worth the time?
-    #             if any(list(proxy) == list(option) for option in best_query):
-    #                 continue
-    #             query = best_query+[proxy]
-    #             if entropy:
-    #                 _, objective, _, _ = self.inference.calc_posterior(query, get_entropy=True)
-    #             else:
-    #                 objective = self.get_exp_exp_post_regret(query, total_reward)
-    #             query_cost = self.cost_of_asking * len(query)
-    #             objective_plus_cost = objective + query_cost
-    #             if objective_plus_cost <= best_objective_plus_cost + 1e-15:
-    #                 best_objective_plus_cost = objective_plus_cost
-    #                 best_objective = objective
-    #                 best_query_new = query
-    #         best_query = best_query_new
-    #
-    #     posteriors, post_cond_entropy, evidence, true_posterior = self.inference.calc_posterior(
-    #                                                             query, get_entropy=True, true_reward=true_reward)
-    #
-    #     return best_query, best_objective, true_posterior, None
 
 
     def find_discrete_query_greedy(self, query_size, measure, true_reward, sess):
@@ -269,25 +221,21 @@ class Query_Chooser_Subclass(Query_Chooser):
         model = self.get_model(
             0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True, no_planning=True)
 
-
+        true_reward_matrix, log_prior = self.subsample_true_rewards_if_desired()
 
 
         # At the start, optimize over pairs of queries to test size 2 queries straight away
         if len(curr_query) == 0:
             for _ in range(self.args.factor_pairs_sampled * len(self.reward_space_proxy)):
                 query = [list(choice(self.reward_space_proxy)) for _ in range(2)]
-                # for _ in range(num_first_proxies):
-                #     first_proxy = choice(self.reward_space_proxy)
-                #     for proxy in self.reward_space_proxy:
-                #         query = [first_proxy] + [list(proxy)]
                 idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
                 feature_exp_input = self.inference.feature_exp_matrix[idx, :]
 
                 # Compute objective
                 objective = model.compute(
-                    desired_outputs, sess, None, None, self.inference.log_prior,
+                    desired_outputs, sess, None, None, log_prior,
                     feature_expectations_input=feature_exp_input,
-                    true_reward_matrix=self.inference.true_reward_matrix)
+                    true_reward_matrix=true_reward_matrix)
 
                 if objective[0][0][0] < best_objective:
                     best_objective = objective
@@ -296,7 +244,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             return best_query, best_objective[0][0][0], model
 
 
-
+        # For longer curr_query, just add one proxy
         for proxy in self.reward_space_proxy:
             if any(list(proxy) == list(option) for option in curr_query):
                 continue
@@ -307,9 +255,9 @@ class Query_Chooser_Subclass(Query_Chooser):
 
             # Compute objective
             objective = model.compute(
-                desired_outputs, sess, None, None, self.inference.log_prior,
+                desired_outputs, sess, None, None, log_prior,
                 feature_expectations_input=feature_exp_input,
-                true_reward_matrix=self.inference.true_reward_matrix)
+                true_reward_matrix=true_reward_matrix)
 
             if objective[0][0][0] < best_objective:
                 best_objective = objective
@@ -318,7 +266,6 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
         return best_query, best_objective[0][0][0], model
-
 
 
 
@@ -333,6 +280,9 @@ class Query_Chooser_Subclass(Query_Chooser):
         model = self.get_model(
             len(curr_query) + 1, self.args.value_iters, discrete=False, no_planning=False)
 
+
+        true_reward_matrix, log_prior = self.subsample_true_rewards_if_desired()
+
         with tf.Session() as sess:
             sess.run(model.initialize_op)
             for i, feature in enumerate(features):
@@ -342,11 +292,11 @@ class Query_Chooser_Subclass(Query_Chooser):
                     weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
 
                 objective_unoptimized, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, query, self.inference.log_prior,
-                    weights, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
+                    desired_outputs, sess, mdp, query, log_prior,
+                    weights, true_reward=true_reward, true_reward_matrix=true_reward_matrix)
                 objective, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, query, self.inference.log_prior,
-                    weights, gradient_steps=self.args.num_iters_optim, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
+                    desired_outputs, sess, mdp, query, log_prior,
+                    weights, gradient_steps=self.args.num_iters_optim, true_reward=true_reward, true_reward_matrix=true_reward_matrix)
                 print objective_unoptimized, objective, objective_unoptimized - objective, objective_unoptimized >= objective
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
@@ -387,6 +337,20 @@ class Query_Chooser_Subclass(Query_Chooser):
                 best_optimal_weights, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
         #return best_query, objective, true_posterior, true_entropy[0]
         return best_query, objective, true_log_posterior, post_avg
+
+
+
+    def subsample_true_rewards_if_desired(self):
+        if self.args.subsampling:
+            num_subsamples = self.args.num_subsamples
+            # Get true reward samples to optimize with
+            true_reward_matrix = self.sample_true_reward_matrix()
+            log_prior = np.log(np.ones(num_subsamples) / num_subsamples)
+        else:
+            true_reward_matrix = self.inference.true_reward_matrix
+            log_prior = self.inference.log_prior
+        return true_reward_matrix, log_prior
+
 
 
     def get_model(self, query_size, num_iters, discretization_const=2,
@@ -580,8 +544,8 @@ class Experiment(object):
             sess = tf.Session()
 
             for i in range(-1,num_iter):
-                exp_start_time = time.clock()
-                print "==========Iteration: {i}/{m}. Total time: {t}==========".format(i=i+1,m=num_iter,t=exp_start_time-self.t_0)
+                iter_start_time = time.clock()
+                print "==========Iteration: {i}/{m} ({c}). Total time: {t}==========".format(i=i+1,m=num_iter,c=chooser,t=iter_start_time-self.t_0)
                 if i > -1:
                     # Do iteration for feature-based choosers:
                     if chooser in ['feature_entropy']:
@@ -614,7 +578,7 @@ class Experiment(object):
 
                 # Outcome measures
                 exp_end_time = time.clock()
-                duration = exp_end_time - exp_start_time
+                duration = exp_end_time - iter_start_time
                 # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
                 post_regret = self.query_chooser.get_regret(post_avg, true_reward) # TODO: Still plans with Python. May use wrong gamma, or trajectory normalization?
                 test_regret = self.compute_test_regret(post_avg, true_reward)

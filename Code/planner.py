@@ -198,12 +198,12 @@ class Model(object):
 
         if 'variance' in objective:
             # post_avg, post_var = tf.nn.moments(self.true_reward_matrix, axes=[0], keep_dims=False)
-            posterior_stack = tf.stack([self.posterior[0]] * self.feature_dim, axis=1)
-            posterior_stack = tf.expand_dims(self.posterior[0], axis=1)
+            self.posterior_stack = tf.stack([self.posterior[0]] * self.feature_dim, axis=1)
+            self.posterior_stack = tf.expand_dims(self.posterior[0], axis=1)
 
             # true_rewards_stack = tf.stack([self.true_reward_matrix] * self.K, axis=0)
             post_avg, post_var = tf.nn.weighted_moments(
-                self.true_reward_matrix, [0, 0], posterior_stack, name="moments", keep_dims=False)
+                self.true_reward_matrix, [0, 0], self.posterior_stack, name="moments", keep_dims=False)
 
             data = tf.constant([[0.,2.,4.],[0.,2.,4.]], dtype=tf.float32)
             avg, var = tf.nn.moments(data, axes=[1,0])
