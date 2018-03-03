@@ -111,7 +111,6 @@ if __name__=='__main__':
         'beta': beta,
         'num_states': num_states,
         'dist_scale': dist_scale,
-        'num_traject': num_traject,
         'num_q_max': num_queries_max,
         'num_iters_optim': num_iters_optim,
         'value_iters': args.value_iters

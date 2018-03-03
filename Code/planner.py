@@ -7,7 +7,7 @@ from gridworld import Direction
 class Model(object):
     def __init__(self, feature_dim, gamma, query_size, discretization_const,
                  true_reward_space_size, proxy_reward_space_size, beta,
-                 beta_planner, objective, lr, discrete):
+                 beta_planner, objective, lr, discrete, optimize):
         self.feature_dim = feature_dim
         self.gamma = gamma
         self.query_size = query_size
@@ -16,6 +16,7 @@ class Model(object):
         self.beta_planner = beta_planner
         self.lr = lr
         self.discrete = discrete
+        self.optimize = optimize
         if discrete:
             self.K = proxy_reward_space_size
         else:
@@ -36,10 +37,28 @@ class Model(object):
         self.initialize_op = tf.global_variables_initializer()
 
     def build_weights(self):
-        if self.discrete:
+        if self.discrete and self.optimize:
+            self.build_discrete_weights_for_optimization()
+        elif self.discrete:
             self.build_discrete_weights()
         else:
             self.build_continuous_weights()
+
+    def build_discrete_weights_for_optimization(self):
+        M, N = self.num_known_weights, self.num_unknown_weights
+        dim = self.feature_dim
+        self.known_weights = tf.placeholder(
+            tf.float32, shape=[M, dim], name="known_weights")
+        self.weights_to_train = tf.Variable(
+            tf.zeros([N, dim]), name="weights_to_train")
+        self.weight_inputs = tf.placeholder(
+            tf.float32, shape=[N, dim], name="weight_inputs")
+        self.assign_op = self.weights_to_train.assign(self.weight_inputs)
+        self.weights = tf.concat(
+            [self.known_weights, self.weights_to_train], axis=0, name="weights")
+
+        self.name_to_op['weights'] = self.weights
+        self.name_to_op['weights_to_train'] = self.weights_to_train
 
     def build_discrete_weights(self):
         self.weights = tf.placeholder(
@@ -48,18 +67,26 @@ class Model(object):
     def build_continuous_weights(self):
         query_size, dim, K = self.query_size, self.feature_dim, self.K
         num_fixed = dim - query_size
-        self.query_weights= tf.constant(self.proxy_reward_space, dtype=tf.float32, name="query_weights")
-        self.weights_to_train = tf.Variable(tf.zeros([num_fixed]), name="weights_to_train")
-        self.weight_inputs = tf.placeholder(tf.float32, shape=[num_fixed], name="weight_inputs")
-        self.assign_op = self.weights_to_train.assign(self.weight_inputs)
+        self.query_weights= tf.constant(
+            self.proxy_reward_space, dtype=tf.float32, name="query_weights")
 
-
+        if self.optimize:
+            self.weights_to_train = tf.Variable(
+                tf.zeros([num_fixed]), name="weights_to_train")
+            self.weight_inputs = tf.placeholder(
+                tf.float32, shape=[num_fixed], name="weight_inputs")
+            self.assign_op = self.weights_to_train.assign(self.weight_inputs)
+            self.fixed_weights = self.weights_to_train
+            self.name_to_op['weights_to_train'] = self.weights_to_train
+        else:
+            self.fixed_weights = tf.constant(
+                np.zeros([num_fixed], dtype=np.float32))
 
         # Let's say query is [1, 3] and there are 6 features.
         # query_weights = [10, 11] and weight_inputs = [12, 13, 14, 15].
         # Then we want self.weights to be [12, 10, 13, 11, 14, 15].
         # Concatenate to get [10, 11, 12, 13, 14, 15]
-        repeated_weights = tf.stack([self.weights_to_train] * K, axis=0)
+        repeated_weights = tf.stack([self.fixed_weights] * K, axis=0)
         unordered_weights = tf.concat(
             [self.query_weights, repeated_weights], axis=1)
         # Then permute using gather to get the desired result.
@@ -68,10 +95,8 @@ class Model(object):
         self.permutation = tf.placeholder(tf.int32, shape=[dim])
         self.weights = tf.gather(unordered_weights, self.permutation, axis=-1)
 
-        self.name_to_op = {}    # Remove
         self.name_to_op['weights'] = self.weights
         self.name_to_op['query_weights'] = self.query_weights
-        self.name_to_op['weights_to_train'] = self.weights_to_train
 
 
     def build_planner(self):
@@ -190,7 +215,7 @@ class Model(object):
             self.name_to_op['entropy'] = self.exp_post_ent
 
             # Set up optimizer
-            if 'weights_to_train' in self.name_to_op:
+            if self.optimize:
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
                 self.minimize_op = optimizer.minimize(
                     self.exp_post_ent, var_list=[self.weights_to_train])
@@ -334,7 +359,7 @@ class BanditsModel(Model):
 class GridworldModel(Model):
     def __init__(self, feature_dim, gamma, query_size, discretization_const,
                  true_reward_space_size, proxy_reward_space_size, beta,
-                 beta_planner, objective, lr, discrete, height, width,
+                 beta_planner, objective, lr, discrete, optimize, height, width,
                  num_iters):
         self.height = height
         self.width = width
@@ -343,7 +368,7 @@ class GridworldModel(Model):
         super(GridworldModel, self).__init__(
             feature_dim, gamma, query_size, discretization_const,
             true_reward_space_size, proxy_reward_space_size, beta, beta_planner,
-            objective, lr, discrete)
+            objective, lr, discrete, optimize)
 
     def build_planner(self):
         height, width, dim = self.height, self.width, self.feature_dim

@@ -60,7 +60,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
         model = self.get_model(
             query_size=self.args.feature_dim, num_iters=self.args.value_iters,
-            proxy_size=len(proxy_space), discrete=True, no_planning=False)
+            proxy_size=len(proxy_space), discrete=True, optimize=False, no_planning=False)
 
         desired_outputs = ['feature_exps']
         mdp = self.inference.mdp
@@ -130,7 +130,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_query = None
 
         model = self.get_model(
-            0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True, no_planning=True)
+            0, self.args.value_iters, proxy_size=len(self.reward_space_proxy),
+            discrete=True, optimize=False, no_planning=True)
 
 
         # Get true reward sample to optimize with
@@ -267,7 +268,8 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # Get model for query size
         model = self.get_model(
-            0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True, no_planning=True)
+            0, self.args.value_iters, proxy_size=len(self.reward_space_proxy),
+            discrete=True, optimize=False, no_planning=True)
 
 
 
@@ -331,7 +333,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_objective, best_objective_plus_cost = float("inf"), float("inf")
         best_query, best_optimal_weights = None, None
         model = self.get_model(
-            len(curr_query) + 1, self.args.value_iters, discrete=False, no_planning=False)
+            len(curr_query) + 1, self.args.value_iters, discrete=False,
+            optimize=False, no_planning=False)
 
         with tf.Session() as sess:
             sess.run(model.initialize_op)
@@ -379,7 +382,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         desired_outputs = [measure,'true_log_posterior','true_entropy', 'post_avg']
         model = self.get_model(
             len(best_query), self.args.value_iters, discrete=False,
-            no_planning=False)
+            optimize=False, no_planning=False)
         with tf.Session() as sess:
             sess.run(model.initialize_op)
             objective, true_log_posterior, true_entropy, post_avg = model.compute(
@@ -390,7 +393,8 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
     def get_model(self, query_size, num_iters, discretization_const=2,
-                  proxy_size=None, discrete=True, no_planning=False):
+                  proxy_size=None, discrete=True, optimize=False,
+                  no_planning=False):
         mdp = self.inference.mdp
         height, width = None, None
         if mdp.type == 'gridworld':
@@ -401,8 +405,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         # true_reward_space_size = len(self.inference.true_reward_matrix)
         key = (no_planning, mdp.type, dim, gamma, query_size,
                discretization_const, true_reward_space_size,
-               proxy_size, beta, beta_planner, lr, discrete, height, width,
-               num_iters)
+               proxy_size, beta, beta_planner, lr, discrete, optimize, height,
+               width, num_iters)
         if key in self.model_cache:
             return self.model_cache[key]
 
@@ -411,18 +415,19 @@ class Query_Chooser_Subclass(Query_Chooser):
             model = NoPlanningModel(
                 dim, gamma, query_size, discretization_const,
                 true_reward_space_size, proxy_size, beta, beta_planner,
-                'entropy', lr, discrete)
+                'entropy', lr, discrete, optimize)
         elif mdp.type == 'bandits':
             print 'Calling BanditsModel'
             model = BanditsModel(
                 dim, gamma, query_size, discretization_const,
                 true_reward_space_size, proxy_size, beta, beta_planner,
-                'entropy', lr, discrete)
+                'entropy', lr, discrete, optimize)
         elif mdp.type == 'gridworld':
             model = GridworldModel(
                 dim, gamma, query_size, discretization_const,
                 true_reward_space_size, proxy_size, beta, beta_planner,
-                'entropy', lr, discrete, mdp.height, mdp.width, num_iters)
+                'entropy', lr, discrete, optimize, mdp.height, mdp.width,
+                num_iters)
         else:
             raise ValueError('Unknown model type: ' + str(mdp.type))
 
