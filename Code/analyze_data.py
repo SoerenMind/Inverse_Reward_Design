@@ -101,6 +101,8 @@ def load_data(folder):
     folder = concat('data', folder)
     experiments = {}
     for experiment in os.listdir(folder):
+        if not experiment.startswith('2018'):
+            continue
         key, params_dict = get_param_vals(experiment)
         chooser, data = load_experiment(concat(folder, experiment))
         if 'choosers' in params_dict:
