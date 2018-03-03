@@ -59,7 +59,6 @@ if __name__=='__main__':
     parser.add_argument('--feature_dim',type=int,default=10)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--num_test_envs',type=int,default=10)    # 10 if positions fixed, 100 otherwise
     # parser.add_argument('--true_rw_random',type=bool,default=False)    # default is true_reward < reward_space_true
-    parser.add_argument('--factor_pairs_sampled',type=int,default=3)
     parser.add_argument('--subsampling',type=int,default=1)
     parser.add_argument('--num_subsamples',type=int,default=10000)
 
