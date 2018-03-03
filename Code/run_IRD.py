@@ -59,7 +59,10 @@ if __name__=='__main__':
     parser.add_argument('--feature_dim',type=int,default=10)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--num_test_envs',type=int,default=10)    # 10 if positions fixed, 100 otherwise
     # parser.add_argument('--true_rw_random',type=bool,default=False)    # default is true_reward < reward_space_true
-    parser.add_argument('--factor_pairs_sampled',type=int,default=3)    # default is true_reward < reward_space_true
+    parser.add_argument('--factor_pairs_sampled',type=int,default=3)
+    parser.add_argument('--subsampling',type=int,default=1)
+    parser.add_argument('--num_subsamples',type=int,default=10000)
+
 
     args = parser.parse_args()
 
@@ -97,6 +100,7 @@ if __name__=='__main__':
     # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
     # choosers = ['greedy_entropy', 'random', 'no_query']
 
+    # These will be in the folder name of the log
     exp_params = {
         'qsize': query_size,
         'num_exp': num_experiments,
@@ -119,8 +123,8 @@ if __name__=='__main__':
     # # Set up env and agent for NStateMdp
     if args.mdp_type == 'bandits':
         # Reward spaces
-        reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_true)]
-        reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_proxy)]
+        reward_space_true = np.array(np.random.randint(-9, 9, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
+        reward_space_proxy = np.random.randint(-9, 9, size=[size_reward_space_proxy, args.feature_dim])
 
 
         'Note: Switch back to non-random features?'
