@@ -137,8 +137,9 @@ class Model(object):
         self.name_to_op['probs'] = tf.exp(log_answer_probs)
 
         # Get true posterior entropy
-        interm_tensor = tf.exp(self.true_log_posterior + tf.log(- self.true_log_posterior))
-        self.true_ent = tf.reduce_sum(interm_tensor, axis=0, name="true_entropy", keep_dims=True)
+        interm_tensor = self.true_log_posterior + tf.log(- self.true_log_posterior)
+        self.true_ent = tf.exp(tf.reduce_logsumexp(
+            interm_tensor, axis=0, name="true_entropy", keep_dims=True))
         self.name_to_op['true_entropy'] = self.true_ent
 
         # Get true posterior_avg
@@ -178,11 +179,14 @@ class Model(object):
 
 
             # Calculate entropy as sum exp (log p + log (-log p))
-            interm_tensor = tf.exp(self.log_posterior + tf.log(- self.log_posterior))
-            self.post_ent_new = tf.reduce_sum(interm_tensor, axis=1, name="entropy_per_answer", keep_dims=True)
+            interm_tensor = self.log_posterior + tf.log(- self.log_posterior)
+            self.log_post_ent_new = tf.reduce_logsumexp(
+                interm_tensor, axis=1, name="entropy_per_answer", keep_dims=True)
+            self.post_ent_new = tf.exp(self.log_post_ent_new)
             self.name_to_op['entropy_per_answer'] = self.post_ent_new
-            self.exp_post_ent = tf.reduce_sum(
-                tf.multiply(self.post_ent_new, tf.exp(self.log_Z_q)), axis=0, keep_dims=True, name='entropy')
+            self.log_exp_post_ent = tf.reduce_logsumexp(
+                self.log_post_ent_new + self.log_Z_q, axis=0, keep_dims=True, name='entropy')
+            self.exp_post_ent = tf.exp(self.log_exp_post_ent)
             self.name_to_op['entropy'] = self.exp_post_ent
 
             # Set up optimizer
