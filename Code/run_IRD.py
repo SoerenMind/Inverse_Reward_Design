@@ -135,7 +135,7 @@ if __name__=='__main__':
             #                                       feature_dim=args.feature_dim, num_states_reachable=num_states,
             #                                       SEED=SEED)
             mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
-                                            feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=100)
+                                            feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED+i*50+100)
             env = GridworldEnvironment(mdp)
             agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
             inference = InferenceDiscrete(
@@ -151,7 +151,7 @@ if __name__=='__main__':
             #                                       feature_dim=args.feature_dim, num_states_reachable=num_states,
             #                                       SEED=SEED)
             mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
-                                            feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
+                                            feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED+i*50)
             env = GridworldEnvironment(mdp)
             agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
             inference = InferenceDiscrete(
@@ -176,8 +176,13 @@ if __name__=='__main__':
         # Create reward spaces for gridworld
         # reward_space_true = [np.random.multinomial(18, np.ones(args.feature_dim)/18) for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.multinomial(18, np.ones(args.feature_dim)) for _ in xrange(size_reward_space_proxy)]
-        reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_true)]
-        reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_proxy)]
+        reward_space_true = np.array(np.random.randint(-9, 9, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
+        reward_space_proxy = np.random.randint(-9, 9, size=[size_reward_space_proxy, args.feature_dim])
+
+        # reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_true)]
+        # reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_proxy)]
+
+
         # reward_space_true = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
 
@@ -206,9 +211,6 @@ if __name__=='__main__':
                 num_traject=num_traject, prior=None)
 
             train_inferences.append(inference)
-
-        'Make sure that true_reward is not a sample from reward_space_true'
-        'do this for bandits'
 
 
     else:

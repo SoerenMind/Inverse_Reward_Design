@@ -73,54 +73,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             print('Done computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
 
-    # def find_best_query_exhaustive(self, query_size, measure, true_reward=None):
-    #     """
-    #     Exhaustive search query chooser.
-    #     Calculates the expected posterior regret after asking for each query of size query_size. Returns the query
-    #     that minimizes this quantity plus the cost for asking (which is constant for fixed-size queries).
-    #     :param query_size: number of reward functions in each query considered
-    #     :return: best query
-    #     """
-    #     set_of_queries = self.generate_set_of_queries(query_size)
-    #     best_objective = float("inf")
-    #     mdp = self.inference.mdp
-    #     desired_outputs = [measure]
-    #     best_query = None
-    #
-    #     model = self.get_model(
-    #         0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True,no_planning=True)
-    #
-    #
-    #     # Find query that minimizes objective
-    #     with tf.Session() as sess:
-    #         print('initializing sess...')
-    #         sess.run(model.initialize_op)
-    #         print('Computing exhaustive search outputs...')
-    #         for query in set_of_queries:
-    #             idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
-    #             feature_exp_input = self.inference.feature_exp_matrix[idx, :]
-    #
-    #             # Compute objective
-    #             objective = model.compute(
-    #                 desired_outputs, sess, None, None, self.inference.prior,
-    #     feature_expectations_input=feature_exp_input, true_reward=true_reward,
-    #     true_reward_matrix=self.inference.true_reward_matrix)
-    #
-    #             if objective[0][0][0] < best_objective:
-    #                 best_objective = objective
-    #                 best_query = query
-    #
-    #         # Get posterior etc for best query
-    #         desired_outputs = [measure,'true_posterior','true_entropy']
-    #         idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
-    #         feature_exp_input = self.inference.feature_exp_matrix[idx, :]
-    #
-    #         best_objective, true_posterior, true_entropy = model.compute(
-    #             desired_outputs, sess, None, None, self.inference.prior,
-    #     feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
-    #     print('Best objective found exhaustively: ' + str(best_objective[0][0]))
-    #
-    #     return best_query, best_objective, true_posterior, true_entropy[0]
+
 
 
     def generate_set_of_queries(self, query_size):
@@ -172,28 +125,36 @@ class Query_Chooser_Subclass(Query_Chooser):
             set_of_queries = [[choice(self.reward_space_proxy) for _ in range(query_size)]]
         else:
             set_of_queries = self.generate_set_of_queries(query_size)
-        best_objective = float("inf")
-        mdp = self.inference.mdp
+        best_objective_optim = float("inf")
         desired_outputs = [measure]
         best_query = None
+
         model = self.get_model(
             0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True, no_planning=True)
 
 
-        # Find query that minimizes objective
-        # with tf.Session() as sess:
-        # sess.run(model.initialize_op)
+        # Get true reward sample to optimize with
+        true_reward_samples = self.sample_true_reward_matrix()
+        unif_log_prior = np.log(np.ones(1000) / 1000.)
+
         print('Computing exhaustive search outputs...')
         for query in set_of_queries:
             idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
             feature_exp_input = self.inference.feature_exp_matrix[idx, :]
-            [objective] = model.compute(
-                desired_outputs, sess, None, None, self.inference.log_prior,
-                feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
 
-            if objective[0][0] < best_objective:
-                best_objective = objective[0][0]
+            [objective] = model.compute(
+                desired_outputs, sess, None, None, unif_log_prior,
+                feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=true_reward_samples)
+            # Not using samples:
+            # [objective] = model.compute(
+            #     desired_outputs, sess, None, None, self.inference.log_prior,
+            #     feature_expectations_input=feature_exp_input, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
+
+            if objective[0][0] < best_objective_optim:
+                best_objective_optim = objective[0][0]
                 best_query = query
+
+        print('Best objective found exhaustively on samples: ' + str(best_objective_optim))
 
         # Get posterior etc for best query
         desired_outputs = [measure,'true_log_posterior','true_entropy', 'post_avg']
@@ -204,9 +165,26 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
             desired_outputs, sess, None, None, self.inference.log_prior, feature_expectations_input=feature_exp_input,
             true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
-        print('Best objective found exhaustively: ' + str(best_objective[0][0]))
+
+        # best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
+        #     desired_outputs, sess, None, None, self.inference.log_prior, feature_expectations_input=feature_exp_input,
+        #     true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
+        print('Best objective found exhaustively on full space: ' + str(best_objective[0][0]))
 
         return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
+
+
+    def sample_true_reward_matrix(self):
+
+        # TODO: Do likelihood weighting here to also sample finer regions of the space?
+        # TODO: Add size parameters for space and samples
+        # Problem: Samples will be likelihood-weighted in graph. Gotta feed in uniform prior.
+        log_probs = self.inference.log_prior
+        probs = np.exp(log_probs)
+        probs = probs / probs.sum()
+        choices = np.random.choice(self.args.size_true_space, p=probs, size=1000)   # 1000 parameter is set for prior too
+        return self.inference.true_reward_matrix[choices]
+
 
     # # @profile
     # def find_best_query_greedy(self, query_size, total_reward=False, entropy=False, true_reward=None):
@@ -291,13 +269,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         model = self.get_model(
             0, self.args.value_iters, proxy_size=len(self.reward_space_proxy), discrete=True, no_planning=True)
 
-        # with tf.Session() as sess:
-        # sess.run(model.initialize_op)
 
-        '''
-        test 3 random first choices with all others first.
-        make the winner the best_query
-        '''
+
 
         # At the start, optimize over pairs of queries to test size 2 queries straight away
         if len(curr_query) == 0:
@@ -424,7 +397,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             height, width = mdp.height, mdp.width
         dim, gamma, lr = self.args.feature_dim, self.args.gamma, self.args.lr
         beta, beta_planner = self.args.beta, self.args.beta_planner
-        true_reward_space_size = len(self.inference.true_reward_matrix)
+        true_reward_space_size = None
+        # true_reward_space_size = len(self.inference.true_reward_matrix)
         key = (no_planning, mdp.type, dim, gamma, query_size,
                discretization_const, true_reward_space_size,
                proxy_size, beta, beta_planner, lr, discrete, height, width,
@@ -635,19 +609,19 @@ class Experiment(object):
                     query = None
                     true_entropy = np.log(len(inference.prior))
                     perf_measure = float('inf')
-                    post_avg = inference.get_prior_avg()
+                    post_avg = -0.5 * np.ones(self.query_chooser.args.feature_dim)    # post_avg for uniform prior
 
 
                 # Outcome measures
+                exp_end_time = time.clock()
+                duration = exp_end_time - exp_start_time
                 # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
-                # TODO: Use post_avg (from TF) and get_avg_reward for this
-                post_regret = self.query_chooser.get_regret_from_query_and_true_reward([], true_reward) # TODO: Still plans with Python. May use wrong gamma, or trajectory normalization?
+                post_regret = self.query_chooser.get_regret(post_avg, true_reward) # TODO: Still plans with Python. May use wrong gamma, or trajectory normalization?
                 test_regret = self.compute_test_regret(post_avg, true_reward)
+                norm_to_true = self.get_normalized_reward_diff(post_avg, true_reward)
                 print('Test regret: '+str(test_regret)+' | Post regret: '+str(post_regret))
 
                 # Save results
-                exp_end_time = time.clock()
-                duration = exp_end_time - exp_start_time
                 # self.results[chooser, 'post_exp_regret', i, exp_num],\
                 self.results[chooser, 'true_entropy', i, exp_num], \
                 self.results[chooser,'perf_measure', i, exp_num], \
@@ -656,7 +630,7 @@ class Experiment(object):
                 self.results[chooser, 'norm post_avg-true', i, exp_num], \
                 self.results[chooser, 'query', i, exp_num], \
                 self.results[chooser, 'time', i, exp_num] \
-                    = true_entropy, perf_measure, post_regret, test_regret, np.linalg.norm(post_avg-true_reward,1), query, duration
+                    = true_entropy, perf_measure, post_regret, test_regret, norm_to_true, query, duration
 
 
     def compute_test_regret(self, post_avg, true_reward):
@@ -669,8 +643,16 @@ class Experiment(object):
             regrets[i] = regret
         return regrets.mean()   # Check variance here and adjust number of envs
 
+    def get_normalized_reward_diff(self, post_avg, true_reward):
+        norm_post_avg = (post_avg - post_avg.mean())
+        norm_post_avg = norm_post_avg / np.linalg.norm(norm_post_avg, ord=2)
+        norm_true = (true_reward - true_reward.mean())
+        norm_true = norm_true / np.linalg.norm(norm_true, ord=2)
 
-    # # @profile
+        return np.linalg.norm(norm_post_avg - norm_true)
+
+
+# # @profile
     # def test_post_avg(self, post_avg, true_reward):
     #     # dist_scale = 0.5
     #     # gamma = 0.8

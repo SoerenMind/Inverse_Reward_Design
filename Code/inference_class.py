@@ -64,7 +64,7 @@ class InferenceDiscrete(Inference):
         self.beta = beta
         self.reward_space_proxy = reward_space_proxy
         self.reward_space_true = reward_space_true
-        self.true_reward_matrix = np.array(self.reward_space_true)
+        self.true_reward_matrix = self.reward_space_true
         self.num_traject = num_traject
         self.cache = {
             'prior_avg': None,
@@ -103,8 +103,8 @@ class InferenceDiscrete(Inference):
         '''Resets to uniform prior'''
         self.cache['prior_avg'] = None
         num_rewards = len(self.reward_space_true)
-        self.prior = np.ones(num_rewards) / num_rewards
-        self.log_prior = np.log(self.prior)
+        self.log_prior = np.tile(-np.log(num_rewards), num_rewards)
+        self.prior = np.exp(self.log_prior)
 
     def get_likelihood(self, true_reward, query, answer):
         key = tuple([(tuple(x) for x in query)]), tuple(answer)
@@ -367,10 +367,10 @@ class InferenceDiscrete(Inference):
 
     def make_reward_to_index_dict(self):
         """This dictionary is used to find the cached posterior or prior of a reward function."""
-        self.reward_index = {}
+        # self.reward_index = {}
         self.reward_index_proxy = {}
-        for i, true_reward in enumerate(self.reward_space_true):
-            self.reward_index[tuple(true_reward)] = i
+        # for i, true_reward in enumerate(self.reward_space_true):
+        #     self.reward_index[tuple(true_reward)] = i
         for i, proxy in enumerate(self.reward_space_proxy):
             self.reward_index_proxy[tuple(proxy)] = i
 
