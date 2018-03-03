@@ -31,13 +31,13 @@ def get_param_vals(folder_name):
 
     folder_name is a string such as "2018-03-02 13:17:51.-beta=0.1-dim=10-dist_scale=0.5-gamma=1.0-mdp=gridworld-num_exp=100-num_iter=20-num_iters_optim=10-num_q_max=500-num_states=100-num_traject=1-qsize=10-seed=1-size_proxy=100-size_true=10000-value_iters=25"
     Returns two things:
-    - A tuple of tuples of strings, of the form ((key, value), ...)
+    - A tuple of tuples of strings/numbers, of the form ((key, value), ...)
     - A dictionary mapping strings to strings or numbers, of the form
       {key : value, ...}
     """
     key_vals = re.finditer(r"([^-]+)=([^-]+)", folder_name)
-    result_tuple = tuple(((m.group(1), m.group(2)) for m in key_vals))
-    result_dict = { k:maybe_num(v) for k, v in result_tuple }
+    result_tuple = tuple(((m.group(1), maybe_num(m.group(2))) for m in key_vals))
+    result_dict = { k:v for k, v in result_tuple }
     return result_tuple, result_dict
 
 def load_experiment(folder):
@@ -69,7 +69,6 @@ def simplify_keys(experiments):
           their values that did not change over the experiments.
     """
     keys = list(experiments.keys())
-    # A key is a tuple of (k, v) pairs
     first_key = keys[0]
 
     indices_with_no_variation = []
@@ -86,6 +85,29 @@ def simplify_keys(experiments):
     new_experiments = {simple_key(k):v for k, v in experiments.items()}
     controls = dict([first_key[index] for index in indices_with_no_variation])
     return new_experiments, controls
+
+def fix_special_cases(experiments):
+    """Does postprocessing to handle any special cases.
+
+    For example, the full chooser is only run with query size 2 since it doesn't
+    depend on query size, but we want it to be plotted with all the other
+    queries as well, so we duplicate the experiment with other query sizes.
+
+    - experiments: Dictionary from keys of the form ((var, val), ...) to
+          Experiment objects
+    """
+    query_sizes = set([exp.params['qsize'] for exp in experiments.values()])
+    full_exps = [(key, exp) for key, exp in experiments.items() if exp.params['choosers'] == 'full']
+    def replace(key_tuple, var, val):
+        return tuple(((k, (val if k == var else v)) for k, v in key_tuple))
+
+    for key, exp in full_exps:
+        for qsize in query_sizes:
+            new_key = replace(key, 'qsize', qsize)
+            if new_key not in experiments:
+                new_params = dict(exp.params.items())
+                new_params['qsize'] = qsize
+                experiments[new_key] = Experiment(new_params, exp.data)
 
 def load_data(folder):
     """Loads all experiment data from data/<folder>.
@@ -112,7 +134,7 @@ def load_data(folder):
             params_dict['choosers'] = chooser
         experiments[key] = Experiment(params_dict, data)
     experiments, control_var_vals = simplify_keys(experiments)
-    experiments = fix_special_cases(experiments)
+    fix_special_cases(experiments)
     changing_vars = [var for var, val in experiments.keys()[0]]
     return experiments, changing_vars, control_var_vals
 
