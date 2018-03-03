@@ -13,23 +13,40 @@ class Experiment(object):
         return 'Experiment: ' + str(self.params)
 
 def maybe_num(x):
+    """Converts string x to an int if possible, otherwise a float if possible,
+    otherwise returns it unchanged."""
     try: return int(x)
     except ValueError:
         try: return float(x)
         except ValueError: return x
 
 def concat(folder, element):
+    """folder and element are strings"""
     if folder[-1] == '/':
         return folder + element
     return folder + '/' + element
 
 def get_param_vals(folder_name):
+    """Gets the parameter values of the experiment from its folder name.
+
+    folder_name is a string such as "2018-03-02 13:17:51.-beta=0.1-dim=10-dist_scale=0.5-gamma=1.0-mdp=gridworld-num_exp=100-num_iter=20-num_iters_optim=10-num_q_max=500-num_states=100-num_traject=1-qsize=10-seed=1-size_proxy=100-size_true=10000-value_iters=25"
+    Returns two things:
+    - A tuple of tuples of strings, of the form ((key, value), ...)
+    - A dictionary mapping strings to strings or numbers, of the form
+      {key : value, ...}
+    """
     key_vals = re.finditer(r"([^-]+)=([^-]+)", folder_name)
     result_tuple = tuple(((m.group(1), m.group(2)) for m in key_vals))
     result_dict = { k:maybe_num(v) for k, v in result_tuple }
     return result_tuple, result_dict
 
 def load_experiment(folder):
+    """Loads the data from <folder>/all choosers-means-.csv.
+
+    Returns two things:
+    - chooser: A string, which chooser was used for this experiment
+    - data: Dictionary mapping keys (such as test_entropy) to lists of numbers.
+    """
     with open(concat(folder, 'all choosers-means-.csv'), 'r') as csvfile:
         chooser = csvfile.readline().strip().strip(',')
         reader = csv.DictReader(csvfile)
@@ -41,6 +58,16 @@ def load_experiment(folder):
     return chooser, data
 
 def simplify_keys(experiments):
+    """Identifies experiment parameters that are constant across the dataset and
+    removes them from the keys, leaving shorter, simpler keys.
+
+    experiments: Dictionary from keys of the form ((var, val), ...) to
+        Experiment objects
+    Returns two things:
+      - new_experiments: Same type as experiments, but with smaller keys
+      - controls: Dictionary of the form {var : val} containing the parameters and
+          their values that did not change over the experiments.
+    """
     keys = list(experiments.keys())
     # A key is a tuple of (k, v) pairs
     first_key = keys[0]
@@ -61,6 +88,16 @@ def simplify_keys(experiments):
     return new_experiments, controls
 
 def load_data(folder):
+    """Loads all experiment data from data/<folder>.
+
+    Returns three things:
+    - experiments: Dictionary from keys of the form ((var, val), ...) to
+          Experiment objects
+    - changing_vars: List of strings, the variables that have more than one
+          distinct value across Experiments
+    - control_var_vals: Dictionary of the form {var : val} containing the
+          parameters and their values that did not change over the experiments.
+    """
     folder = concat('data', folder)
     experiments = {}
     for experiment in os.listdir(folder):
@@ -73,15 +110,31 @@ def load_data(folder):
             params_dict['choosers'] = chooser
         experiments[key] = Experiment(params_dict, data)
     experiments, control_var_vals = simplify_keys(experiments)
+    experiments = fix_special_cases(experiments)
     changing_vars = [var for var, val in experiments.keys()[0]]
     return experiments, changing_vars, control_var_vals
 
 def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
               controls, folder):
-    # TODO(rohinmshah): May want to generalize to two dependent vars
-    assert len(dependent_vars) == 1
-    y_var = dependent_vars[0]
+    """Graphs data and saves them.
 
+    Each graph generated plots the dependent_vars against x_var for all
+    valuations of independent_vars, with the control variables set to the values
+    specified in controls. For every valuation of variables not in x_var,
+    dependent_vars, independent_vars, or controls, a separate graph is
+    generated and saved in folder.
+
+    - experiments: Dictionary from keys of the form ((var, val), ...) to
+          Experiment objects
+    - all_vars: List of strings, all the variables that have some variation
+    - x_var: Variable that provides the data for the x-axis
+    - dependent_vars: List of strings, variables to plot on the y-axis
+    - independent_vars: List of strings, experimental conditions to plot on the
+          same graph
+    - controls: Tuple of the form ((var, val), ...) where var is a string and
+          val is a string or number. The values of control variables.
+    - folder: Graphs are saved to graph/<folder>/
+    """
     control_vars = [var for var, val in controls]
     vars_so_far = [x_var] + dependent_vars + independent_vars + control_vars
     remaining_vars = list(set(all_vars) - set(vars_so_far))
@@ -100,27 +153,41 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
     for key, exps in graphs_data.items():
         graph(exps, x_var, dependent_vars, independent_vars, controls, key, folder)
 
-def graph(experiments, x_var, dependent_vars, independent_vars, controls, other_vals, folder):
-    assert len(dependent_vars) == 1
-    y_var = dependent_vars[0]
+def graph(experiments, x_var, dependent_vars, independent_vars, controls,
+          other_vals, folder):
+    """Creates and saves a single graph.
 
-    plt.figure()
-    for experiment in experiments:
-        params, data = experiment.params, experiment.data
-        label = ', '.join([str(params[k]) for k in independent_vars])
-        plt.plot(data[x_var], data[y_var], label=label)
-    plt.xlabel(x_var)
-    plt.ylabel(y_var)
-    
+    Arguments are almost the same as for graph_all.
+    - other_vals: String of the form "{var}={val},..." specifying values of
+          variables not in x_var, dependent_vars, independent_vars, or
+          controls.
+    """
+    assert len(dependent_vars) in [1, 2]
+
+    def make_graph(ax, y_var):
+        for experiment in experiments:
+            params, data = experiment.params, experiment.data
+            label = ', '.join([str(params[k]) for k in independent_vars])
+            ax.plot(data[x_var], data[y_var], label=label)
+        ax.set_xlabel(x_var)
+        ax.set_ylabel(y_var)
+
+    fig, ax1 = plt.subplots()
+    make_graph(ax1, dependent_vars[0])
+    if len(dependent_vars) == 2:
+        ax2 = ax1.twinx()
+        make_graph(ax2, dependent_vars[1])
+
     subtitle = ','.join(['{0}={1}'.format(k, v) for k, v in controls])
     subtitle = '{0},{1}'.format(subtitle, other_vals).strip(',')
-    title = '{0} vs {1} for {2}'.format(y_var, x_var, ', '.join(independent_vars))
+    title = 'Data for {0}'.format(', '.join(independent_vars))
     plt.title(title + '\n' + subtitle)
     plt.legend() #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    fig.tight_layout()
 
     folder = concat('graph', folder)
-    filename = '{0}-with-{1}.png'.format(title, subtitle)
-    filename = filename.replace(', ', ',').replace(' ', '-')
+    filename = '{0}-vs-{1}-for-{2}-with-{3}.png'.format(
+        ','.join(dependent_vars), x_var, ','.join(independent_vars), subtitle)
     if not os.path.exists(folder):
         os.mkdir(folder)
     plt.savefig(concat(folder, filename))
