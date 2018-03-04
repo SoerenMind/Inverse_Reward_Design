@@ -50,8 +50,8 @@ class TestPlanner(unittest.TestCase):
         other_weights = mdp.rewards[1:3]
         # Use beta_planner = 1000 so that softmax is approximately max
         model = GridworldModel(
-            dim, 1, len(query), 1, 10, None, 1, 1000, 'entropy', 0.1, False,
-            True, 8, 8, 25)
+            dim, 0.9, len(query), 2, 1, None, 1, 1000, [], 0.1, False, True,
+            8, 8, 25)
         check_model_equivalent(model, query, other_weights, mdp, 25)
 
 
@@ -89,7 +89,7 @@ class TestPlanner(unittest.TestCase):
         # other_weights = np.array([weights[1], weights[4]])
         other_weights = np.zeros(0)
         model = BanditsModel(
-            dim, 0.9, len(query), 1, 10, None, 1, 1000, 'entropy', 0.1, False, True)
+            dim, 0.9, len(query), 2, 1, None, 1, 1000, [], 0.1, False, True)
         check_model_equivalent(model, query, other_weights, mdp, 20)
 
 

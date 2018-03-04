@@ -58,9 +58,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         inference.feature_expectations_matrix."""
         proxy_space = [list(reward) for reward in reward_space]
         print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-        model = self.get_model(
-            query_size=self.args.feature_dim, num_iters=self.args.value_iters,
-            proxy_size=len(proxy_space), discrete=True, optimize=False, no_planning=False)
+        model = self.get_model(len(proxy_space))
 
         desired_outputs = ['feature_exps']
         mdp = self.inference.mdp
@@ -88,19 +86,25 @@ class Query_Chooser_Subclass(Query_Chooser):
         # if chooser == 'maxmin':
         #     return self.find_query_feature_diff(query_size)
         if chooser == 'exhaustive_entropy':
-            return self.find_best_query_discrete(query_size, 'entropy', sess, true_reward, query_growth_rate=query_size)
+            return self.find_discrete_query(query_size, 'entropy', sess, true_reward, growth_rate=query_size)
         # elif chooser == 'greedy_regret':
         #     return self.find_best_query_greedy(query_size, true_reward=true_reward)
         elif chooser == 'random':
-            return self.find_best_query_discrete(query_size, 'entropy', sess, true_reward, random_query=True)
+            return self.find_discrete_query(query_size, 'entropy', sess, true_reward, random_query=True)
         elif chooser == 'full':
-            return self.find_best_query_discrete(query_size, 'entropy', sess, true_reward, full_query=True)
+            return self.find_discrete_query(query_size, 'entropy', sess, true_reward, full_query=True)
         # elif chooser == 'no_query':
         #     return [], self.get_exp_regret_from_query([]), None
         # elif chooser == 'greedy_exp_reward':
         #     return self.find_best_query_greedy(query_size, total_reward=True, true_reward=true_reward)
         elif chooser == 'greedy_entropy_discrete_tf':
-            return self.find_best_query_discrete(query_size, 'entropy', sess, true_reward, query_growth_rate=1)
+            return self.find_discrete_query(query_size, 'entropy', sess, true_reward, growth_rate=1)
+        elif chooser == 'incremental_optimize':
+            return self.find_discrete_query_with_optimization(
+                query_size, 'entropy', sess, true_reward, growth_rate=1)
+        elif chooser == 'joint_optimize':
+            return self.find_discrete_query_with_optimization(
+                query_size, 'entropy', sess, true_reward, growth_rate=query_size)
         # elif chooser == 'greedy_entropy':
             # return self.find_best_query_greedy(query_size, entropy=True, true_reward=true_reward)
         elif chooser == 'feature_entropy':
@@ -110,47 +114,56 @@ class Query_Chooser_Subclass(Query_Chooser):
         else:
             raise NotImplementedError('Calling unimplemented query chooser')
 
-    def find_best_query_discrete(
-            self, query_size, measure, sess, true_reward=None,
-            query_growth_rate=None, full_query=False, random_query=False):
-        """Computes a query by greedily growing the query by query_growth_rate
+    def build_discrete_query(self, query_size, measure, sess, growth_rate, extend_fn):
+        """Builds a discrete query by starting from the empty query and calling
+        extend_fn to add growth_rate rewards to it until it reaches query_size
+        rewards.
+
+        Requires query_size >= 2.
+        Assuming extend_fn adds exactly as many rewards to the query as asked,
+        it is guaranteed that the returned query is of size query_size.
+        """
+        best_query = []
+        while len(best_query) < query_size:
+            size_increase = min(growth_rate, query_size - len(best_query))
+            # Discrete queries of size 1 make no sense, so increase to size 2
+            if len(best_query) == 0 and size_increase == 1:
+                size_increase = 2
+            best_query, _ = extend_fn(best_query, size_increase, measure, sess)
+        return best_query
+
+    def find_discrete_query(
+            self, query_size, measure, sess, true_reward, growth_rate=None,
+            full_query=False, random_query=False):
+        """Computes a query by greedily growing the query by growth_rate
         features until reaching query_size features.
         """
-        model = self.get_model(
-            0, self.args.value_iters, proxy_size=1,
-            discrete=True, optimize=False, no_planning=True)
-
         if full_query:
             best_query = self.reward_space_proxy
         elif random_query:
             best_query = [choice(self.reward_space_proxy) for _ in range(query_size)]
         else:
-            best_query = []
-            while len(best_query) < query_size:
-                size_increase = min(query_growth_rate, query_size - len(best_query))
-                # Discrete queries of size 1 make no sense, so increase to size 2
-                if len(best_query) == 0 and size_increase == 1:
-                    size_increase = 2
-                best_query, best_objective = self.extend_discrete_query(
-                    best_query, size_increase, measure, model, sess)
+            best_query = self.build_discrete_query(
+                query_size, measure, sess, growth_rate, self.extend_with_discretization)
 
         desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
+        true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
         idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
         feature_exp_input = self.inference.feature_exp_matrix[idx, :]
+        model = self.get_model(query_size, no_planning=True)
         best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
-            desired_outputs, sess, None, None, self.inference.log_prior,
+            desired_outputs, sess, None, None, log_prior,
             feature_expectations_input=feature_exp_input,
-            true_reward=true_reward,
-            true_reward_matrix=self.inference.true_reward_matrix)
+            true_reward=true_reward, true_reward_matrix=true_reward_matrix)
 
         print('Best objective found with a discrete query: ' + str(best_objective[0][0]))
         return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
-    def extend_discrete_query(self, curr_query, num_to_add, measure, model, sess):
+    def extend_with_discretization(self, curr_query, num_to_add, measure, sess):
         best_objective, best_query = float("inf"), None
         query_extensions = self.generate_set_of_queries(num_to_add)
-        true_reward_matrix, log_prior = self.subsample_true_rewards_if_desired()
-
+        true_reward_matrix, log_prior = self.get_true_reward_space()
+        model = self.get_model(len(curr_query) + num_to_add, no_planning=True)
         for query in query_extensions:
             query = curr_query + query
             idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
@@ -167,6 +180,39 @@ class Query_Chooser_Subclass(Query_Chooser):
                 best_query = query
         print('Objective for size {s}: '.format(s=len(best_query)) + str(best_objective[0][0][0]))
         return best_query, best_objective[0][0][0]
+
+    def find_discrete_query_with_optimization(
+            self, query_size, measure, sess, true_reward, growth_rate=None):
+        best_query = self.build_discrete_query(
+            query_size, measure, sess, growth_rate, self.extend_with_optimization)
+
+        desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
+        true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
+        mdp = self.inference.mdp
+        model = self.get_model(query_size)
+        best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
+            desired_outputs, sess, mdp, best_query, log_prior,
+            true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+
+        print('Best objective found with optimized discrete query: ' + str(best_objective[0][0]))
+        return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
+
+    def extend_with_optimization(self, curr_query, num_to_add, measure, sess):
+        true_reward_matrix, log_prior = self.get_true_reward_space()
+        desired_outputs = [measure, 'weights_to_train']
+        mdp = self.inference.mdp
+        dim, steps = self.args.feature_dim, self.args.num_iters_optim
+        model = self.get_model(
+            len(curr_query) + num_to_add, num_unknown=num_to_add, optimize=True)
+        model.initialize(sess)
+        objective, optimal_new_rewards = model.compute(
+            desired_outputs, sess, mdp, curr_query, log_prior,
+            weight_inits=np.random.randn(num_to_add, dim), gradient_steps=steps,
+            gradient_logging_outputs=[measure],
+            true_reward_matrix=true_reward_matrix)
+        query = curr_query + list(optimal_new_rewards)
+        print('Objective for size {s}: '.format(s=len(query)) + str(objective[0][0]))
+        return query, objective[0][0]
 
     def sample_true_reward_matrix(self):
         # TODO: Do likelihood weighting here to also sample finer regions of the space?
@@ -187,11 +233,9 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_objective, best_objective_plus_cost = float("inf"), float("inf")
         best_query, best_optimal_weights = None, None
         model = self.get_model(
-            len(curr_query) + 1, self.args.value_iters, discrete=False,
-            optimize=False, no_planning=False)
+            len(curr_query) + 1, discrete=False, optimize=True)
 
-
-        true_reward_matrix, log_prior = self.subsample_true_rewards_if_desired()
+        true_reward_matrix, log_prior = self.get_true_reward_space()
 
         with tf.Session() as sess:
             sess.run(model.initialize_op)
@@ -201,13 +245,11 @@ class Query_Chooser_Subclass(Query_Chooser):
                 if curr_weights is not None:
                     weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
 
-                objective_unoptimized, optimal_weights = model.compute(
-                    desired_outputs, sess, mdp, query, log_prior,
-                    weights, true_reward=true_reward, true_reward_matrix=true_reward_matrix)
                 objective, optimal_weights = model.compute(
                     desired_outputs, sess, mdp, query, log_prior,
-                    weights, gradient_steps=self.args.num_iters_optim, true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-                print objective_unoptimized, objective, objective_unoptimized - objective, objective_unoptimized >= objective
+                    weights, gradient_steps=self.args.num_iters_optim,
+                    gradient_logging_outputs=[measure], true_reward=true_reward,
+                    true_reward_matrix=true_reward_matrix)
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
                 print('Model outputs calculated')
@@ -236,10 +278,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         print('query found')
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         # Add: Get all measures for data recording?
-        desired_outputs = [measure,'true_log_posterior','true_entropy', 'post_avg']
-        model = self.get_model(
-            len(best_query), self.args.value_iters, discrete=False,
-            optimize=False, no_planning=False)
+        desired_outputs = [measure, 'true_log_posterior','true_entropy', 'post_avg']
+        model = self.get_model(query_size, discrete=False)
         with tf.Session() as sess:
             sess.run(model.initialize_op)
             objective, true_log_posterior, true_entropy, post_avg = model.compute(
@@ -250,8 +290,8 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
 
-    def subsample_true_rewards_if_desired(self):
-        if self.args.subsampling:
+    def get_true_reward_space(self, no_subsampling=False):
+        if self.args.subsampling and not no_subsampling:
             num_subsamples = self.args.num_subsamples
             # Get true reward samples to optimize with
             true_reward_matrix = self.sample_true_reward_matrix()
@@ -263,21 +303,21 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
 
-    def get_model(self, query_size, num_iters, discretization_const=2,
-                  proxy_size=None, discrete=True, optimize=False,
-                  no_planning=False):
+    def get_model(self, query_size, discretization_const=2, num_unknown=None,
+                  discrete=True, optimize=False, no_planning=False):
         mdp = self.inference.mdp
         height, width = None, None
+        # TODO: Replace mdp.type with self.args.mdp_type
         if mdp.type == 'gridworld':
             height, width = mdp.height, mdp.width
         dim, gamma, lr = self.args.feature_dim, self.args.gamma, self.args.lr
         beta, beta_planner = self.args.beta, self.args.beta_planner
+        num_iters = self.args.value_iters
         true_reward_space_size = None
         # true_reward_space_size = len(self.inference.true_reward_matrix)
         key = (no_planning, mdp.type, dim, gamma, query_size,
-               discretization_const, true_reward_space_size,
-               proxy_size, beta, beta_planner, lr, discrete, optimize, height,
-               width, num_iters)
+               discretization_const, true_reward_space_size, num_unknown, beta,
+               beta_planner, lr, discrete, optimize, height, width, num_iters)
         if key in self.model_cache:
             return self.model_cache[key]
 
@@ -285,18 +325,18 @@ class Query_Chooser_Subclass(Query_Chooser):
         if no_planning:
             model = NoPlanningModel(
                 dim, gamma, query_size, discretization_const,
-                true_reward_space_size, proxy_size, beta, beta_planner,
+                true_reward_space_size, num_unknown, beta, beta_planner,
                 'entropy', lr, discrete, optimize)
         elif mdp.type == 'bandits':
             print 'Calling BanditsModel'
             model = BanditsModel(
                 dim, gamma, query_size, discretization_const,
-                true_reward_space_size, proxy_size, beta, beta_planner,
+                true_reward_space_size, num_unknown, beta, beta_planner,
                 'entropy', lr, discrete, optimize)
         elif mdp.type == 'gridworld':
             model = GridworldModel(
                 dim, gamma, query_size, discretization_const,
-                true_reward_space_size, proxy_size, beta, beta_planner,
+                true_reward_space_size, num_unknown, beta, beta_planner,
                 'entropy', lr, discrete, optimize, mdp.height, mdp.width,
                 num_iters)
         else:

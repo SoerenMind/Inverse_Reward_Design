@@ -6,8 +6,9 @@ from gridworld import Direction
 
 class Model(object):
     def __init__(self, feature_dim, gamma, query_size, discretization_const,
-                 true_reward_space_size, proxy_reward_space_size, beta,
-                 beta_planner, objective, lr, discrete, optimize):
+                 true_reward_space_size, num_unknown, beta, beta_planner,
+                 objective, lr, discrete, optimize):
+        self.initialized = False
         self.feature_dim = feature_dim
         self.gamma = gamma
         self.query_size = query_size
@@ -18,7 +19,9 @@ class Model(object):
         self.discrete = discrete
         self.optimize = optimize
         if discrete:
-            self.K = proxy_reward_space_size
+            self.K = query_size
+            if optimize:
+                self.num_unknown = num_unknown
         else:
             assert query_size <= 5
             f_range = range(-discretization_const, discretization_const + 1)
@@ -26,6 +29,11 @@ class Model(object):
             self.proxy_reward_space = list(product(f_range, repeat=query_size))
             self.K = len(self.proxy_reward_space)
         self.build_tf_graph(objective)
+
+    def initialize(self, sess):
+        if not self.initialized:
+            self.initialized = True
+            sess.run(self.initialize_op)
 
     def build_tf_graph(self, objective):
         self.name_to_op = {}
@@ -45,17 +53,21 @@ class Model(object):
             self.build_continuous_weights()
 
     def build_discrete_weights_for_optimization(self):
-        M, N = self.num_known_weights, self.num_unknown_weights
+        K, N = self.K, self.num_unknown
         dim = self.feature_dim
-        self.known_weights = tf.placeholder(
-            tf.float32, shape=[M, dim], name="known_weights")
         self.weights_to_train = tf.Variable(
             tf.zeros([N, dim]), name="weights_to_train")
         self.weight_inputs = tf.placeholder(
             tf.float32, shape=[N, dim], name="weight_inputs")
         self.assign_op = self.weights_to_train.assign(self.weight_inputs)
-        self.weights = tf.concat(
-            [self.known_weights, self.weights_to_train], axis=0, name="weights")
+
+        if N < K:
+            self.known_weights = tf.placeholder(
+                tf.float32, shape=[K - N, dim], name="known_weights")
+            self.weights = tf.concat(
+                [self.known_weights, self.weights_to_train], axis=0, name="weights")
+        else:
+            self.weights = self.weights_to_train
 
         self.name_to_op['weights'] = self.weights
         self.name_to_op['weights_to_train'] = self.weights_to_train
@@ -217,9 +229,9 @@ class Model(object):
             # Set up optimizer
             if self.optimize:
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
-                self.minimize_op = optimizer.minimize(
-                    self.exp_post_ent, var_list=[self.weights_to_train])
-                self.name_to_op['minimize'] = self.minimize_op
+                self.grads_and_vars = optimizer.compute_gradients(self.exp_post_ent)
+                self.train_op = optimizer.apply_gradients(self.grads_and_vars)
+                self.name_to_op['minimize'] = self.train_op
 
         if 'variance' in objective:
             # post_avg, post_var = tf.nn.moments(self.true_reward_matrix, axes=[0], keep_dims=False)
@@ -251,8 +263,8 @@ class Model(object):
             pass
 
 
-    def compute(self, outputs, sess, mdp, query=None, log_prior=None, weight_inits=None, feature_expectations_input = None,
-                gradient_steps=0, true_reward=None, true_reward_matrix=None, test_prior=None):
+    def compute(self, outputs, sess, mdp, query=None, log_prior=None, weight_inits=None, feature_expectations_input=None,
+                gradient_steps=0, gradient_logging_outputs=[], true_reward=None, true_reward_matrix=None):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -277,12 +289,11 @@ class Model(object):
 
         if log_prior is not None:
             fd[self.log_prior] = log_prior
-        if test_prior is not None:
-            fd[self.prior] = test_prior
 
-
-        if query is not None:
-            if self.discrete:
+        if query:
+            if self.discrete and self.optimize:
+                fd[self.known_weights] = query
+            elif self.discrete:
                 fd[self.weights] = query
             else:
                 fd[self.permutation] = self.get_permutation_from_query(query)
@@ -292,15 +303,17 @@ class Model(object):
         if true_reward_matrix is not None:
             fd[self.true_reward_matrix] = true_reward_matrix
 
-        if gradient_steps > 0:
-            for step in range(gradient_steps):
-                sess.run(self.minimize_op, feed_dict=fd)
-
         def get_op(name):
             if name not in self.name_to_op:
                 raise ValueError("Unknown op name: " + str(name))
             return self.name_to_op[name]
 
+        if gradient_steps > 0:
+            ops = [get_op(name) for name in gradient_logging_outputs]
+            for step in range(gradient_steps):
+                results = sess.run(ops + [self.train_op], feed_dict=fd)
+                if ops and step % 5 == 0:
+                    print 'Gradient step {0}: {1}'.format(step, results[:-1])
         return sess.run([get_op(name) for name in outputs], feed_dict=fd)
 
 
@@ -358,16 +371,15 @@ class BanditsModel(Model):
 
 class GridworldModel(Model):
     def __init__(self, feature_dim, gamma, query_size, discretization_const,
-                 true_reward_space_size, proxy_reward_space_size, beta,
-                 beta_planner, objective, lr, discrete, optimize, height, width,
-                 num_iters):
+                 true_reward_space_size, num_unknown, beta, beta_planner,
+                 objective, lr, discrete, optimize, height, width, num_iters):
         self.height = height
         self.width = width
         self.num_iters = num_iters
         self.num_actions = 4
         super(GridworldModel, self).__init__(
             feature_dim, gamma, query_size, discretization_const,
-            true_reward_space_size, proxy_reward_space_size, beta, beta_planner,
+            true_reward_space_size, num_unknown, beta, beta_planner,
             objective, lr, discrete, optimize)
 
     def build_planner(self):
@@ -448,7 +460,7 @@ class NoPlanningModel(Model):
 
     def build_planner(self):
         self.feature_expectations = tf.placeholder(
-            tf.float32, shape=[None, self.feature_dim], name='feature_exps')
+            tf.float32, shape=[self.K, self.feature_dim], name='feature_exps')
         self.name_to_op['feature_exps'] = self.feature_expectations
 
     def update_feed_dict_with_mdp(self, mdp, fd):
