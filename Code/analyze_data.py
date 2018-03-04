@@ -5,9 +5,10 @@ import re
 import matplotlib.pyplot as plt
 
 class Experiment(object):
-    def __init__(self, params, data):
+    def __init__(self, params, means_data, sterrs_data):
         self.params = params
-        self.data = data
+        self.means_data = means_data
+        self.sterrs_data = sterrs_data
 
     def __str__(self):
         return 'Experiment: ' + str(self.params)
@@ -40,14 +41,14 @@ def get_param_vals(folder_name):
     result_dict = { k:v for k, v in result_tuple }
     return result_tuple, result_dict
 
-def load_experiment(folder):
-    """Loads the data from <folder>/all choosers-means-.csv.
+def load_experiment_file(filename):
+    """Loads the data from <filename>, which should be an all choosers CSV.
 
     Returns two things:
     - chooser: A string, which chooser was used for this experiment
     - data: Dictionary mapping keys (such as test_entropy) to lists of numbers.
     """
-    with open(concat(folder, 'all choosers-means-.csv'), 'r') as csvfile:
+    with open(filename, 'r') as csvfile:
         chooser = csvfile.readline().strip().strip(',')
         reader = csv.DictReader(csvfile)
         first_row = next(reader)
@@ -56,6 +57,22 @@ def load_experiment(folder):
             for k, v in row.items():
                 data[k].append(maybe_num(v))
     return chooser, data
+
+def load_experiment(folder):
+    """Loads the data from <folder>, specifically from all choosers-means-.csv
+    and all choosers-sterr-.csv.
+
+    Returns three things:
+    - chooser: A string, which chooser was used for this experiment
+    - means_data: Dictionary mapping keys to lists of numbers (means).
+    - sterr_data: Dictionary mapping keys to lists of numbers (std errors).
+    """
+    means_chooser, means_data = load_experiment_file(
+        concat(folder, 'all choosers-means-.csv'))
+    sterrs_chooser, sterrs_data = load_experiment_file(
+        concat(folder, 'all choosers-sterr-.csv'))
+    assert means_chooser == sterrs_chooser
+    return means_chooser, means_data, sterrs_data
 
 def simplify_keys(experiments):
     """Identifies experiment parameters that are constant across the dataset and
@@ -107,7 +124,8 @@ def fix_special_cases(experiments):
             if new_key not in experiments:
                 new_params = dict(exp.params.items())
                 new_params['qsize'] = qsize
-                experiments[new_key] = Experiment(new_params, exp.data)
+                experiments[new_key] = Experiment(
+                    new_params, exp.means_data, exp.sterrs_data)
 
 def load_data(folder):
     """Loads all experiment data from data/<folder>.
@@ -126,13 +144,13 @@ def load_data(folder):
         if not experiment.startswith('2018'):
             continue
         key, params_dict = get_param_vals(experiment)
-        chooser, data = load_experiment(concat(folder, experiment))
+        chooser, means, sterrs = load_experiment(concat(folder, experiment))
         if 'choosers' in params_dict:
             assert chooser == params_dict['choosers']
         else:
             key = key + (('choosers', chooser),)
             params_dict['choosers'] = chooser
-        experiments[key] = Experiment(params_dict, data)
+        experiments[key] = Experiment(params_dict, means, sterrs)
     experiments, control_var_vals = simplify_keys(experiments)
     fix_special_cases(experiments)
     changing_vars = [var for var, val in experiments.keys()[0]]
@@ -165,7 +183,7 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
     graphs_data = {}
 
     for experiment in experiments.values():
-        params, data = experiment.params, experiment.data
+        params = experiment.params
         if not all(params[k] == v for k, v in controls):
             continue
 
@@ -186,28 +204,24 @@ def graph(experiments, x_var, dependent_vars, independent_vars, controls,
           variables not in x_var, dependent_vars, independent_vars, or
           controls.
     """
-    assert len(dependent_vars) in [1, 2]
+    assert len(dependent_vars) == 1
+    y_var = dependent_vars[0]
 
-    def make_graph(ax, y_var):
-        for experiment in experiments:
-            params, data = experiment.params, experiment.data
-            label = ', '.join([str(params[k]) for k in independent_vars])
-            ax.plot(data[x_var], data[y_var], label=label)
-        ax.set_xlabel(x_var)
-        ax.set_ylabel(y_var)
+    plt.figure()
+    for experiment in experiments:
+        params = experiment.params
+        means, sterrs = experiment.means_data, experiment.sterrs_data
+        label = ', '.join([str(params[k]) for k in independent_vars])
+        plt.errorbar(means[x_var], means[y_var], sterrs[y_var], label=label)
 
-    fig, ax1 = plt.subplots()
-    make_graph(ax1, dependent_vars[0])
-    if len(dependent_vars) == 2:
-        ax2 = ax1.twinx()
-        make_graph(ax2, dependent_vars[1])
+    plt.xlabel(x_var)
+    plt.ylabel(y_var)
 
     subtitle = ','.join(['{0}={1}'.format(k, v) for k, v in controls])
     subtitle = '{0},{1}'.format(subtitle, other_vals).strip(',')
     title = 'Data for {0}'.format(', '.join(independent_vars))
     plt.title(title + '\n' + subtitle)
     plt.legend() #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    fig.tight_layout()
 
     folder = concat('graph', folder)
     filename = '{0}-vs-{1}-for-{2}-with-{3}.png'.format(
