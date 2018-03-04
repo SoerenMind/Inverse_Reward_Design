@@ -772,7 +772,8 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
                     # weight = self.goal_weights[(i, j)]
                     distance = np.linalg.norm(np.array((x,y)) - np.array((i,j)))
                     nearness = np.exp(- self.dist_scale * distance)
-                    features.append(nearness)
+                    # features.append(nearness)
+                    features.append(-distance / 5.)
                     # reward += weight / (distance ** distance_exponent)
                 self.feature_matrix[y,x,:] = np.array(features)
 
