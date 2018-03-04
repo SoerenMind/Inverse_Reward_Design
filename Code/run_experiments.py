@@ -9,15 +9,15 @@ query_sizes = ['2', '3', '5', '10']
 mdp_types = ['gridworld', 'bandits']
 # true_reward_space_sizes = ['5000000', '1000000', '100000', '10000']
 true_reward_space_sizes = ['100000']
-viters = '15'
+viters = ['15', '25']
 
-def run(chooser, qsize, mdp_type, rsize='1000000', subsampling='1'):
+def run(chooser, qsize, mdp_type, viter, rsize='1000000', subsampling='1'):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
         beta = '1.0'            # CHANGED TO SLOW LEARNING
         beta_planner = '10'
-        dim = '10'                                                              # Increase to 20?
+        dim = '20'                                                              # Increase to 20?
         # TODO: Set the following to the right values
         lr = '0.1'
         num_iters_optim = '10'
@@ -25,7 +25,7 @@ def run(chooser, qsize, mdp_type, rsize='1000000', subsampling='1'):
         # Values range from 50-100 when using 25 value iterations.
         beta = '0.1'
         beta_planner = '10'
-        dim = '10'                                                              # Increase to 20?
+        dim = '20'                                                              # Increase to 20?
         # TODO: Set the following to the right values
         lr = '0.1'
         num_iters_optim = '10'
@@ -48,7 +48,7 @@ def run(chooser, qsize, mdp_type, rsize='1000000', subsampling='1'):
           '--height', '12',  # Only applies for gridworld
           '--width', '12',   # Only applies for gridworld
           '--lr', lr,   # Doesn't matter, only applies in continuous case
-          '--value_iters', viters,  # Consider decreasing viters to 10-15 to make the path more important as opposed to ending up at the right goal
+          '--value_iters', viter,  # Consider decreasing viters to 10-15 to make the path more important as opposed to ending up at the right goal
           '--mdp_type', mdp_type,
           '--feature_dim', dim,
           '--num_test_envs', '100',
@@ -71,15 +71,16 @@ def run(chooser, qsize, mdp_type, rsize='1000000', subsampling='1'):
 
 # Run with different rsize and subsampling values
 if __name__ == '__main__':
-    for mdp_type in mdp_types:
-        for rsize in true_reward_space_sizes:
-            if rsize == '10000':
-                subsampling = '0'
-            else: subsampling = '1'
+    for viter in viters:
+        for mdp_type in mdp_types:
+            for rsize in true_reward_space_sizes:
+                if rsize == '10000':
+                    subsampling = '0'
+                else: subsampling = '1'
 
 
-            for chooser in choosers:
-                for qsize in query_sizes:
-                    run(chooser, qsize, mdp_type, rsize, subsampling)
+                for chooser in choosers:
+                    for qsize in query_sizes:
+                        run(chooser, qsize, mdp_type, viter, rsize, subsampling)
 
-            run('full', '2', mdp_type, rsize, subsampling)
+                run('full', '2', mdp_type, viter, rsize, subsampling)
