@@ -140,6 +140,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         """
         if full_query:
             best_query = self.reward_space_proxy
+            query_size = len(self.reward_space_proxy)
         elif random_query:
             best_query = [choice(self.reward_space_proxy) for _ in range(query_size)]
         else:
