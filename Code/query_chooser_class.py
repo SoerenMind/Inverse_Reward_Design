@@ -430,9 +430,8 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 class Experiment(object):
     """"""
-    def __init__(self, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params,
-                 train_inferences, test_inferences):
-        # self.inference = inference  # TODO: Possibly create inference here and maybe input params as a dict
+    def __init__(self, true_rewards, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params,
+                 train_inferences, test_inferences, prior_avg):
         self.reward_space_proxy = reward_space_proxy
         self.query_size = query_size
         self.num_queries_max = num_queries_max
@@ -448,6 +447,8 @@ class Experiment(object):
         self.folder_name = curr_time + '-' + '-'.join([key+'='+str(val) for key, val in sorted(exp_params.items())])
         self.train_inferences = train_inferences
         self.test_inferences = test_inferences
+        self.true_rewards = true_rewards
+        self.prior_avg = prior_avg
 
 
     # @profile
@@ -466,7 +467,6 @@ class Experiment(object):
     def run_experiment(self, num_iter, exp_num, num_experiments):
         print "======================================================Experiment {n}/{N}===============================================================".format(n=exp_num + 1, N=num_experiments)
         # Initialize variables
-        # self.inference.reset(reset_mdp=True)
 
         # Set run parameters
         inference = self.train_inferences[exp_num]
@@ -474,9 +474,7 @@ class Experiment(object):
         seed(self.seed)
         self.seed += 1
         'Note: true reward no longer in true reward space'
-        # if self.query_chooser.args.true_rw_random:
-        true_reward = np.random.randint(-9, 9, size=[self.query_chooser.args.feature_dim])
-        # else: true_reward = choice(inference.reward_space_true)
+        true_reward = self.true_rewards[exp_num]
         self.results['true_reward', exp_num] = true_reward
 
 
@@ -516,8 +514,6 @@ class Experiment(object):
                             = self.query_chooser.find_query(self.query_size, chooser, true_reward, sess)
                         print('Found best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
                         query = [np.array(proxy) for proxy in query]
-                        # TODO: this line still suffers from overflow
-                        # _, exp_post_entropy, _, _ = inference.calc_posterior(query, get_entropy=True)  # Do before posterior update
 
                         # Update posterior
                         inference.update_prior(None, None, true_log_posterior)
@@ -526,7 +522,7 @@ class Experiment(object):
                     query = None
                     true_entropy = np.log(len(inference.prior))
                     perf_measure = float('inf')
-                    post_avg = -0.5 * np.ones(self.query_chooser.args.feature_dim)    # post_avg for uniform prior
+                    post_avg = self.prior_avg
 
 
                 # Outcome measures
@@ -534,8 +530,8 @@ class Experiment(object):
                 duration = exp_end_time - iter_start_time
                 # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
                 post_regret = self.query_chooser.get_regret(post_avg, true_reward) # TODO: Still plans with Python. May use wrong gamma, or trajectory normalization?
-                test_regret = self.compute_test_regret(post_avg, true_reward)
                 norm_to_true = self.get_normalized_reward_diff(post_avg, true_reward)
+                test_regret = self.compute_test_regret(post_avg, true_reward)
                 print('Test regret: '+str(test_regret)+' | Post regret: '+str(post_regret))
 
                 # Save results
@@ -641,9 +637,9 @@ class Experiment(object):
 
 
     def write_mean_and_median_results_to_csv(self, num_experiments, num_iter):
-        """Writes a CSV for every chooser averaged (and median-ed) across experiments. Saves in the same folder as
-        CSVs per experiment. Columns are 'iteration' and all measures in self.measures."""
-        time = str(datetime.datetime.now())[:-13]
+        """Writes a CSV for every chooser averaged (and median-ed, standard-error-ed) across experiments.
+        Saves in the same folder as CSVs per experiment. Columns are 'iteration' and all measures in
+        self.measures + self.cum_measures + ['time']."""
         if not os.path.exists('data/' + self.folder_name):
             os.mkdir('data/' + self.folder_name)
         else:
@@ -652,23 +648,39 @@ class Experiment(object):
         f_mean_all = open('data/'+self.folder_name+'/'+'all choosers'+'-means-'+'.csv','w')
         writer_mean_all_choosers = csv.DictWriter(f_mean_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
 
+        f_median_all = open('data/'+self.folder_name+'/'+'all choosers'+'-medians-'+'.csv','w')
+        writer_medians_all_choosers = csv.DictWriter(f_median_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+
+        f_sterr_all = open('data/'+self.folder_name+'/'+'all choosers'+'-sterr-'+'.csv','w')
+        writer_sterr_all_choosers = csv.DictWriter(f_sterr_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+
         for chooser in self.choosers:
             f_mean = open('data/'+self.folder_name+'/'+chooser+'-means-'+'.csv','w')
             f_median = open('data/'+self.folder_name+'/'+chooser+'-medians-'+'.csv','w')
+            f_sterr = open('data/'+self.folder_name+'/'+chooser+'-sterr-'+'.csv','w')
+
             writer_mean = csv.DictWriter(f_mean, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
             writer_median = csv.DictWriter(f_median, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+            writer_sterr = csv.DictWriter(f_sterr, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+
             writer_mean.writeheader()
             writer_median.writeheader()
+            writer_sterr.writeheader()
             rows_mean = []
             rows_median = []
+            rows_sterr = []
             cum_test_regret = np.zeros(num_experiments)
             cum_post_regret = np.zeros(num_experiments)
 
             for i in range(-1,num_iter):
                 csvdict_mean = {}
                 csvdict_median = {}
+                csvdict_sterr = {}
+
                 csvdict_mean['iteration'] = i
                 csvdict_median['iteration'] = i
+                csvdict_sterr['iteration'] = i
+
                 for measure in self.measures + ['time']:
                     entries = np.zeros(num_experiments)
                     for exp_num in range(num_experiments):
@@ -682,12 +694,26 @@ class Experiment(object):
                     csvdict_mean['cum_post_regret'] = cum_post_regret.mean()
                     csvdict_mean[measure] = np.mean(entries)
                     csvdict_median[measure] = np.median(entries)
+                    csvdict_sterr[measure] = np.std(entries) / np.sqrt(len(entries))
                 rows_mean.append(csvdict_mean)
-                rows_median.append(csvdict_mean)
+                rows_median.append(csvdict_median)
+                rows_sterr.append(csvdict_sterr)
             writer_mean.writerows(rows_mean)
             writer_median.writerows(rows_median)
+            writer_sterr.writerows(rows_sterr)
 
-            # Also append statistics for this chooser to CSV with all choosers
+
+            # Also append statistics for this chooser to CSV with all_choosers_mean
             writer_mean_all_choosers.writerow({'iteration': chooser})
             writer_mean_all_choosers.writeheader()
             writer_mean_all_choosers.writerows(rows_mean)
+
+            # Also append statistics for this chooser to CSV with all_choosers_medians
+            writer_medians_all_choosers.writerow({'iteration': chooser})
+            writer_medians_all_choosers.writeheader()
+            writer_medians_all_choosers.writerows(rows_median)
+
+            # Also append statistics for this chooser to CSV with all_choosers_sterr
+            writer_sterr_all_choosers.writerow({'iteration': chooser})
+            writer_sterr_all_choosers.writeheader()
+            writer_sterr_all_choosers.writerows(rows_sterr)

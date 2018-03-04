@@ -3,6 +3,8 @@ import time
 print('importing')
 
 start = time.clock()
+import datetime
+print 'time: '+str(datetime.datetime.now())
 import numpy as np
 from inference_class import InferenceDiscrete
 from gridworld import GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
@@ -58,7 +60,7 @@ if __name__=='__main__':
     parser.add_argument('--mdp_type',type=str,default='gridworld')
     parser.add_argument('--feature_dim',type=int,default=10)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--num_test_envs',type=int,default=10)    # 10 if positions fixed, 100 otherwise
-    # parser.add_argument('--true_rw_random',type=bool,default=False)    # default is true_reward < reward_space_true
+    parser.add_argument('--well_spec',type=int,default=1)    # default is well-specified
     parser.add_argument('--subsampling',type=int,default=1)
     parser.add_argument('--num_subsamples',type=int,default=10000)
 
@@ -114,8 +116,10 @@ if __name__=='__main__':
         'dist_scale': dist_scale,
         # 'num_q_max': num_queries_max,
         # 'num_iters_optim': num_iters_optim,
+        'well_spec': args.well_spec,
         'subsampling': args.subsampling,
-        'num_subsamples': args.num_subsamples
+        'num_subsamples': args.num_subsamples,
+        'viters: ': args.value_iters
     }
 
     # # Set up env and agent for NStateMdp
@@ -142,11 +146,16 @@ if __name__=='__main__':
                                             feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED+i*50)
             train_mdps.append(mdp)
 
-        'Sample reward spaces'
+        'Sample true rewards and reward spaces'
+
         reward_space_true = np.array(np.random.randint(-9, 9, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
         reward_space_proxy = np.random.randint(-9, 9, size=[size_reward_space_proxy, args.feature_dim])
 
-
+        if not args.well_spec:
+            true_rewards = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in range(num_experiments)]
+        else:
+            true_rewards = [choice(reward_space_true) for _ in range(num_experiments)]
+        prior_avg = -0.5 * np.ones(args.feature_dim) + 1e-4 * np.random.exponential(1,args.feature_dim) # post_avg for uniform prior + noise
 
         'Create train and test inferences'
         test_inferences = []
@@ -172,15 +181,22 @@ if __name__=='__main__':
 
     # Set up env and agent for gridworld
     elif args.mdp_type == 'gridworld':
-        # Create reward spaces for gridworld
+
+        'Sample true rewards and reward spaces'
         # reward_space_true = [np.random.multinomial(18, np.ones(args.feature_dim)/18) for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.multinomial(18, np.ones(args.feature_dim)) for _ in xrange(size_reward_space_proxy)]
+
         reward_space_true = np.array(np.random.randint(-9, 9, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
         reward_space_proxy = np.random.randint(-9, 9, size=[size_reward_space_proxy, args.feature_dim])
 
+        if not args.well_spec:
+            true_rewards = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in range(num_experiments)]
+        else:
+            true_rewards = [choice(reward_space_true) for _ in range(num_experiments)]
+        prior_avg = -0.5 * np.ones(args.feature_dim) + 1e-4 * np.random.exponential(1,args.feature_dim) # post_avg for uniform prior + noise
+
         # reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_proxy)]
-
 
         # reward_space_true = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_true)]
         # reward_space_proxy = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
@@ -260,7 +276,7 @@ if __name__=='__main__':
 
 
     'Experiment'
-    def experiment(query_size, train_inferences, test_inferences):
+    def experiment(query_size, train_inferences, test_inferences, true_rewards, prior_avg):
         # test_planning_speed(inference, reward_space_proxy); print('tested planning speed')
         # mean, std, failures, gain, mean_std_actual, regret_compare, regret_exp_vs_actual \
         #     = experiment(inference, reward_space_proxy, query_size, iterations_optimized=num_experiments, greedy=greedy,
@@ -271,8 +287,8 @@ if __name__=='__main__':
         # print 'Mean actual -reduction and std(mean) over random query: {r}'.format(r=mean_std_actual)
         # print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
         # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
-        experiment = Experiment(reward_space_proxy, query_size, num_queries_max,
-                                args, choosers, SEED, exp_params, train_inferences, test_inferences)
+        experiment = Experiment(true_rewards, reward_space_proxy, query_size, num_queries_max,
+                                args, choosers, SEED, exp_params, train_inferences, test_inferences, prior_avg)
         results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
 
 
@@ -317,7 +333,7 @@ if __name__=='__main__':
     # for q_size in range(2,50):
     #     if q_size % 4 == 0:
     #         experiment(q_size)
-    experiment(query_size, train_inferences, test_inferences)
+    experiment(query_size, train_inferences, test_inferences, true_rewards, prior_avg)
 
 
     'Create interface'

@@ -207,7 +207,7 @@ def graph(experiments, x_var, dependent_vars, independent_vars, controls,
     title = 'Data for {0}'.format(', '.join(independent_vars))
     plt.title(title + '\n' + subtitle)
     plt.legend() #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    fig.tight_layout()
+    # fig.tight_layout()
 
     folder = concat('graph', folder)
     filename = '{0}-vs-{1}-for-{2}-with-{3}.png'.format(
