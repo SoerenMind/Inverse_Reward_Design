@@ -9,7 +9,7 @@ query_sizes = ['2', '3', '5', '10']
 mdp_types = ['gridworld', 'bandits']
 # true_reward_space_sizes = ['5000000', '1000000', '100000', '10000']
 true_reward_space_sizes = ['100000']
-viters = '10'
+viters = '15'
 
 def run(chooser, qsize, mdp_type, rsize='1000000', subsampling='1'):
     if mdp_type == 'bandits':
@@ -77,9 +77,9 @@ if __name__ == '__main__':
                 subsampling = '0'
             else: subsampling = '1'
 
-            run('full', '2', mdp_type, rsize, subsampling)
 
             for chooser in choosers:
                 for qsize in query_sizes:
                     run(chooser, qsize, mdp_type, rsize, subsampling)
 
+            run('full', '2', mdp_type, rsize, subsampling)

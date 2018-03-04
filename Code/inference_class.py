@@ -301,7 +301,10 @@ class InferenceDiscrete(Inference):
             self.mdp.change_reward(proxy)
             # self.mdp.set_feature_weights(proxy)
             iters = self.agent.set_mdp(self.mdp)  # Does value iteration
-            trajectories = [run_agent(self.agent, self.env) for _ in range(self.num_traject)]
+            try: viters = self.agent.num_iters
+            except:
+                viters = 20
+            trajectories = [run_agent(self.agent, self.env, viters) for _ in range(self.num_traject)]
             # trajectory = [trajectories[0][t][0] for t in range(20)]
             # print trajectory
             # print(run_agent(self.agent, self.env, episode_length=10))

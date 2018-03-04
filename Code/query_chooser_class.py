@@ -157,6 +157,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             feature_expectations_input=feature_exp_input,
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
 
+
+
         print('Best objective found with a discrete query: ' + str(best_objective[0][0]))
         return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
@@ -531,7 +533,7 @@ class Experiment(object):
                 # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
                 post_regret = self.query_chooser.get_regret(post_avg, true_reward) # TODO: Still plans with Python. May use wrong gamma, or trajectory normalization?
                 norm_to_true = self.get_normalized_reward_diff(post_avg, true_reward)
-                test_regret = self.compute_test_regret(post_avg, true_reward)
+                test_regret = self.compute_test_regret(post_avg, true_reward, sess)
                 print('Test regret: '+str(test_regret)+' | Post regret: '+str(post_regret))
 
                 # Save results
@@ -546,14 +548,31 @@ class Experiment(object):
                     = true_entropy, perf_measure, post_regret, test_regret, norm_to_true, query, duration
 
 
-    def compute_test_regret(self, post_avg, true_reward):
+    def compute_test_regret(self, post_avg, true_reward, sess):
         """Computes regret from optimizing post_avg across some cached test environments."""
+
         regrets = np.empty(len(self.test_inferences))
+        # Have to use the test environment model!
         for i, test_inference in enumerate(self.test_inferences):
+            # New method using TF:
+            # test_mdp = test_inference.mdp
+            # planning_model = self.query_chooser.get_model(1)
+            #
+            # [post_avg_feature_exps] = planning_model.compute(['feature_exps'], sess, test_mdp, [list(post_avg)])
+            # [true_reward_feature_exps] = planning_model.compute(['feature_exps'], sess, test_mdp, [list(true_reward)])
+            #
+            # optimal_reward = np.dot(true_reward_feature_exps, true_reward)
+            # test_reward = np.dot(post_avg_feature_exps, post_avg)
+            # regret = optimal_reward - test_reward
+            # regrets[i] = regret
+
+            # Old method (using normalized feature exps in Python)
             test_reward = test_inference.get_avg_reward(post_avg, true_reward)
             optimal_reward = test_inference.get_avg_reward(true_reward, true_reward)
             regret = optimal_reward - test_reward
             regrets[i] = regret
+            if regret < -0.1:
+                print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
         return regrets.mean()   # Check variance here and adjust number of envs
 
     def get_normalized_reward_diff(self, post_avg, true_reward):
