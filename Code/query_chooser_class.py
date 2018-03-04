@@ -555,22 +555,22 @@ class Experiment(object):
         # Have to use the test environment model!
         for i, test_inference in enumerate(self.test_inferences):
             # New method using TF:
-            # test_mdp = test_inference.mdp
-            # planning_model = self.query_chooser.get_model(1)
-            #
-            # [post_avg_feature_exps] = planning_model.compute(['feature_exps'], sess, test_mdp, [list(post_avg)])
-            # [true_reward_feature_exps] = planning_model.compute(['feature_exps'], sess, test_mdp, [list(true_reward)])
-            #
-            # optimal_reward = np.dot(true_reward_feature_exps, true_reward)
-            # test_reward = np.dot(post_avg_feature_exps, post_avg)
-            # regret = optimal_reward - test_reward
-            # regrets[i] = regret
+            test_mdp = test_inference.mdp
+            planning_model = self.query_chooser.get_model(1)
 
-            # Old method (using normalized feature exps in Python)
-            test_reward = test_inference.get_avg_reward(post_avg, true_reward)
-            optimal_reward = test_inference.get_avg_reward(true_reward, true_reward)
+            [post_avg_feature_exps] = planning_model.compute(['feature_exps'], sess, test_mdp, [list(post_avg)])
+            [true_reward_feature_exps] = planning_model.compute(['feature_exps'], sess, test_mdp, [list(true_reward)])
+
+            optimal_reward = np.dot(true_reward_feature_exps, true_reward)
+            test_reward = np.dot(post_avg_feature_exps, true_reward)
             regret = optimal_reward - test_reward
             regrets[i] = regret
+
+            # Old method (using normalized feature exps in Python)
+            # test_reward = test_inference.get_avg_reward(post_avg, true_reward)
+            # optimal_reward = test_inference.get_avg_reward(true_reward, true_reward)
+            # regret = optimal_reward - test_reward
+            # regrets[i] = regret
             if regret < -0.1:
                 print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
         return regrets.mean()   # Check variance here and adjust number of envs

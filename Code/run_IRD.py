@@ -59,7 +59,7 @@ if __name__=='__main__':
     parser.add_argument('--value_iters',type=int,default=25)    # max_reward / (1-gamma) or height+width
     parser.add_argument('--mdp_type',type=str,default='gridworld')
     parser.add_argument('--feature_dim',type=int,default=10)    # 10 if positions fixed, 100 otherwise
-    parser.add_argument('--num_test_envs',type=int,default=20)    # 10 if positions fixed, 100 otherwise
+    parser.add_argument('--num_test_envs',type=int,default=100)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--well_spec',type=int,default=1)    # default is well-specified
     parser.add_argument('--subsampling',type=int,default=1)
     parser.add_argument('--num_subsamples',type=int,default=10000)

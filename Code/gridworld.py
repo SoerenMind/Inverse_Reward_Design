@@ -57,9 +57,8 @@ class Mdp(object):
         state_feature_list = [[self.get_features(tup[0]) * tup[4] for tup in trajectory[1:]] for trajectory in trajectories]
         state_feature_list = list(itertools.chain(*state_feature_list))     # flatten list of lists
         feature_sum = np.array(state_feature_list).sum(axis=0)
-        feature_expectations = np.true_divide(feature_sum, len(state_feature_list))
-        # assert feature_expectations.max() <= 1    # only if features are max 1
-        return np.array(feature_expectations)
+        # feature_expectations = np.true_divide(feature_sum, len(state_feature_list))
+        return np.array(feature_sum)
 
     def get_reward(self, state, action):
         """Get reward for state, action transition.
