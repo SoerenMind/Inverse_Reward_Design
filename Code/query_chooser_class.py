@@ -230,11 +230,11 @@ class Query_Chooser_Subclass(Query_Chooser):
 
     def find_next_feature(self, curr_query, curr_weights, measure, true_reward):
         mdp = self.inference.mdp
-        desired_outputs = [measure, 'weights_to_train']
+        desired_outputs = [measure, 'weights_to_train', 'feature_exps']
         features = [i for i in range(self.args.feature_dim) if i not in curr_query]
 
         best_objective, best_objective_plus_cost = float("inf"), float("inf")
-        best_query, best_optimal_weights = None, None
+        best_query, best_optimal_weights, best_feature_exps = None, None, None
         model = self.get_model(
             len(curr_query) + 1, discrete=False, optimize=True)
 
@@ -248,7 +248,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                 if curr_weights is not None:
                     weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
 
-                objective, optimal_weights = model.compute(
+                objective, optimal_weights, feature_exps = model.compute(
                     desired_outputs, sess, mdp, query, log_prior,
                     weights, gradient_steps=self.args.num_iters_optim,
                     gradient_logging_outputs=[measure], true_reward=true_reward,
@@ -261,7 +261,8 @@ class Query_Chooser_Subclass(Query_Chooser):
                     best_objective_plus_cost = objective_plus_cost
                     best_optimal_weights = optimal_weights
                     best_query = query
-        return best_query, best_optimal_weights
+                    best_feature_exps = feature_exps
+        return best_query, best_optimal_weights, best_feature_exps
 
 
 
@@ -272,22 +273,24 @@ class Query_Chooser_Subclass(Query_Chooser):
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
         best_query = []
         feature_dim = self.args.feature_dim
-        best_optimal_weights = None
+        best_weights = None
         while len(best_query) < query_size:
-            best_query, best_optimal_weights = self.find_next_feature(
-                best_query, best_optimal_weights, measure, true_reward)
+            best_query, best_weights, feature_exps = self.find_next_feature(
+                best_query, best_weights, measure, true_reward)
             print 'Query length increased to {s}'.format(s=len(best_query))
 
         print('query found')
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         # Add: Get all measures for data recording?
         desired_outputs = [measure, 'true_log_posterior','true_entropy', 'post_avg']
+        true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
         model = self.get_model(query_size, discrete=False)
         with tf.Session() as sess:
             sess.run(model.initialize_op)
             objective, true_log_posterior, true_entropy, post_avg = model.compute(
-                desired_outputs, sess, mdp, best_query, self.inference.log_prior,
-                best_optimal_weights, true_reward=true_reward, true_reward_matrix=self.inference.true_reward_matrix)
+                desired_outputs, sess, mdp, best_query, log_prior,
+                feature_expectations_input=feature_exps,
+                true_reward=true_reward, true_reward_matrix=true_reward_matrix)
         #return best_query, objective, true_posterior, true_entropy[0]
         return best_query, objective, true_log_posterior, post_avg
 
