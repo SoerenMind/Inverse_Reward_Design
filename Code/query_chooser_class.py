@@ -571,8 +571,9 @@ class Experiment(object):
             # optimal_reward = test_inference.get_avg_reward(true_reward, true_reward)
             # regret = optimal_reward - test_reward
             # regrets[i] = regret
-            if regret < -0.1:
+            if regret < -1:
                 print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+                print 'regret: ' +str(regret)
         return regrets.mean()   # Check variance here and adjust number of envs
 
     def get_normalized_reward_diff(self, post_avg, true_reward):
