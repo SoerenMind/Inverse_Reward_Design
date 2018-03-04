@@ -51,7 +51,7 @@ def run(chooser, qsize, mdp_type, rsize='1000000', subsampling='1'):
           '--value_iters', viters,  # Consider decreasing viters to 10-15 to make the path more important as opposed to ending up at the right goal
           '--mdp_type', mdp_type,
           '--feature_dim', dim,
-          '--num_test_envs', '10',
+          '--num_test_envs', '100',
           '--subsampling', subsampling,
           '--num_subsamples','10000',
           '--well_spec', '1'
