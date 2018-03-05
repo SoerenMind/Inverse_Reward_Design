@@ -9,7 +9,7 @@ mdp_types = ['gridworld', 'bandits']
 true_reward_space_sizes = ['1000000']
 viters = ['15'] #, '25']
 
-def run(chooser, qsize, mdp_type, viter, rsize='1000000', subsampling='1'):
+def run(chooser, qsize, mdp_type, viter='15', rsize='1000000', subsampling='1'):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
@@ -17,7 +17,7 @@ def run(chooser, qsize, mdp_type, viter, rsize='1000000', subsampling='1'):
         beta_planner = '10'
         dim = '20'                                                              # Increase to 20?
         # TODO: Set the following to the right values
-        lr = '0.1'
+        lr = '0.01'
         num_iters_optim = '10'
     else:
         # Values range from 50-100 when using 25 value iterations.
@@ -61,16 +61,16 @@ def run(chooser, qsize, mdp_type, viter, rsize='1000000', subsampling='1'):
 
 
 # Run as usual
-# if __name__ == '__main__':
-#     for mdp_type in mdp_types:
-#         run('full', '2', mdp_type)
-#
-#         for chooser in choosers:
-#             for qsize in query_sizes:
-#                 run(chooser, qsize, mdp_type)
+def run_discrete():
+    for mdp_type in mdp_types:
+        run('full', '2', mdp_type)
+
+        for chooser in choosers:
+            for qsize in query_sizes:
+                run(chooser, qsize, mdp_type)
 
 # Run with different rsize and subsampling values
-if __name__ == '__main__':
+def run_subsampling():
     for viter in viters:
         for mdp_type in mdp_types:
             for rsize in true_reward_space_sizes:
@@ -84,3 +84,12 @@ if __name__ == '__main__':
                         run(chooser, qsize, mdp_type, viter, rsize, subsampling)
 
                 run('full', '2', mdp_type, viter, rsize, subsampling)
+
+def run_discrete_optimization():
+    for mdp_type in mdp_types:
+        for qsize in query_sizes:
+            for chooser in ['incremental_optimize', 'joint_optimize']:
+                run(chooser, qsize, mdp_type)
+
+if __name__ == '__main__':
+    run_discrete_optimization()
