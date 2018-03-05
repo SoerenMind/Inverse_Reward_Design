@@ -218,14 +218,24 @@ class Query_Chooser_Subclass(Query_Chooser):
         return query, objective[0][0]
 
     def sample_true_reward_matrix(self):
-        # TODO: Do likelihood weighting here to also sample finer regions of the space?
-        # TODO: Add size parameter for num samples
         # Problem: Samples will be likelihood-weighted in graph. Gotta feed in uniform prior.
+
+        num_subsamples = self.args.num_subsamples
         log_probs = self.inference.log_prior
         probs = np.exp(log_probs)
         probs = probs / probs.sum()
-        choices = np.random.choice(self.args.size_true_space, p=probs, size=self.args.num_subsamples)
-        return self.inference.true_reward_matrix[choices]
+        choices = np.random.choice(self.args.size_true_space, p=probs, size=num_subsamples)
+
+        if self.args.weighting:
+            unique_sample_idx, counts = np.unique(choices, return_counts=True)
+
+            # Not using log probabilities
+            weighted_probs = probs[unique_sample_idx] * counts
+            weighted_probs = weighted_probs / weighted_probs.sum()
+            return self.inference.true_reward_matrix[unique_sample_idx], np.log(weighted_probs)
+        else:
+            unif_log_prior = np.log(np.ones(num_subsamples) / num_subsamples)
+            return self.inference.true_reward_matrix[choices], unif_log_prior
 
 
     def find_next_feature(self, curr_query, curr_weights, measure, true_reward):
@@ -298,10 +308,10 @@ class Query_Chooser_Subclass(Query_Chooser):
 
     def get_true_reward_space(self, no_subsampling=False):
         if self.args.subsampling and not no_subsampling:
-            num_subsamples = self.args.num_subsamples
+            # num_subsamples = self.args.num_subsamples
             # Get true reward samples to optimize with
-            true_reward_matrix = self.sample_true_reward_matrix()
-            log_prior = np.log(np.ones(num_subsamples) / num_subsamples)
+            true_reward_matrix, log_prior = self.sample_true_reward_matrix()
+            # log_prior = np.log(np.ones(num_subsamples) / num_subsamples)
         else:
             true_reward_matrix = self.inference.true_reward_matrix
             log_prior = self.inference.log_prior
@@ -531,8 +541,8 @@ class Experiment(object):
 
 
                 # Outcome measures
-                exp_end_time = time.clock()
-                duration = exp_end_time - iter_start_time
+                iter_end_time = time.clock()
+                duration = iter_end_time - iter_start_time
                 # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
                 post_regret = self.query_chooser.get_regret(post_avg, true_reward) # TODO: Still plans with Python. May use wrong gamma, or trajectory normalization?
                 norm_to_true = self.get_normalized_reward_diff(post_avg, true_reward)

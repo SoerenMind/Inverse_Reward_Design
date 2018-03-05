@@ -63,6 +63,8 @@ if __name__=='__main__':
     parser.add_argument('--well_spec',type=int,default=1)    # default is well-specified
     parser.add_argument('--subsampling',type=int,default=1)
     parser.add_argument('--num_subsamples',type=int,default=10000)
+    parser.add_argument('--weighting',type=int,default=1)
+    parser.add_argument('--linear_features',type=int,default=1)
 
 
     args = parser.parse_args()
@@ -113,13 +115,15 @@ if __name__=='__main__':
         'seed': SEED,
         'beta': beta,
         'num_states': num_states,
-        'dist_scale': dist_scale,
-        # 'num_q_max': num_queries_max,
+        # 'dist_scale': dist_scale,
+        'n_q_max': num_queries_max,
         # 'num_iters_optim': num_iters_optim,
         'well_spec': args.well_spec,
-        'subsampling': args.subsampling,
-        'num_subsamples': args.num_subsamples,
-        'viters: ': args.value_iters
+        'subsamp': args.subsampling,
+        'num_subsamp': args.num_subsamples,
+        'weighting': args.weighting,
+        'viters: ': args.value_iters,
+        'linfeat:': args.linear_features,
     }
 
     # # Set up env and agent for NStateMdp
@@ -206,7 +210,7 @@ if __name__=='__main__':
         test_inferences = []
         for i in range(args.num_test_envs):
             test_grid = GridworldMdp.generate_random(height,width,0.35,feature_dim,None,living_reward=-0.01, print_grid=False)
-            mdp = GridworldMdpWithDistanceFeatures(test_grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
+            mdp = GridworldMdpWithDistanceFeatures(test_grid, args.linear_features, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
             env = GridworldEnvironment(mdp)
             agent = OptimalAgent(gamma, num_iters=args.value_iters)
             inference = InferenceDiscrete(
@@ -218,7 +222,7 @@ if __name__=='__main__':
         train_inferences = []
         for j in range(num_experiments):
             grid = GridworldMdp.generate_random(height,width,0.35,feature_dim,None,living_reward=-0.01, print_grid=False)
-            mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
+            mdp = GridworldMdpWithDistanceFeatures(grid, args.linear_features, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
             env = GridworldEnvironment(mdp)
             agent = OptimalAgent(gamma, num_iters=args.value_iters)
             inference = InferenceDiscrete(

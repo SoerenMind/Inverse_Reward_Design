@@ -721,9 +721,10 @@ class GridworldMdpWithFeatures(GridworldMdp):
 
 class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
     """Features are based on distance to places with reward."""
-    def __init__(self, grid, dist_scale=0.5, living_reward=-0.01, noise=0, rewards=None):
+    def __init__(self, grid, linear_features=True, dist_scale=0.5, living_reward=-0.01, noise=0, rewards=None):
         self.dist_scale = dist_scale
         # self.feature_weights = None
+        self.linear_features = linear_features
         super(GridworldMdpWithDistanceFeatures, self).__init__(
             grid, living_reward=-0.01, noise=0)
 
@@ -771,9 +772,11 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
                 for i,j in self.goals:
                     # weight = self.goal_weights[(i, j)]
                     distance = np.linalg.norm(np.array((x,y)) - np.array((i,j)))
-                    nearness = np.exp(- self.dist_scale * distance)
-                    # features.append(nearness)
-                    features.append(-distance / 5.)
+                    if self.linear_features:
+                        features.append(-distance / 5.)
+                    else:
+                        nearness = np.exp(- self.dist_scale * distance)
+                        features.append(nearness)
                     # reward += weight / (distance ** distance_exponent)
                 self.feature_matrix[y,x,:] = np.array(features)
 

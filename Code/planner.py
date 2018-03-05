@@ -124,8 +124,14 @@ class Model(object):
         self.true_reward_matrix = tf.placeholder(
             tf.float32, [true_reward_space_size, dim], name="true_reward_matrix")
         self.log_true_reward_matrix = tf.log(self.true_reward_matrix, name='log_true_reward_matrix')
+
+        # TODO: Inefficient to recompute this matrix on every forward pass.
+        # We can cache it and feed in true reward indeces instead of true_reward_matrix. The matrix multiplication has
+        # size_proxy x size_true x feature_dim complexity. The other calculations in this map have a factor feature_dim
+        # less. However, storing this matrix takes size_proxy / feature_dim more memory. That's good for large feature_dim.
         self.avg_reward_matrix = tf.tensordot(
             self.feature_expectations, self.true_reward_matrix, axes=[-1, -1], name='avg_reward_matrix')
+
         log_likelihoods_new = self.beta * self.avg_reward_matrix
 
 
