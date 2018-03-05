@@ -3,12 +3,9 @@ from subprocess import call
 # Discrete experiments
 NUM_EXPERIMENTS = '5'  # Modify this to change the sample size
 
-# choosers = ['greedy_entropy_discrete_tf', 'random', 'exhaustive_entropy']
-choosers = ['greedy_entropy_discrete_tf', 'random']
-# query_sizes = ['2', '3', '5', '10']
-query_sizes = ['3','10']
-mdp_types = ['gridworld'] #, 'bandits']
-# true_reward_space_sizes = ['5000000', '1000000', '100000', '10000']
+choosers = ['greedy_entropy_discrete_tf', 'random', 'exhaustive_entropy']
+query_sizes = ['2', '3', '5', '10']
+mdp_types = ['gridworld', 'bandits']
 true_reward_space_sizes = ['1000000']
 viters = ['15'] #, '25']
 

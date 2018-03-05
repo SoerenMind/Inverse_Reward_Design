@@ -240,13 +240,32 @@ class Model(object):
                 self.name_to_op['minimize'] = self.train_op
 
         if 'variance' in objective:
+            '''
+            Dimensions:
+            -posterior: qsize x strue                   stack into dimension 1
+            -true_reward_matrix: feature_dim x strue    stack into dimension 2
+
+            Problem: We temporarily store a feature_dim x strue x qsize matrix.
+
+            tf.nn.weighted_moments
+            -Still need to store huge matrix
+
+            '''
+
+
+
+
+
             # post_avg, post_var = tf.nn.moments(self.true_reward_matrix, axes=[0], keep_dims=False)
-            self.posterior_stack = tf.stack([self.posterior[0]] * self.feature_dim, axis=1)
+            # self.posterior_stack = tf.stack([self.posterior[0]] * self.feature_dim, axis=1)
             self.posterior_stack = tf.expand_dims(self.posterior[0], axis=1)
+
+            'Only using posterior[0 so far!'
 
             # true_rewards_stack = tf.stack([self.true_reward_matrix] * self.K, axis=0)
             post_avg, post_var = tf.nn.weighted_moments(
                 self.true_reward_matrix, [0, 0], self.posterior_stack, name="moments", keep_dims=False)
+            post_std = tf.sqrt(post_var)
 
             data = tf.constant([[0.,2.,4.],[0.,2.,4.]], dtype=tf.float32)
             avg, var = tf.nn.moments(data, axes=[1,0])
@@ -255,8 +274,8 @@ class Model(object):
             # self.name_to_op['variance'] = self.generalized_var
             self.name_to_op['post_avg'] = post_avg
             self.name_to_op['post_var'] = post_var
-            self.name_to_op['posterior_stack'] = posterior_stack
-            self.name_to_op['var'] = var
+            self.name_to_op['posterior_stack'] = self.posterior_stack
+            self.name_to_op['variance'] = var
 
 
         if 'regret' in objective:

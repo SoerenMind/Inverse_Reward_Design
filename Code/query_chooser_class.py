@@ -85,6 +85,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         """Calls query chooser specified by chooser (string)."""
         # if chooser == 'maxmin':
         #     return self.find_query_feature_diff(query_size)
+        if chooser == 'test_graph':
+            self.test_graph(query_size, 'variance', sess, true_reward)
         if chooser == 'exhaustive_entropy':
             return self.find_discrete_query(query_size, 'entropy', sess, true_reward, growth_rate=query_size)
         # elif chooser == 'greedy_regret':
@@ -113,6 +115,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             return self.find_feature_query_greedy(query_size, 'variance', true_reward)
         else:
             raise NotImplementedError('Calling unimplemented query chooser')
+
 
     def build_discrete_query(self, query_size, measure, sess, growth_rate, extend_fn):
         """Builds a discrete query by starting from the empty query and calling
