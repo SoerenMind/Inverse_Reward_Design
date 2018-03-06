@@ -320,7 +320,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
 
-    def get_model(self, query_size, discretization_const=2, num_unknown=None,
+    def get_model(self, query_size, num_unknown=None,
                   discrete=True, optimize=False, no_planning=False):
         mdp = self.inference.mdp
         height, width = None, None
@@ -329,11 +329,11 @@ class Query_Chooser_Subclass(Query_Chooser):
             height, width = mdp.height, mdp.width
         dim, gamma, lr = self.args.feature_dim, self.args.gamma, self.args.lr
         beta, beta_planner = self.args.beta, self.args.beta_planner
-        num_iters = self.args.value_iters
+        discretization_size, num_iters = self.args.discretization_size, self.args.value_iters
         true_reward_space_size = None
         # true_reward_space_size = len(self.inference.true_reward_matrix)
         key = (no_planning, mdp.type, dim, gamma, query_size,
-               discretization_const, true_reward_space_size, num_unknown, beta,
+               discretization_size, true_reward_space_size, num_unknown, beta,
                beta_planner, lr, discrete, optimize, height, width, num_iters)
         if key in self.model_cache:
             return self.model_cache[key]
@@ -341,18 +341,18 @@ class Query_Chooser_Subclass(Query_Chooser):
         print('building model...')
         if no_planning:
             model = NoPlanningModel(
-                dim, gamma, query_size, discretization_const,
+                dim, gamma, query_size, discretization_size,
                 true_reward_space_size, num_unknown, beta, beta_planner,
                 'entropy', lr, discrete, optimize)
         elif mdp.type == 'bandits':
             print 'Calling BanditsModel'
             model = BanditsModel(
-                dim, gamma, query_size, discretization_const,
+                dim, gamma, query_size, discretization_size,
                 true_reward_space_size, num_unknown, beta, beta_planner,
                 'entropy', lr, discrete, optimize)
         elif mdp.type == 'gridworld':
             model = GridworldModel(
-                dim, gamma, query_size, discretization_const,
+                dim, gamma, query_size, discretization_size,
                 true_reward_space_size, num_unknown, beta, beta_planner,
                 'entropy', lr, discrete, optimize, mdp.height, mdp.width,
                 num_iters)

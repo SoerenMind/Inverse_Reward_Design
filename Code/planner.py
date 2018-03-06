@@ -5,7 +5,7 @@ from itertools import product
 from gridworld import Direction
 
 class Model(object):
-    def __init__(self, feature_dim, gamma, query_size, discretization_const,
+    def __init__(self, feature_dim, gamma, query_size, discretization_size,
                  true_reward_space_size, num_unknown, beta, beta_planner,
                  objective, lr, discrete, optimize):
         self.initialized = False
@@ -24,7 +24,11 @@ class Model(object):
                 self.num_unknown = num_unknown
         else:
             assert query_size <= 5
-            f_range = range(-discretization_const, discretization_const + 1)
+            num_posneg_vals = (discretization_size // 2)
+            const = 9 // num_posneg_vals
+            f_range = range(-num_posneg_vals * const, 10, const)
+            print 'Using', f_range, 'to discretize the feature'
+            assert len(f_range) == discretization_size
             # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
             self.proxy_reward_space = list(product(f_range, repeat=query_size))
             self.K = len(self.proxy_reward_space)

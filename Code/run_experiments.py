@@ -9,7 +9,7 @@ mdp_types = ['gridworld', 'bandits']
 true_reward_space_sizes = ['1000000']
 viters = ['15'] #, '25']
 
-def run(chooser, qsize, mdp_type, viter='15', rsize='1000000', subsampling='1'):
+def run(chooser, qsize, mdp_type, discretization_size='5', viter='15', rsize='1000000', subsampling='1'):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
@@ -90,6 +90,11 @@ def run_discrete_optimization():
         for qsize in query_sizes:
             for chooser in ['incremental_optimize', 'joint_optimize']:
                 run(chooser, qsize, mdp_type)
+
+def run_continuous():
+    for mdp_type in mdp_types:
+        for qsize, discretization_size in [('1', '9'), ('2', '5'), ('3', '3')]:
+            run('feature_entropy', qsize, mdp_type, discretization_size=discretization_size)
 
 if __name__ == '__main__':
     run_discrete_optimization()
