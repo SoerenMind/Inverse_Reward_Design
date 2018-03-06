@@ -470,38 +470,46 @@ class GridworldMdp(Mdp):
 
     @staticmethod
     def generate_random(height, width, pr_wall, num_goals, goals=None, living_reward=0, noise=0, print_grid = False):
-        """Generates a random instance of a Gridworld.
+        """Generates a random instance of a Gridworld."""
 
-        Note that based on the generated walls and start position, it may be
-        impossible for the agent to ever reach a reward.
-        """
+        def generate_start_and_goals():
+            start_state = (width // 2, height // 2)
+            states = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
+            states.remove(start_state)
+            if goals is None:
+                indices = np.random.choice(len(states), num_goals, replace=False)
+                return start_state, [states[i] for i in indices]
+            else:
+                return start_state, goals
+
+        (start_x, start_y), goals = generate_start_and_goals()
+        required_nonwalls = list(goals)
+        required_nonwalls.append((start_x, start_y))
+
+        directions = [
+            Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]
         grid = [['X'] * width for _ in range(height)]
+        walls = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
+        dsets = DisjointSets([])
+        for x, y in required_nonwalls:
+            grid[y][x] = ' '
+            walls.remove((x, y))
+            dsets.add_singleton((x, y))
+
+        min_free_spots = (1 - pr_wall) * len(walls)
+        random.shuffle(walls)
+        while dsets.get_num_elements() < min_free_spots or not dsets.is_connected():
+            x, y = walls.pop()
+            grid[y][x] = ' '
+            dsets.add_singleton((x, y))
+            for direction in directions:
+                newx, newy = Direction.move_in_direction((x, y), direction)
+                if dsets.contains((newx, newy)):
+                    dsets.union((x, y), (newx, newy))
 
         grid[height // 2][width // 2] = 'A'
-
-        # Set rewarded states and walls
-        for y in range(1, height - 1):
-            for x in range(1, width - 1):
-                if random.random() >= pr_wall and grid[y][x] == 'X':
-                    grid[y][x] = ' '
-
-        def set_random_position_to(token):
-            current_val = None
-            while current_val not in ['X', ' ']:
-                y = random.randint(1, height - 2)
-                x = random.randint(1, width - 2)
-                current_val = grid[y][x]
-            grid[y][x] = token
-
-        if goals is not None:
-            for x, y in goals:
-                grid[y][x] = random.randint(-9, 9)
-        else:
-            for _ in range(num_goals):
-                r = random.randint(-9, 9)
-                while r == 0:
-                    r = random.randint(-9, 9)
-                set_random_position_to(r)
+        for x, y in goals:
+            grid[y][x] = random.randint(-9, 9)
 
         # Print grid
         if print_grid:
@@ -512,7 +520,6 @@ class GridworldMdp(Mdp):
                     row_new.append(place)
                 print str(row_new)
         return grid
-        # return GridworldMdp(grid, living_reward, noise)
 
     @staticmethod
     def generate_random_connected(height, width, pr_reward, living_reward=0, noise=0):
