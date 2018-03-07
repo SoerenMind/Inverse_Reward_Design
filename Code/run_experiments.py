@@ -1,15 +1,20 @@
 from subprocess import call
 
 # Discrete experiments
-NUM_EXPERIMENTS = '5'  # Modify this to change the sample size
+NUM_EXPERIMENTS = '25'  # Modify this to change the sample size
 
-choosers = ['greedy_entropy_discrete_tf', 'random', 'exhaustive_entropy']
-query_sizes = ['2', '3', '5', '10']
+# choosers = ['greedy_entropy_discrete_tf', 'random', 'exhaustive_entropy']
+# choosers = ['greedy_discrete', 'random', 'exhaustive']
+choosers = ['random']
+# query_sizes = ['2', '3', '5', '10']
+query_sizes = ['5']
 mdp_types = ['gridworld', 'bandits']
 true_reward_space_sizes = ['1000000']
-viters = ['15'] #, '25']
+# objectives = ['total_variation','entropy']
+objectives = ['entropy']
 
-def run(chooser, qsize, mdp_type, viter, rsize='1000000', subsampling='1'):
+
+def run(chooser, qsize, mdp_type, objective, rsize='1000000', subsampling='1'):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
@@ -46,7 +51,7 @@ def run(chooser, qsize, mdp_type, viter, rsize='1000000', subsampling='1'):
           '--height', '12',  # Only applies for gridworld
           '--width', '12',   # Only applies for gridworld
           '--lr', lr,   # Doesn't matter, only applies in continuous case
-          '--value_iters', viter,  # Consider decreasing viters to 10-15 to make the path more important as opposed to ending up at the right goal
+          '--value_iters', '15',  # Consider decreasing viters to 10-15 to make the path more important as opposed to ending up at the right goal
           '--mdp_type', mdp_type,
           '--feature_dim', dim,
           '--num_test_envs', '100',
@@ -54,7 +59,8 @@ def run(chooser, qsize, mdp_type, viter, rsize='1000000', subsampling='1'):
           '--num_subsamples','10000',
           '--weighting', '1',
           '--well_spec', '1',
-          '--linear_features', '1'
+          '--linear_features', '1',
+          '--objective',objective
         ])
 
 
@@ -71,7 +77,6 @@ def run(chooser, qsize, mdp_type, viter, rsize='1000000', subsampling='1'):
 
 # Run with different rsize and subsampling values
 if __name__ == '__main__':
-    for viter in viters:
         for mdp_type in mdp_types:
             for rsize in true_reward_space_sizes:
                 if rsize == '10000':
@@ -79,8 +84,9 @@ if __name__ == '__main__':
                 else: subsampling = '1'
 
 
-                for chooser in choosers:
-                    for qsize in query_sizes:
-                        run(chooser, qsize, mdp_type, viter, rsize, subsampling)
+                for qsize in query_sizes:
+                    for chooser in choosers:
+                        for objective in objectives:
+                            run(chooser, qsize, mdp_type, objective, rsize, subsampling)
 
-                run('full', '2', mdp_type, viter, rsize, subsampling)
+                run('full', '2', mdp_type, 'entropy', rsize, subsampling)

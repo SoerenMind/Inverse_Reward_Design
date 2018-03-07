@@ -3,6 +3,9 @@ import csv
 import os
 import re
 import matplotlib.pyplot as plt
+import matplotlib
+import seaborn as sns
+import numpy as np
 
 class Experiment(object):
     def __init__(self, params, means_data, sterrs_data):
@@ -156,6 +159,7 @@ def load_data(folder):
     changing_vars = [var for var, val in experiments.keys()[0]]
     return experiments, changing_vars, control_var_vals
 
+
 def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
               controls, folder):
     """Graphs data and saves them.
@@ -195,6 +199,58 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
     for key, exps in graphs_data.items():
         graph(exps, x_var, dependent_vars, independent_vars, controls, key, folder)
 
+
+
+def graph_all_new(experiments, all_vars, x_var, dependent_vars, independent_vars,
+              controls, folder):
+    """Graphs data and saves them.
+
+    Each graph generated plots the dependent_vars against x_var for all
+    valuations of independent_vars, with the control variables set to the values
+    specified in controls. For every valuation of variables not in x_var,
+    dependent_vars, independent_vars, or controls, a separate graph is
+    generated and saved in folder.
+
+    - experiments: Dictionary from keys of the form ((var, val), ...) to
+          Experiment objects
+    - all_vars: List of strings, all the variables that have some variation
+    - x_var: Variable that provides the data for the x-axis
+    - dependent_vars: List of strings, variables to plot on the y-axis
+    - independent_vars: List of strings, experimental conditions to plot on the
+          same graph
+    - controls: Tuple of the form ((var, val), ...) where var is a string and
+          val is a string or number. The values of control variables.
+    - folder: Graphs are saved to graph/<folder>/
+    """
+    control_vars = [var for var, val in controls]
+    vars_so_far = [x_var] + dependent_vars + independent_vars + control_vars
+    remaining_vars = list(set(all_vars) - set(vars_so_far))
+    graphs_data = {}
+
+    for experiment in experiments.values():
+        params = experiment.params
+        if not all(params[k] == v for k, v in controls):
+            continue
+
+        key = ','.join(['{0}={1}'.format(k, params[k]) for k in remaining_vars])
+        if key not in graphs_data:
+            graphs_data[key] = []
+        graphs_data[key].append(experiment)
+
+    keys, graphs_list = [], []
+    for key, exps in graphs_data.items():
+        keys.append(key), graphs_list.append(exps)
+    graph(graphs_list, x_var, dependent_vars, independent_vars, controls, keys, folder)
+
+
+
+'''how to do multiple subplots
+-Feed 2 exps into graph
+-Create each ax outside of graph and fill it in with graph
+'''
+
+
+
 def graph(experiments, x_var, dependent_vars, independent_vars, controls,
           other_vals, folder):
     """Creates and saves a single graph.
@@ -229,6 +285,164 @@ def graph(experiments, x_var, dependent_vars, independent_vars, controls,
     if not os.path.exists(folder):
         os.mkdir(folder)
     plt.savefig(concat(folder, filename))
+
+
+
+
+def graph_new(graphs_list, x_var, dependent_vars, independent_vars, controls,
+          other_vals, folder):
+    """Creates and saves a single graph.
+
+    Arguments are almost the same as for graph_all.
+    - other_vals: String of the form "{var}={val},..." specifying values of
+          variables not in x_var, dependent_vars, independent_vars, or
+          controls.
+    """
+    assert len(dependent_vars) == 1
+    y_var = dependent_vars[0]
+
+
+    fig, (ax1, ax2) = plt.subplots(1,2)
+
+    set_style()
+    # sns.set_context(rc={'lines.markeredgewidth': 10.0})   # Thickness or error bars
+    capsize = 0.    # length of horizontal line on error bars
+    spacing = 100.0
+
+    for experiment in graphs_list[0]:
+        params = experiment.params
+        means, sterrs = experiment.means_data, experiment.sterrs_data
+        chooser = ', '.join([str(params[k]) for k in independent_vars])
+        label = chooser_to_label(chooser)   # name in legend
+        x_data = np.array(means[x_var]) + 1
+        ax1.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=chooser_to_color(chooser),
+                     capsize=capsize, capthick=1, label=label)
+
+    ax1.set_xlim([0,20])
+    ax1.set_xlabel(var_to_label(x_var))
+    ax1.set_ylabel(var_to_label(y_var))
+    plt.sca(ax1)
+
+    subtitle = ','.join(['{0}={1}'.format(k, v) for k, v in controls])
+    subtitle = '{0},{1}'.format(subtitle, other_vals).strip(',')
+    title = 'Data for {0}'.format(', '.join(independent_vars))
+    ax1.set_title(title + '\n' + subtitle)
+    ax1.legend() #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+
+    # for experiment in graphs_list[1]:
+    #     params = experiment.params
+    #     means, sterrs = experiment.means_data, experiment.sterrs_data
+    #     chooser = ', '.join([str(params[k]) for k in independent_vars])
+    #     label = chooser_to_label(chooser)   # name in legend
+    #     x_data = np.array(means[x_var]) + 1
+    #     ax2.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=chooser_to_color(chooser),
+    #                  capsize=capsize, capthick=1, label=label)
+    #
+    # #
+    # ax2.set_xlim([0,20])
+    # ax2.set_xlabel(var_to_label(x_var))
+    # ax2.set_ylabel(var_to_label(y_var))
+    # # plt.sca(ax2)
+    #
+    # subtitle = ','.join(['{0}={1}'.format(k, v) for k, v in controls])
+    # subtitle = '{0},{1}'.format(subtitle, other_vals).strip(',')
+    # title = 'Data for {0}'.format(', '.join(independent_vars))
+    # ax2.set_title(title + '\n' + subtitle)
+    # ax2.legend() #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+
+    folder = concat('graph', folder)
+    filename = '{0}-vs-{1}-for-{2}-with-{3}.png'.format(
+        ','.join(dependent_vars), x_var, ','.join(independent_vars), subtitle)
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+    # plt.savefig(concat(folder, filename))
+
+    plt.show()
+
+
+'''TODO:
+-Make subtitle function or hard-code
+-Serif?
+-Change graph shape to square
+-Incorporate more design parameters.
+'''
+
+
+# matplotlib.rcParams['text.usetex'] = True
+# matplotlib.rc('font', family='serif', serif=['Palatino'])
+# sns.set_style('darkgrid')
+
+
+def get_subtitle(controls):
+    pass
+
+
+def set_style():
+    sns.set(font='sansserif', font_scale=1.4)   # Change font size of (sub) title and legend. Serif seems to have no effect.
+
+    # Make the background a dark grid, and specify the
+    # specific font family
+    sns.set_style("darkgrid", {     # Font settings have no effect
+        "font.family": "serif",
+        "font.weight": "normal",
+        "font.serif": ["Times", "Palatino", "serif"]})
+        # 'axes.facecolor': 'darkgrid'})
+        # 'lines.markeredgewidth': 1})
+
+
+def plot_sig_line(ax, x1, x2, y1, h, padding=0.3):
+    '''
+    Plots the bracket thing denoting significance in plots. h controls how tall vertically the bracket is.
+    Only need one y coordinate (y1) since the bracket is parallel to the x-axis.
+    '''
+    ax.plot([x1, x1, x2, x2], [y1, y1 + h, y1 + h, y1], linewidth=1, color='k')
+    ax.text(0.5*(x1 + x2), y1 + h + padding * h, '*', color='k', fontsize=16, fontweight='normal')
+
+
+def var_to_label(varname):
+    if varname in ['true_entropy']:
+        return 'Entropy'
+    if varname in ['test_regret']:
+        return 'Regret in test environment'
+    if varname in ['post_regret']:
+        return 'Regret in training environment'
+    if varname in ['time']:
+        return 'Seconds per iteration'
+    if varname in ['norm post_avg-true']:
+        return 'Distance of posterior average to true reward'
+
+    if varname in ['iteration']:
+        return 'Number of queries asked'
+
+
+def chooser_to_color(chooser):
+    greedy_color = 'orange'
+    exhaustive_color = 'green'
+    random_color = 'grey'
+    full_color = 'red'
+
+    if chooser in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
+        return greedy_color
+    if chooser == 'random':
+        return random_color
+    if chooser in ['exhaustive', 'exhaustive_entropy']:
+        return exhaustive_color
+    if chooser == 'full':
+        return full_color
+
+def chooser_to_label(chooser):
+    if chooser in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
+        return 'Greedy'
+    if chooser in ['exhaustive', 'exhaustive_entropy']:
+        return 'Exhaustive'
+    if chooser == 'full':
+        return 'Full IRD'
+    if chooser == 'random':
+        return 'Random baseline'
+    if chooser == 'feature_entropy':
+        return 'Feature selection'
+    else:
+        return chooser
 
 def parse_args():
     parser = argparse.ArgumentParser()
