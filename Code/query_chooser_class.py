@@ -214,7 +214,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         objective, optimal_new_rewards = model.compute(
             desired_outputs, self.sess, mdp, curr_query, log_prior,
             weight_inits=np.random.randn(num_to_add, dim), gradient_steps=steps,
-            gradient_logging_outputs=[measure],
+            gradient_logging_outputs=[measure, 'weights_to_train'],
             true_reward_matrix=true_reward_matrix)
         query = curr_query + list(optimal_new_rewards)
         print('Objective for size {s}: '.format(s=len(query)) + str(objective[0][0]))
@@ -263,8 +263,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             objective, optimal_weights, feature_exps = model.compute(
                 desired_outputs, self.sess, mdp, query, log_prior,
                 weights, gradient_steps=self.args.num_iters_optim,
-                gradient_logging_outputs=[measure], true_reward=true_reward,
-                true_reward_matrix=true_reward_matrix)
+                gradient_logging_outputs=[measure, 'weights_to_train'],
+                true_reward=true_reward, true_reward_matrix=true_reward_matrix)
             query_cost = self.cost_of_asking * len(query)
             objective_plus_cost = objective + query_cost
             print('Model outputs calculated')
@@ -303,7 +303,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             feature_expectations_input=feature_exps,
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
         #return best_query, objective, true_posterior, true_entropy[0]
-        return best_query, objective, true_log_posterior, post_avg
+        return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
 
 
@@ -514,7 +514,8 @@ class Experiment(object):
                 if i > -1:
                     # Do iteration for feature-based choosers:
                     if chooser in ['feature_entropy']:
-                        query, exp_post_entropy, true_log_posterior, post_avg = self.query_chooser.find_query(self.query_size, chooser, true_reward)
+                        query, perf_measure, true_log_posterior, true_entropy, post_avg \
+                            = self.query_chooser.find_query(self.query_size, chooser, true_reward)
                         inference.update_prior(None, None, true_log_posterior)
                     else:
                         # Cache feature expectations and likelihoods

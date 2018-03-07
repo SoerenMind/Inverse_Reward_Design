@@ -41,12 +41,12 @@ if __name__=='__main__':
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
     parser.add_argument('--query_size',type=int,default=3)
     parser.add_argument('--num_experiments',type=int,default=2) # 3-5
-    parser.add_argument('--num_iter',type=int,default=15)    # number of queries asked
+    parser.add_argument('--num_iter',type=int,default=20)    # number of queries asked
     parser.add_argument('--gamma',type=float,default=1.) # otherwise 0.98. Values <1 might make test regret inaccurate.
-    parser.add_argument('--size_true_space',type=int,default=1000)
+    parser.add_argument('--size_true_space',type=int,default=1000000)
     parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--seed',type=int,default=1)
-    parser.add_argument('--beta',type=float,default=0.1)
+    parser.add_argument('--beta',type=float,default=0.2)
     parser.add_argument('--beta_planner',type=float,default=10.) # 1 for small version of results
     parser.add_argument('--num_states',type=int,default=100)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
@@ -56,9 +56,9 @@ if __name__=='__main__':
     parser.add_argument('--width',type=int,default=12)
     parser.add_argument('--lr',type=float,default=0.1)  # Learning rate
     parser.add_argument('--num_iters_optim',type=int,default=10)
-    parser.add_argument('--value_iters',type=int,default=25)    # max_reward / (1-gamma) or height+width
+    parser.add_argument('--value_iters',type=int,default=15)    # max_reward / (1-gamma) or height+width
     parser.add_argument('--mdp_type',type=str,default='gridworld')
-    parser.add_argument('--feature_dim',type=int,default=10)    # 10 if positions fixed, 100 otherwise
+    parser.add_argument('--feature_dim',type=int,default=20)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--discretization_size',type=int,default=5)
     parser.add_argument('--num_test_envs',type=int,default=100)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--well_spec',type=int,default=1)    # default is well-specified

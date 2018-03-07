@@ -491,10 +491,12 @@ class GridworldMdp(Mdp):
         grid = [['X'] * width for _ in range(height)]
         walls = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
         dsets = DisjointSets([])
+        first_state = required_nonwalls[0]
         for x, y in required_nonwalls:
             grid[y][x] = ' '
             walls.remove((x, y))
             dsets.add_singleton((x, y))
+            dsets.union((x, y), first_state)
 
         min_free_spots = (1 - pr_wall) * len(walls)
         random.shuffle(walls)
