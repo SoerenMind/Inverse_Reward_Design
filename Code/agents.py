@@ -203,10 +203,7 @@ class ValueIterationLikeAgent(Agent):
             elif action_value == best_value:
                 best_actions.append(a)
         # return Distribution({a : 1 for a in best_actions})
-        try:
-            return Distribution({best_actions[0] : 1})
-        except:
-            raise ValueError
+        return Distribution({best_actions[0] : 1})
 
     def get_mus(self):
         """Returns all possible generalized states the agent could be in.

@@ -41,12 +41,12 @@ if __name__=='__main__':
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
     parser.add_argument('--query_size',type=int,default=3)
     parser.add_argument('--num_experiments',type=int,default=2) # 3-5
-    parser.add_argument('--num_iter',type=int,default=15)    # number of queries asked
+    parser.add_argument('--num_iter',type=int,default=20)    # number of queries asked
     parser.add_argument('--gamma',type=float,default=1.) # otherwise 0.98. Values <1 might make test regret inaccurate.
-    parser.add_argument('--size_true_space',type=int,default=1000)
+    parser.add_argument('--size_true_space',type=int,default=1000000)
     parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--seed',type=int,default=1)
-    parser.add_argument('--beta',type=float,default=0.1)
+    parser.add_argument('--beta',type=float,default=0.2)
     parser.add_argument('--beta_planner',type=float,default=10.) # 1 for small version of results
     parser.add_argument('--num_states',type=int,default=100)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
@@ -56,9 +56,10 @@ if __name__=='__main__':
     parser.add_argument('--width',type=int,default=12)
     parser.add_argument('--lr',type=float,default=0.1)  # Learning rate
     parser.add_argument('--num_iters_optim',type=int,default=10)
-    parser.add_argument('--value_iters',type=int,default=25)    # max_reward / (1-gamma) or height+width
+    parser.add_argument('--value_iters',type=int,default=15)    # max_reward / (1-gamma) or height+width
     parser.add_argument('--mdp_type',type=str,default='gridworld')
-    parser.add_argument('--feature_dim',type=int,default=10)    # 10 if positions fixed, 100 otherwise
+    parser.add_argument('--feature_dim',type=int,default=20)    # 10 if positions fixed, 100 otherwise
+    parser.add_argument('--discretization_size',type=int,default=5)
     parser.add_argument('--num_test_envs',type=int,default=100)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--well_spec',type=int,default=1)    # default is well-specified
     parser.add_argument('--subsampling',type=int,default=1)
@@ -71,7 +72,7 @@ if __name__=='__main__':
 
     args = parser.parse_args()
     print args
-
+    assert args.discretization_size % 2 == 1
 
     # Experiment description
     adapted_description = False
@@ -111,9 +112,9 @@ if __name__=='__main__':
         'qsize': query_size,
         'mdp': args.mdp_type,
         'dim': feature_dim,
+        'dsize': args.discretization_size,
         'size_true': size_reward_space_true,
         'size_proxy': size_reward_space_proxy,
-        # 'true_rw_random' : args.true_rw_random,
         'seed': SEED,
         'beta': beta,
         'num_states': num_states,
@@ -129,7 +130,16 @@ if __name__=='__main__':
         'objective': args.objective
     }
 
-    # # Set up env and agent for NStateMdp
+    'Sample true rewards and reward spaces'
+    reward_space_true = np.array(np.random.randint(-9, 9, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
+    reward_space_proxy = np.random.randint(-9, 9, size=[size_reward_space_proxy, args.feature_dim])
+    if not args.well_spec:
+        true_rewards = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in range(num_experiments)]
+    else:
+        true_rewards = [choice(reward_space_true) for _ in range(num_experiments)]
+    prior_avg = -0.5 * np.ones(args.feature_dim) + 1e-4 * np.random.exponential(1,args.feature_dim) # post_avg for uniform prior + noise
+
+    # Set up env and agent for NStateMdp
     if args.mdp_type == 'bandits':
 
         'Create train and test MDPs'
@@ -152,17 +162,6 @@ if __name__=='__main__':
             mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
                                             feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED+i*50)
             train_mdps.append(mdp)
-
-        'Sample true rewards and reward spaces'
-
-        reward_space_true = np.array(np.random.randint(-9, 9, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
-        reward_space_proxy = np.random.randint(-9, 9, size=[size_reward_space_proxy, args.feature_dim])
-
-        if not args.well_spec:
-            true_rewards = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in range(num_experiments)]
-        else:
-            true_rewards = [choice(reward_space_true) for _ in range(num_experiments)]
-        prior_avg = -0.5 * np.ones(args.feature_dim) + 1e-4 * np.random.exponential(1,args.feature_dim) # post_avg for uniform prior + noise
 
         'Create train and test inferences'
         test_inferences = []
@@ -188,27 +187,6 @@ if __name__=='__main__':
 
     # Set up env and agent for gridworld
     elif args.mdp_type == 'gridworld':
-
-        'Sample true rewards and reward spaces'
-        # reward_space_true = [np.random.multinomial(18, np.ones(args.feature_dim)/18) for _ in xrange(size_reward_space_true)]
-        # reward_space_proxy = [np.random.multinomial(18, np.ones(args.feature_dim)) for _ in xrange(size_reward_space_proxy)]
-
-        reward_space_true = np.array(np.random.randint(-9, 9, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
-        reward_space_proxy = np.random.randint(-9, 9, size=[size_reward_space_proxy, args.feature_dim])
-
-        if not args.well_spec:
-            true_rewards = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in range(num_experiments)]
-        else:
-            true_rewards = [choice(reward_space_true) for _ in range(num_experiments)]
-        prior_avg = -0.5 * np.ones(args.feature_dim) + 1e-4 * np.random.exponential(1,args.feature_dim) # post_avg for uniform prior + noise
-
-        # reward_space_true = [np.random.randint(-9, 9, size=[args.feature_dim])   for _ in xrange(size_reward_space_true)]
-        # reward_space_proxy = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in xrange(size_reward_space_proxy)]
-
-        # reward_space_true = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_true)]
-        # reward_space_proxy = [np.random.dirichlet(np.ones(args.feature_dim)) * args.feature_dim - 1 for _ in xrange(size_reward_space_proxy)]
-
-
         'Create train and test MDPs'
         test_inferences = []
         for i in range(args.num_test_envs):

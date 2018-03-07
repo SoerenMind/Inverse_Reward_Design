@@ -5,7 +5,7 @@ from itertools import product
 from gridworld import Direction
 
 class Model(object):
-    def __init__(self, feature_dim, gamma, query_size, discretization_const,
+    def __init__(self, feature_dim, gamma, query_size, discretization_size,
                  true_reward_space_size, num_unknown, beta, beta_planner,
                  objective, lr, discrete, optimize):
         self.initialized = False
@@ -24,7 +24,11 @@ class Model(object):
                 self.num_unknown = num_unknown
         else:
             assert query_size <= 5
-            f_range = range(-discretization_const, discretization_const + 1)
+            num_posneg_vals = (discretization_size // 2)
+            const = 9 // num_posneg_vals
+            f_range = range(-num_posneg_vals * const, 10, const)
+            print 'Using', f_range, 'to discretize the feature'
+            assert len(f_range) == discretization_size
             # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
             self.proxy_reward_space = list(product(f_range, repeat=query_size))
             self.K = len(self.proxy_reward_space)
@@ -212,7 +216,7 @@ class Model(object):
         """
         :param objective: string that specifies the objective function
         """
-        if 'entropy' in objective:
+        if 'entropy' == objective:
             # # Calculate exp entropy without log space trick
             # post_ent = - tf.reduce_sum(
             #     tf.multiply(tf.exp(self.log_posterior), self.log_posterior), axis=1, keep_dims=True, name='post_ent')
@@ -221,8 +225,9 @@ class Model(object):
             # self.name_to_op['entropy'] = self.exp_post_ent
 
 
-            # Calculate entropy as sum exp (log p + log (-log p))
-            interm_tensor = self.log_posterior + tf.log(- self.log_posterior)
+            # Calculate entropy as exp logsumexp (log p + log (-log p))
+            scaled_log_posterior = self.log_posterior - 0.0001
+            interm_tensor = scaled_log_posterior + tf.log(- scaled_log_posterior)
             self.log_post_ent_new = tf.reduce_logsumexp(
                 interm_tensor, axis=1, name="entropy_per_answer", keep_dims=True)
             self.post_ent_new = tf.exp(self.log_post_ent_new)
@@ -232,9 +237,9 @@ class Model(object):
             self.exp_post_ent = tf.exp(self.log_exp_post_ent)
             self.name_to_op['entropy'] = self.exp_post_ent
 
-            self.objective = self.exp_post_ent
+            self.objective = self.log_exp_post_ent
 
-        if 'total_variation' in objective:
+        if 'total_variation' == objective:
 
             self.post_averages, self.post_var = tf.nn.weighted_moments(
                 self.true_reward_matrix, [1, 1], tf.stack([self.posterior] * self.feature_dim, axis=2),
@@ -255,8 +260,10 @@ class Model(object):
         # Set up optimizer
         if self.optimize:
             optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
-            self.grads_and_vars = optimizer.compute_gradients(self.objective)
-            self.train_op = optimizer.apply_gradients(self.grads_and_vars)
+            gradients, vs = zip(*optimizer.compute_gradients(self.objective))
+            # self.gradient_norm = tf.norm(tf.stack(gradients, axis=0))
+            self.train_op = optimizer.apply_gradients(zip(gradients, vs))
+            # self.name_to_op['gradient_norm'] = self.gradient_norm
             self.name_to_op['minimize'] = self.train_op
 
 
@@ -307,10 +314,12 @@ class Model(object):
 
         if gradient_steps > 0:
             ops = [get_op(name) for name in gradient_logging_outputs]
+            other_ops = [self.train_op]
             for step in range(gradient_steps):
-                results = sess.run(ops + [self.train_op], feed_dict=fd)
+                results = sess.run(ops + other_ops, feed_dict=fd)
                 if ops and step % 5 == 0:
                     print 'Gradient step {0}: {1}'.format(step, results[:-1])
+
         return sess.run([get_op(name) for name in outputs], feed_dict=fd)
 
 
