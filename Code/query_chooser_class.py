@@ -58,7 +58,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         inference.feature_expectations_matrix."""
         proxy_space = [list(reward) for reward in reward_space]
         print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-        model = self.get_model(len(proxy_space))
+        model = self.get_model(len(proxy_space), 'entropy')
 
         desired_outputs = ['feature_exps']
         mdp = self.inference.mdp
@@ -85,36 +85,33 @@ class Query_Chooser_Subclass(Query_Chooser):
         """Calls query chooser specified by chooser (string)."""
         # if chooser == 'maxmin':
         #     return self.find_query_feature_diff(query_size)
-        if chooser == 'test_graph':
-            self.test_graph(query_size, 'variance', sess, true_reward)
-        if chooser == 'exhaustive_entropy':
-            return self.find_discrete_query(query_size, 'entropy', sess, true_reward, growth_rate=query_size)
+        measure = self.args.objective
+        if chooser == 'exhaustive':
+            return self.find_discrete_query(query_size, measure, sess, true_reward, growth_rate=query_size)
         # elif chooser == 'greedy_regret':
         #     return self.find_best_query_greedy(query_size, true_reward=true_reward)
         elif chooser == 'random':
-            return self.find_discrete_query(query_size, 'entropy', sess, true_reward, random_query=True)
+            return self.find_discrete_query(query_size, measure, sess, true_reward, random_query=True)
         elif chooser == 'full':
-            return self.find_discrete_query(query_size, 'entropy', sess, true_reward, full_query=True)
+            return self.find_discrete_query(query_size, measure, sess, true_reward, full_query=True)
         # elif chooser == 'no_query':
         #     return [], self.get_exp_regret_from_query([]), None
         # elif chooser == 'greedy_exp_reward':
         #     return self.find_best_query_greedy(query_size, total_reward=True, true_reward=true_reward)
-        elif chooser == 'greedy_entropy_discrete_tf':
-            return self.find_discrete_query(query_size, 'entropy', sess, true_reward, growth_rate=1)
+        elif chooser == 'greedy_discrete':
+            return self.find_discrete_query(query_size, measure, sess, true_reward, growth_rate=1)
         elif chooser == 'incremental_optimize':
             return self.find_discrete_query_with_optimization(
-                query_size, 'entropy', sess, true_reward, growth_rate=1)
+                query_size, measure, sess, true_reward, growth_rate=1)
         elif chooser == 'joint_optimize':
             return self.find_discrete_query_with_optimization(
-                query_size, 'entropy', sess, true_reward, growth_rate=query_size)
+                query_size, measure, sess, true_reward, growth_rate=query_size)
         # elif chooser == 'greedy_entropy':
             # return self.find_best_query_greedy(query_size, entropy=True, true_reward=true_reward)
         elif chooser == 'feature_entropy':
             return self.find_feature_query_greedy(query_size, 'entropy', true_reward)
-        elif chooser == 'feature_variance':
-            return self.find_feature_query_greedy(query_size, 'variance', true_reward)
         else:
-            raise NotImplementedError('Calling unimplemented query chooser')
+            raise NotImplementedError('Calling unimplemented query chooser: '+str(chooser))
 
 
     def build_discrete_query(self, query_size, measure, sess, growth_rate, extend_fn):
@@ -154,7 +151,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
         idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
         feature_exp_input = self.inference.feature_exp_matrix[idx, :]
-        model = self.get_model(query_size, no_planning=True)
+        model = self.get_model(query_size, measure, no_planning=True)
         best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
             desired_outputs, sess, None, None, log_prior,
             feature_expectations_input=feature_exp_input,
@@ -169,7 +166,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_objective, best_query = float("inf"), None
         query_extensions = self.generate_set_of_queries(num_to_add)
         true_reward_matrix, log_prior = self.get_true_reward_space()
-        model = self.get_model(len(curr_query) + num_to_add, no_planning=True)
+        model = self.get_model(len(curr_query) + num_to_add, measure, no_planning=True)
         for query in query_extensions:
             query = curr_query + query
             idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
@@ -195,7 +192,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
         mdp = self.inference.mdp
-        model = self.get_model(query_size)
+        model = self.get_model(query_size, measure)
         best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
             desired_outputs, sess, mdp, best_query, log_prior,
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
@@ -209,7 +206,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         mdp = self.inference.mdp
         dim, steps = self.args.feature_dim, self.args.num_iters_optim
         model = self.get_model(
-            len(curr_query) + num_to_add, num_unknown=num_to_add, optimize=True)
+            len(curr_query) + num_to_add, measure, num_unknown=num_to_add, optimize=True)
         model.initialize(sess)
         objective, optimal_new_rewards = model.compute(
             desired_outputs, sess, mdp, curr_query, log_prior,
@@ -249,7 +246,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_objective, best_objective_plus_cost = float("inf"), float("inf")
         best_query, best_optimal_weights, best_feature_exps = None, None, None
         model = self.get_model(
-            len(curr_query) + 1, discrete=False, optimize=True)
+            len(curr_query) + 1, measure, discrete=False, optimize=True)
 
         true_reward_matrix, log_prior = self.get_true_reward_space()
 
@@ -297,7 +294,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         # Add: Get all measures for data recording?
         desired_outputs = [measure, 'true_log_posterior','true_entropy', 'post_avg']
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
-        model = self.get_model(query_size, discrete=False)
+        model = self.get_model(query_size, measure, discrete=False)
         with tf.Session() as sess:
             sess.run(model.initialize_op)
             objective, true_log_posterior, true_entropy, post_avg = model.compute(
@@ -322,7 +319,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
 
-    def get_model(self, query_size, discretization_const=2, num_unknown=None,
+    def get_model(self, query_size, objective, discretization_const=2, num_unknown=None,
                   discrete=True, optimize=False, no_planning=False):
         mdp = self.inference.mdp
         height, width = None, None
@@ -336,7 +333,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         # true_reward_space_size = len(self.inference.true_reward_matrix)
         key = (no_planning, mdp.type, dim, gamma, query_size,
                discretization_const, true_reward_space_size, num_unknown, beta,
-               beta_planner, lr, discrete, optimize, height, width, num_iters)
+               beta_planner, lr, discrete, optimize, height, width, num_iters, objective)
         if key in self.model_cache:
             return self.model_cache[key]
 
@@ -345,18 +342,18 @@ class Query_Chooser_Subclass(Query_Chooser):
             model = NoPlanningModel(
                 dim, gamma, query_size, discretization_const,
                 true_reward_space_size, num_unknown, beta, beta_planner,
-                'entropy', lr, discrete, optimize)
+                objective, lr, discrete, optimize)
         elif mdp.type == 'bandits':
             print 'Calling BanditsModel'
             model = BanditsModel(
                 dim, gamma, query_size, discretization_const,
                 true_reward_space_size, num_unknown, beta, beta_planner,
-                'entropy', lr, discrete, optimize)
+                objective, lr, discrete, optimize)
         elif mdp.type == 'gridworld':
             model = GridworldModel(
                 dim, gamma, query_size, discretization_const,
                 true_reward_space_size, num_unknown, beta, beta_planner,
-                'entropy', lr, discrete, optimize, mdp.height, mdp.width,
+                objective, lr, discrete, optimize, mdp.height, mdp.width,
                 num_iters)
         else:
             raise ValueError('Unknown model type: ' + str(mdp.type))
@@ -498,7 +495,7 @@ class Experiment(object):
 
         # Cache feature_exps and lhoods
         # print 'NOT CACHING FEATURES!'
-        if any(chooser in self.choosers for chooser in ['greedy_entropy_discrete_tf','exhaustive_entropy','random','full']):
+        if any(chooser in self.choosers for chooser in ['greedy_discrete','exhaustive','random','full']):
             print('caching likelihoods. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
             self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
             inference.cache_lhoods() # Only run this if the environment isn't changed each iteration
@@ -572,7 +569,7 @@ class Experiment(object):
         for i, test_inference in enumerate(self.test_inferences):
             # New method using TF:
             test_mdp = test_inference.mdp
-            planning_model = self.query_chooser.get_model(1)
+            planning_model = self.query_chooser.get_model(1, 'entropy')
 
             [post_avg_feature_exps] = planning_model.compute(['feature_exps'], sess, test_mdp, [list(post_avg)])
             [true_reward_feature_exps] = planning_model.compute(['feature_exps'], sess, test_mdp, [list(true_reward)])
@@ -588,7 +585,7 @@ class Experiment(object):
             # regret = optimal_reward - test_reward
             # regrets[i] = regret
             if regret < -1:
-                print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+                print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
                 print 'regret: ' +str(regret)
         return regrets.mean()   # Check variance here and adjust number of envs
 

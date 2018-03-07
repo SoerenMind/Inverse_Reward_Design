@@ -232,60 +232,32 @@ class Model(object):
             self.exp_post_ent = tf.exp(self.log_exp_post_ent)
             self.name_to_op['entropy'] = self.exp_post_ent
 
-            # Set up optimizer
-            if self.optimize:
-                optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
-                self.grads_and_vars = optimizer.compute_gradients(self.exp_post_ent)
-                self.train_op = optimizer.apply_gradients(self.grads_and_vars)
-                self.name_to_op['minimize'] = self.train_op
+            self.objective = self.exp_post_ent
 
-        if 'variance' in objective:
-            '''
-            Dimensions:
-            -posterior: qsize x strue                   stack into dimension 1
-            -true_reward_matrix: feature_dim x strue    stack into dimension 2
+        if 'total_variation' in objective:
 
-            Problem: We temporarily store a feature_dim x strue x qsize matrix.
+            self.post_averages, self.post_var = tf.nn.weighted_moments(
+                self.true_reward_matrix, [1, 1], tf.stack([self.posterior] * self.feature_dim, axis=2),
+                name="moments", keep_dims=False)
+            self.name_to_op['post_var'] = self.post_var
 
-            tf.nn.weighted_moments
-            -Still need to store huge matrix
-
-            '''
+            self.total_variations = tf.reduce_sum(self.post_var, axis=-1, keep_dims=False)
+            self.name_to_op['total_variations'] = self.total_variations
+            self.total_variations, self.log_Z_q = tf.reshape(self.total_variations, [-1]), tf.reshape(self.log_Z_q,[-1])
+            self.total_variation = tf.tensordot(
+                self.total_variations, tf.exp(self.log_Z_q), axes=[-1,-1] ,name='total_var')
+            self.total_variation = tf.reshape(self.total_variation, shape=[1,1,-1])
+            self.name_to_op['total_variation'] = self.total_variation
 
 
+            self.objective = self.total_variation
 
-
-
-            # post_avg, post_var = tf.nn.moments(self.true_reward_matrix, axes=[0], keep_dims=False)
-            # self.posterior_stack = tf.stack([self.posterior[0]] * self.feature_dim, axis=1)
-            self.posterior_stack = tf.expand_dims(self.posterior[0], axis=1)
-
-            'Only using posterior[0 so far!'
-
-            # true_rewards_stack = tf.stack([self.true_reward_matrix] * self.K, axis=0)
-            post_avg, post_var = tf.nn.weighted_moments(
-                self.true_reward_matrix, [0, 0], self.posterior_stack, name="moments", keep_dims=False)
-            post_std = tf.sqrt(post_var)
-
-            data = tf.constant([[0.,2.,4.],[0.,2.,4.]], dtype=tf.float32)
-            avg, var = tf.nn.moments(data, axes=[1,0])
-
-            # self.generalized_var = tf.matrix_determinant(post_var, name="generalized_variance")
-            # self.name_to_op['variance'] = self.generalized_var
-            self.name_to_op['post_avg'] = post_avg
-            self.name_to_op['post_var'] = post_var
-            self.name_to_op['posterior_stack'] = self.posterior_stack
-            self.name_to_op['variance'] = var
-
-
-        if 'regret' in objective:
-            pass
-
-        if 'avg_reward' in objective:
-            pass
-
-        if 'query_entropy' in objective:
-            pass
+        # Set up optimizer
+        if self.optimize:
+            optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+            self.grads_and_vars = optimizer.compute_gradients(self.objective)
+            self.train_op = optimizer.apply_gradients(self.grads_and_vars)
+            self.name_to_op['minimize'] = self.train_op
 
 
     def compute(self, outputs, sess, mdp, query=None, log_prior=None, weight_inits=None, feature_expectations_input=None,

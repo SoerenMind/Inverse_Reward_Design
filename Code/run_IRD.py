@@ -65,6 +65,8 @@ if __name__=='__main__':
     parser.add_argument('--num_subsamples',type=int,default=10000)
     parser.add_argument('--weighting',type=int,default=1)
     parser.add_argument('--linear_features',type=int,default=1)
+    parser.add_argument('--objective',type=str,default='entropy')
+
 
 
     args = parser.parse_args()
@@ -122,8 +124,9 @@ if __name__=='__main__':
         'subsamp': args.subsampling,
         'num_subsamp': args.num_subsamples,
         'weighting': args.weighting,
-        'viters: ': args.value_iters,
-        'linfeat:': args.linear_features,
+        'viters': args.value_iters,
+        'linfeat': args.linear_features,
+        'objective': args.objective
     }
 
     # # Set up env and agent for NStateMdp
