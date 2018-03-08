@@ -165,7 +165,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # Select set of extensions to consider
         if num_to_add == 1:               # Consider whole proxy space
-            query_extensions = self.reward_space_proxy
+            query_extensions = [list(proxy) for proxy in self.reward_space_proxy]
         elif num_to_add == 2:             # Consider random combinations
             num_queries_max = 2 * len(self.reward_space_proxy)
             query_extensions = self.generate_set_of_queries(num_to_add, num_queries_max)

@@ -2,14 +2,16 @@ from subprocess import call
 
 # Discrete experiments
 
-NUM_EXPERIMENTS = '2'  # Modify this to change the sample size
+NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
-choosers = ['greedy_discrete', 'random', 'exhaustive']
+choosers = ['exhaustive', 'greedy_discrete', 'random']
 query_sizes = ['2','3','5','10']
 mdp_types = ['bandits', 'gridworld']
 true_reward_space_sizes = ['1000000']
 # objectives = ['entropy']
 num_iter = '20'
+num_q_max = '2000'
+
 
 def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', viter='15', rsize='1000000',
         subsampling='1', num_iter='20'):
@@ -45,7 +47,7 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                   '--num_states', '100',  # Only applies for bandits
                   '--dist_scale', '0.5',
                   '--num_traject', '1',
-                  '--num_queries_max', '500',
+                  '--num_queries_max', num_q_max,
                   '--height', '12',  # Only applies for gridworld
                   '--width', '12',   # Only applies for gridworld
                   '--lr', lr,   # Doesn't matter, only applies in continuous case
