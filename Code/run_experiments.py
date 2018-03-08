@@ -4,15 +4,15 @@ from subprocess import call
 
 NUM_EXPERIMENTS = '2'  # Modify this to change the sample size
 
-choosers = ['greedy_discrete', 'random', 'exhaustive', 'feature_entropy']
-query_sizes = ['3']
+choosers = ['greedy_discrete', 'random', 'exhaustive']
+query_sizes = ['2','3','5','10']
 mdp_types = ['bandits', 'gridworld']
 true_reward_space_sizes = ['1000000']
-# objectives = ['total_variation','entropy']
-objectives = ['entropy']
-num_iter = '3'
+# objectives = ['entropy']
+num_iter = '20'
 
-def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', viter='15', rsize='1000000', subsampling='1', num_iter='20'):
+def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', viter='15', rsize='1000000',
+        subsampling='1', num_iter='20'):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one

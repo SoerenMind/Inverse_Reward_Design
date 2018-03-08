@@ -74,9 +74,11 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
 
-    def generate_set_of_queries(self, query_size):
+    def generate_set_of_queries(self, query_size, num_queries_max=None):
+        if num_queries_max == None:
+            num_queries_max = self.num_queries_max
         num_queries = comb(len(self.reward_space_proxy), query_size)
-        if num_queries > self.num_queries_max:
+        if num_queries > num_queries_max:
             return [list(random_combination(self.reward_space_proxy, query_size)) for _ in range(self.num_queries_max)]
         return [list(x) for x in combinations(self.reward_space_proxy, query_size)]
 
@@ -131,14 +133,14 @@ class Query_Chooser_Subclass(Query_Chooser):
     def find_discrete_query(
             self, query_size, measure, true_reward, growth_rate=None,
             full_query=False, random_query=False):
-        """Computes a query by greedily growing the query by growth_rate
-        features until reaching query_size features.
+        """Computes a random or full query or calls a function to greedily grow a query until it reaches query_size.
         """
         if full_query:
             best_query = self.reward_space_proxy
             query_size = len(self.reward_space_proxy)
         elif random_query:
             best_query = [choice(self.reward_space_proxy) for _ in range(query_size)]
+        # Find best query by greedy or exhaustive search
         else:
             best_query = self.build_discrete_query(
                 query_size, measure, growth_rate, self.extend_with_discretization)
@@ -160,7 +162,17 @@ class Query_Chooser_Subclass(Query_Chooser):
 
     def extend_with_discretization(self, curr_query, num_to_add, measure):
         best_objective, best_query = float("inf"), None
-        query_extensions = self.generate_set_of_queries(num_to_add)
+
+        # Select set of extensions to consider
+        if num_to_add == 1:               # Consider whole proxy space
+            query_extensions = self.reward_space_proxy
+        elif num_to_add == 2:             # Consider random combinations
+            num_queries_max = 2 * len(self.reward_space_proxy)
+            query_extensions = self.generate_set_of_queries(num_to_add, num_queries_max)
+        elif num_to_add > 2:              # Consider self.num_queries_max for exhaustive search
+            query_extensions = self.generate_set_of_queries(num_to_add)
+        else: raise ValueError('Must add >0 proxies to query.')
+
         true_reward_matrix, log_prior = self.get_true_reward_space()
         model = self.get_model(len(curr_query) + num_to_add, measure, no_planning=True)
         for query in query_extensions:
@@ -537,9 +549,9 @@ class Experiment(object):
                 iter_end_time = time.clock()
                 duration = iter_end_time - iter_start_time
                 # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
-                post_regret = self.query_chooser.get_regret(post_avg, true_reward) # TODO: Still plans with Python. May use wrong gamma, or trajectory normalization?
+                post_regret = self.compute_regret(post_avg, true_reward, inference) # TODO: Still plans with Python. May use wrong gamma, or trajectory length
                 norm_to_true = self.get_normalized_reward_diff(post_avg, true_reward)
-                test_regret = self.compute_test_regret(post_avg, true_reward)
+                test_regret = self.compute_regret(post_avg, true_reward)
                 print('Test regret: '+str(test_regret)+' | Post regret: '+str(post_regret))
 
                 # Save results
@@ -554,14 +566,21 @@ class Experiment(object):
                     = true_entropy, perf_measure, post_regret, test_regret, norm_to_true, query, duration
 
 
-    def compute_test_regret(self, post_avg, true_reward):
-        """Computes regret from optimizing post_avg across some cached test environments."""
+    def compute_regret(self, post_avg, true_reward, inference=None):
+        """Computes mean regret from optimizing post_avg across some cached test environments.
+        If inference is given, the regret is computed only in inference.mdp (the training environment)."""
+
+        # Compute regret over test mdps
+        if inference is None:
+            inferences = self.test_inferences
+        # Compute regret using training mdp
+        else:
+            inferences = [inference]
 
         regrets = np.empty(len(self.test_inferences))
-        # Have to use the test environment model!
-        for i, test_inference in enumerate(self.test_inferences):
+        for i, inference in enumerate(inferences):
             # New method using TF:
-            test_mdp = test_inference.mdp
+            test_mdp = inference.mdp
             planning_model = self.query_chooser.get_model(1, 'entropy')
 
             [post_avg_feature_exps] = planning_model.compute(['feature_exps'], self.query_chooser.sess, test_mdp, [list(post_avg)])
@@ -573,14 +592,14 @@ class Experiment(object):
             regrets[i] = regret
 
             # Old method (using normalized feature exps in Python)
-            # test_reward = test_inference.get_avg_reward(post_avg, true_reward)
-            # optimal_reward = test_inference.get_avg_reward(true_reward, true_reward)
+            # test_reward = inference.get_avg_reward(post_avg, true_reward)
+            # optimal_reward = inference.get_avg_reward(true_reward, true_reward)
             # regret = optimal_reward - test_reward
             # regrets[i] = regret
             if regret < -1:
                 print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
                 print 'regret: ' +str(regret)
-        return regrets.mean()   # Check variance here and adjust number of envs
+        return regrets.mean()
 
     def get_normalized_reward_diff(self, post_avg, true_reward):
         norm_post_avg = (post_avg - post_avg.mean())
