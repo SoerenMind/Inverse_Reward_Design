@@ -1,11 +1,16 @@
+
+print('importing')
 import argparse
 import csv
 import os
 import re
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib
 import seaborn as sns
+# from seaborn import set, set_style
 import numpy as np
+
+print('importing done')
 
 class Experiment(object):
     def __init__(self, params, means_data, sterrs_data):
@@ -160,7 +165,7 @@ def load_data(folder):
     return experiments, changing_vars, control_var_vals
 
 
-def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
+def graph_all_old(experiments, all_vars, x_var, dependent_vars, independent_vars,
               controls, folder):
     """Graphs data and saves them.
 
@@ -201,8 +206,8 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
 
 
 
-def graph_all_new(experiments, all_vars, x_var, dependent_vars, independent_vars,
-              controls, folder):
+def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
+              controls, folder, args):
     """Graphs data and saves them.
 
     Each graph generated plots the dependent_vars against x_var for all
@@ -226,9 +231,14 @@ def graph_all_new(experiments, all_vars, x_var, dependent_vars, independent_vars
     vars_so_far = [x_var] + dependent_vars + independent_vars + control_vars
     remaining_vars = list(set(all_vars) - set(vars_so_far))
     graphs_data = {}
+    double_envs = args.double_envs
+    if double_envs:
+        remaining_vars = list(set(remaining_vars) - set(['mdp', 'beta']))
+
 
     for experiment in experiments.values():
         params = experiment.params
+        # Exclude experiments that don't have the desired values of controls
         if not all(params[k] == v for k, v in controls):
             continue
 
@@ -237,21 +247,16 @@ def graph_all_new(experiments, all_vars, x_var, dependent_vars, independent_vars
             graphs_data[key] = []
         graphs_data[key].append(experiment)
 
-    keys, graphs_list = [], []
     for key, exps in graphs_data.items():
-        keys.append(key), graphs_list.append(exps)
-    graph(graphs_list, x_var, dependent_vars, independent_vars, controls, keys, folder)
+        # keys.append(key), graphs_list.append(exps)
+        graph(exps, x_var, dependent_vars, independent_vars, controls, key, folder, double_envs)
 
 
 
-'''how to do multiple subplots
--Feed 2 exps into graph
--Create each ax outside of graph and fill it in with graph
-'''
 
 
 
-def graph(experiments, x_var, dependent_vars, independent_vars, controls,
+def graph_old(experiments, x_var, dependent_vars, independent_vars, controls,
           other_vals, folder):
     """Creates and saves a single graph.
 
@@ -288,9 +293,8 @@ def graph(experiments, x_var, dependent_vars, independent_vars, controls,
 
 
 
-
-def graph_new(graphs_list, x_var, dependent_vars, independent_vars, controls,
-          other_vals, folder):
+def graph(exps, x_var, dependent_vars, independent_vars, controls,
+          other_vals, folder, double_envs):
     """Creates and saves a single graph.
 
     Arguments are almost the same as for graph_all.
@@ -298,91 +302,158 @@ def graph_new(graphs_list, x_var, dependent_vars, independent_vars, controls,
           variables not in x_var, dependent_vars, independent_vars, or
           controls.
     """
-    assert len(dependent_vars) == 1
-    y_var = dependent_vars[0]
 
-
-    fig, (ax1, ax2) = plt.subplots(1,2)
-
+    # Whole figure layout setting
     set_style()
-    # sns.set_context(rc={'lines.markeredgewidth': 10.0})   # Thickness or error bars
+    num_rows = len(dependent_vars)
+    num_columns = 2 if double_envs else 1
+    fig, axes = plt.subplots(num_rows, num_columns)
+    sns.set_context(rc={'lines.markeredgewidth': 1.0})   # Thickness or error bars
     capsize = 0.    # length of horizontal line on error bars
     spacing = 100.0
 
-    for experiment in graphs_list[0]:
-        params = experiment.params
-        means, sterrs = experiment.means_data, experiment.sterrs_data
-        chooser = ', '.join([str(params[k]) for k in independent_vars])
-        label = chooser_to_label(chooser)   # name in legend
-        x_data = np.array(means[x_var]) + 1
-        ax1.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=chooser_to_color(chooser),
-                     capsize=capsize, capthick=1, label=label)
+    # Draw all lines and labels
+    for row, y_var in enumerate(dependent_vars):
+        for experiment in exps:
+            col = 0 if experiment.params['mdp'] == 'bandits' else 1
+            ax = get_ax(axes, row, num_rows, num_columns, col)
 
-    ax1.set_xlim([0,20])
-    ax1.set_xlabel(var_to_label(x_var))
-    ax1.set_ylabel(var_to_label(y_var))
-    plt.sca(ax1)
+            params = experiment.params
+            means, sterrs = experiment.means_data, experiment.sterrs_data
+            chooser = ', '.join([str(params[k]) for k in independent_vars])
+            label = chooser_to_label(chooser)   # name in legend
+            x_data = np.array(means[x_var]) + 1
+            ax.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=chooser_to_color(chooser),
+                         capsize=capsize, capthick=1, label=label)#,
+                         # marker='o', markerfacecolor='white', markeredgecolor=chooser_to_color(chooser),
+                         # markersize=4)
 
+            ax.set_xlim([0,21])
+            ax.set_ylim(-0.2)
+
+            # Set ylabel
+            ax_left = get_ax(axes, row, num_rows, num_columns, 0)
+            ax_left.set_ylabel(var_to_label(y_var), fontsize=15)
+
+            # Set title
+            # title = 'Data for {0}'.format(', '.join(independent_vars))
+            title = get_title(col)
+            ax_top = get_ax(axes, 0, num_rows, num_columns, col)
+            ax_top.set_title(title, fontsize=16, fontweight='normal')
+
+
+    'Make legend'
+    plt.sca(ax)
+    plt.legend(fontsize=12)
+
+
+    'Change global layout'
+    sns.despine(fig)    # Removes top and right graph edges
+    plt.suptitle('Number of queries asked', y=0.02, fontsize=16)
+    # fig.suptitle('Bandits', y=0.98, fontsize=18)
+    # plt.tight_layout(w_pad=0.02, rect=[0, 0.03, 1, 0.95])  # w_pad adds horizontal space between graphs
+    # plt.subplots_adjust(top=1, wspace=0.35)     # adds space at the top or bottom
+    # plt.subplots_adjust(bottom=.2)
+    # fig.set_figwidth(15)     # Can be adjusted by resizing window
+    # fig.set_figheight(5)
+
+    'Save file'
     subtitle = ','.join(['{0}={1}'.format(k, v) for k, v in controls])
     subtitle = '{0},{1}'.format(subtitle, other_vals).strip(',')
-    title = 'Data for {0}'.format(', '.join(independent_vars))
-    ax1.set_title(title + '\n' + subtitle)
-    ax1.legend() #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-
-    # for experiment in graphs_list[1]:
-    #     params = experiment.params
-    #     means, sterrs = experiment.means_data, experiment.sterrs_data
-    #     chooser = ', '.join([str(params[k]) for k in independent_vars])
-    #     label = chooser_to_label(chooser)   # name in legend
-    #     x_data = np.array(means[x_var]) + 1
-    #     ax2.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=chooser_to_color(chooser),
-    #                  capsize=capsize, capthick=1, label=label)
-    #
-    # #
-    # ax2.set_xlim([0,20])
-    # ax2.set_xlabel(var_to_label(x_var))
-    # ax2.set_ylabel(var_to_label(y_var))
-    # # plt.sca(ax2)
-    #
-    # subtitle = ','.join(['{0}={1}'.format(k, v) for k, v in controls])
-    # subtitle = '{0},{1}'.format(subtitle, other_vals).strip(',')
-    # title = 'Data for {0}'.format(', '.join(independent_vars))
-    # ax2.set_title(title + '\n' + subtitle)
-    # ax2.legend() #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-
     folder = concat('graph', folder)
     filename = '{0}-vs-{1}-for-{2}-with-{3}.png'.format(
         ','.join(dependent_vars), x_var, ','.join(independent_vars), subtitle)
     if not os.path.exists(folder):
         os.mkdir(folder)
-    # plt.savefig(concat(folder, filename))
-
+    plt.savefig(concat(folder, filename))
     plt.show()
 
 
 '''TODO:
--Make subtitle function or hard-code
--Serif?
--Change graph shape to square
--Incorporate more design parameters.
+-List types of graphs I want and make a general framework for creating them
+    -2nd set
+        -1-2 -i qsize+continuous+discrete optim
+            - TODO: Make choosers in [c, d, c+d]
+            - TODO: have qsizes seperately for discrete and continuous
+    -Compare continuous query sizes among themselves
+    -Compare continuous against random continuous for a given qsize
+    -Single graphs as usual (but with continuous +discrete optim included)
 '''
 
+"""
+Plot types
+    -4 choosers on bandits and gridworlds for entropy and test regret
+        -qsize=5
+        -add discrete optim?
+    -qsize=2,3,5,10,full,continuous
+        -2 or 3 graphs
+        -gridworlds + bandits
+        -test regret (+entropy? may be boring)
+    -continuous: 1,2,3,random baselines,post_avg baselines
+    -bar graph for time?
+        -qsize=2 or 3
+        -random vs greedy vs continuous
+"""
 
-# matplotlib.rcParams['text.usetex'] = True
-# matplotlib.rc('font', family='serif', serif=['Palatino'])
-# sns.set_style('darkgrid')
 
 
-def get_subtitle(controls):
-    pass
+def get_ax(axes, row, num_rows, num_columns, col):
+    onecol = num_columns == 1
+    onerow = num_rows == 1
+
+    # col = 0 if experiment.params['mdp'] == 'bandits' or num_columns == 1 else 1
+
+    if not onerow and not onecol:
+        ax = axes[row, col]
+    elif onecol and not onerow:
+        ax = axes[row]
+    elif not onecol and onerow:
+        ax = axes[col]
+    elif onecol and onerow:
+        ax = axes
+    else:
+        raise ValueError('Number of dependent vars and envs each must be 1 or 2')
+    return ax
+
+
+def get_title(axnum):
+    if axnum == 0:
+        return 'Bandits*'
+    elif axnum == 1:
+        return 'Gridworlds'
+    else:
+        return str(axnum)
+
+def create_legend(ax):
+    lines = [
+        ('nominal', {'color': '#f79646', 'linestyle': 'solid'}),
+        ('risk-averse', {'color': '#f79646', 'linestyle': 'dashed'}),
+        ('nominal', {'color': '#cccccc', 'linestyle': 'solid'}),
+        ('IRD-augmented', {'color': '#cccccc', 'linestyle': 'dotted'}),
+        ('risk-averse', {'color': '#cccccc', 'linestyle': 'dashed'})
+    ]
+
+    def create_dummy_line(**kwds):
+        return mpl.lines.Line2D([], [], **kwds)
+
+    ax.legend([create_dummy_line(**l[1]) for l in lines],
+    [l[0] for l in lines],
+    loc='upper right',
+    ncol=1,
+    fontsize=10,
+    bbox_to_anchor=(1.1, 1.0))  # adjust horizontal and vertical legend position
+
 
 
 def set_style():
-    sns.set(font='sansserif', font_scale=1.4)   # Change font size of (sub) title and legend. Serif seems to have no effect.
+    mpl.rcParams['text.usetex'] = True
+    mpl.rc('font', family='serif', serif=['Palatino'])  # Makes font thinner
+
+    sns.set(font='serif', font_scale=1.4)   # Change font size of (sub) title and legend. Serif seems to have no effect.
 
     # Make the background a dark grid, and specify the
     # specific font family
-    sns.set_style("darkgrid", {     # Font settings have no effect
+    sns.set_style("white", {     # Font settings have no effect
         "font.family": "serif",
         "font.weight": "normal",
         "font.serif": ["Times", "Palatino", "serif"]})
@@ -403,7 +474,7 @@ def var_to_label(varname):
     if varname in ['true_entropy']:
         return 'Entropy'
     if varname in ['test_regret']:
-        return 'Regret in test environment'
+        return 'Regret in test env'
     if varname in ['post_regret']:
         return 'Regret in training environment'
     if varname in ['time']:
@@ -416,10 +487,10 @@ def var_to_label(varname):
 
 
 def chooser_to_color(chooser):
-    greedy_color = 'orange'
-    exhaustive_color = 'green'
-    random_color = 'grey'
-    full_color = 'red'
+    greedy_color = 'lightblue'
+    exhaustive_color = 'crimson'
+    random_color = 'darkorange'
+    full_color = 'grey'
 
     if chooser in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
         return greedy_color
@@ -451,12 +522,15 @@ def parse_args():
     parser.add_argument('-d', '--dependent_var', action='append', required=True)
     parser.add_argument('-i', '--independent_var', action='append', required=True)
     parser.add_argument('-c', '--control_var_val', action='append', default=[])
+    parser.add_argument('--double_envs', action='store_true')
+    # parser.add_argument('-choosers', '--cho', action='append', default=[])
     return parser.parse_args()
 
 if __name__ == '__main__':
+
     args = parse_args()
     experiments, all_vars, _ = load_data(args.folder)
     controls = [kv_pair.split('=') for kv_pair in args.control_var_val]
     controls = [(k, maybe_num(v)) for k, v in controls]
     graph_all(experiments, all_vars, args.x_var, args.dependent_var,
-              args.independent_var, controls, args.folder)
+              args.independent_var, controls, args.folder, args)
