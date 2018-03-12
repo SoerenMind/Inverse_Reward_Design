@@ -204,10 +204,24 @@ def graph_all_old(experiments, all_vars, x_var, dependent_vars, independent_vars
     for key, exps in graphs_data.items():
         graph(exps, x_var, dependent_vars, independent_vars, controls, key, folder)
 
+def get_matching_experiments(experiments, params_to_match):
+    """Returns a list of Experiments whose param values match the bindings in
+    params_to_match.
 
+    - experiments: Dictionary from keys of the form ((var, val), ...) to
+          Experiment objects
+    - params_to_match: Tuple of the form ((var, val), ...) where var is a string
+          and val is a string or number. The parameter values to match.
+    """
+    result = []
+    for exp in experiments.values():
+        if not all(exp.params[k] == v for k, v in params_to_match):
+            continue
+        result.append(exp)
+    return result
 
 def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
-              controls, folder, args):
+              controls, extra_experiment_params, folder, args):
     """Graphs data and saves them.
 
     Each graph generated plots the dependent_vars against x_var for all
@@ -235,17 +249,18 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
     if double_envs:
         remaining_vars = list(set(remaining_vars) - set(['mdp', 'beta']))
 
+    extra_experiments = []
+    for exp_params in extra_experiment_params:
+        identified_experiments = get_matching_experiments(experiments, exp_params)
+        assert len(identified_experiments) == 2
+        assert set([e.params['mdp'] for e in identified_experiments]) == set(['gridworld', 'bandits'])
+        extra_experiments.extend(identified_experiments)
 
-    for experiment in experiments.values():
-        params = experiment.params
-        # Exclude experiments that don't have the desired values of controls
-        if not all(params[k] == v for k, v in controls):
-            continue
-
-        key = ','.join(['{0}={1}'.format(k, params[k]) for k in remaining_vars])
+    for exp in get_matching_experiments(experiments, controls):
+        key = ','.join(['{0}={1}'.format(k, exp.params[k]) for k in remaining_vars])
         if key not in graphs_data:
-            graphs_data[key] = []
-        graphs_data[key].append(experiment)
+            graphs_data[key] = extra_experiments[:]  # Make a copy of the list
+        graphs_data[key].append(exp)
 
     for key, exps in graphs_data.items():
         # keys.append(key), graphs_list.append(exps)
@@ -522,15 +537,19 @@ def parse_args():
     parser.add_argument('-d', '--dependent_var', action='append', required=True)
     parser.add_argument('-i', '--independent_var', action='append', required=True)
     parser.add_argument('-c', '--control_var_val', action='append', default=[])
+    parser.add_argument('-e', '--experiment', action='append', default=[])
     parser.add_argument('--double_envs', action='store_true')
     # parser.add_argument('-choosers', '--cho', action='append', default=[])
     return parser.parse_args()
 
-if __name__ == '__main__':
+def parse_kv_pairs(lst):
+    result = [kv_pair.split('=') for kv_pair in lst]
+    return [(k, maybe_num(v)) for k, v in result]
 
+if __name__ == '__main__':
     args = parse_args()
     experiments, all_vars, _ = load_data(args.folder)
-    controls = [kv_pair.split('=') for kv_pair in args.control_var_val]
-    controls = [(k, maybe_num(v)) for k, v in controls]
+    controls = parse_kv_pairs(args.control_var_val)
+    extra_experiments = [parse_kv_pairs(x.split(',')) for x in args.experiment]
     graph_all(experiments, all_vars, args.x_var, args.dependent_var,
-              args.independent_var, controls, args.folder, args)
+              args.independent_var, controls, extra_experiments, args.folder, args)
