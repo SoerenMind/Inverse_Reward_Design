@@ -252,8 +252,8 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
     extra_experiments = []
     for exp_params in extra_experiment_params:
         identified_experiments = get_matching_experiments(experiments, exp_params)
-        assert len(identified_experiments) == 2
-        assert set([e.params['mdp'] for e in identified_experiments]) == set(['gridworld', 'bandits'])
+        # assert len(identified_experiments) == 2
+        # assert set([e.params['mdp'] for e in identified_experiments]) == set(['gridworld', 'bandits'])
         extra_experiments.extend(identified_experiments)
 
     for exp in get_matching_experiments(experiments, controls):

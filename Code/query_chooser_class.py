@@ -76,6 +76,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
     def generate_set_of_queries(self, query_size, num_queries_max=None):
         if num_queries_max == None:
+            # Use hyperparameter for exhaustive chooser
             num_queries_max = self.num_queries_max
         num_queries = comb(len(self.reward_space_proxy), query_size)
         if num_queries > num_queries_max:
@@ -165,7 +166,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # Select set of extensions to consider
         if num_to_add == 1:               # Consider whole proxy space
-            query_extensions = [list(proxy) for proxy in self.reward_space_proxy]
+            query_extensions = [[proxy] for proxy in self.reward_space_proxy]
         elif num_to_add == 2:             # Consider random combinations
             num_queries_max = 2 * len(self.reward_space_proxy)
             query_extensions = self.generate_set_of_queries(num_to_add, num_queries_max)
@@ -176,8 +177,11 @@ class Query_Chooser_Subclass(Query_Chooser):
         true_reward_matrix, log_prior = self.get_true_reward_space()
         model = self.get_model(len(curr_query) + num_to_add, measure, no_planning=True)
         for query in query_extensions:
-            query = curr_query + query
-            idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
+            query = curr_query + query  # query must be LIST of one or more arrays
+            try:
+                idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
+            except:
+                pass
             feature_exp_input = self.inference.feature_exp_matrix[idx, :]
 
             # Compute objective
