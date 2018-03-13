@@ -90,7 +90,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         #     return self.find_query_feature_diff(query_size)
         measure = self.args.objective
         if chooser == 'exhaustive':
-            return self.find_discrete_query(query_size, measure, true_reward, growth_rate=query_size)
+            return self.find_discrete_query(query_size, measure, true_reward, growth_rate=query_size, exhaustive_query=True)
         # elif chooser == 'greedy_regret':
         #     return self.find_best_query_greedy(query_size, true_reward=true_reward)
         elif chooser == 'random':
@@ -113,7 +113,38 @@ class Query_Chooser_Subclass(Query_Chooser):
             raise NotImplementedError('Calling unimplemented query chooser: '+str(chooser))
 
 
-    def build_discrete_query(self, query_size, measure, growth_rate, extend_fn):
+    def find_discrete_query(
+            self, query_size, measure, true_reward, growth_rate=None,
+            full_query=False, random_query=False, exhaustive_query=False):
+        """Computes a random or full query or calls a function to greedily grow a query until it reaches query_size.
+        """
+        if full_query:
+            best_query = self.reward_space_proxy
+            query_size = len(self.reward_space_proxy)
+        elif random_query:
+            best_query = [choice(self.reward_space_proxy) for _ in range(query_size)]
+        # Find best query by greedy or exhaustive search
+        elif exhaustive_query:
+            best_query = self.build_discrete_query(
+                query_size, measure, growth_rate, self.extend_with_discretization, exhaustive_query=True)
+        else:
+            best_query = self.build_discrete_query(
+                query_size, measure, growth_rate, self.extend_with_discretization, exhaustive_query=False)
+
+        desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
+        true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
+        idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
+        feature_exp_input = self.inference.feature_exp_matrix[idx, :]
+        model = self.get_model(query_size, measure, no_planning=True)
+        best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
+            desired_outputs, self.sess, None, None, log_prior,
+            feature_expectations_input=feature_exp_input,
+            true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+
+        print('Best objective found with a discrete query: ' + str(best_objective[0][0]))
+        return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
+
+    def build_discrete_query(self, query_size, measure, growth_rate, extend_fn, exhaustive_query=False):
         """Builds a discrete query by starting from the empty query and calling
         extend_fn to add growth_rate rewards to it until it reaches query_size
         rewards.
@@ -128,60 +159,33 @@ class Query_Chooser_Subclass(Query_Chooser):
             # Discrete queries of size 1 make no sense, so increase to size 2
             if len(best_query) == 0 and size_increase == 1:
                 size_increase = 2
-            best_query, _ = extend_fn(best_query, size_increase, measure)
+            # if growth_rate > 1:
+            #     exhaustive = True
+            best_query, _ = extend_fn(best_query, size_increase, measure, exhaustive_query)
         return best_query
 
-    def find_discrete_query(
-            self, query_size, measure, true_reward, growth_rate=None,
-            full_query=False, random_query=False):
-        """Computes a random or full query or calls a function to greedily grow a query until it reaches query_size.
-        """
-        if full_query:
-            best_query = self.reward_space_proxy
-            query_size = len(self.reward_space_proxy)
-        elif random_query:
-            best_query = [choice(self.reward_space_proxy) for _ in range(query_size)]
-        # Find best query by greedy or exhaustive search
-        else:
-            best_query = self.build_discrete_query(
-                query_size, measure, growth_rate, self.extend_with_discretization)
-
-        desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
-        true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
-        idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
-        feature_exp_input = self.inference.feature_exp_matrix[idx, :]
-        model = self.get_model(query_size, measure, no_planning=True)
-        best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
-            desired_outputs, self.sess, None, None, log_prior,
-            feature_expectations_input=feature_exp_input,
-            true_reward=true_reward, true_reward_matrix=true_reward_matrix)
 
 
 
-        print('Best objective found with a discrete query: ' + str(best_objective[0][0]))
-        return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
-    def extend_with_discretization(self, curr_query, num_to_add, measure):
+    def extend_with_discretization(self, curr_query, num_to_add, measure, exhaustive_query):
         best_objective, best_query = float("inf"), None
 
         # Select set of extensions to consider
         if num_to_add == 1:               # Consider whole proxy space
             query_extensions = [[proxy] for proxy in self.reward_space_proxy]
-        elif num_to_add == 2:             # Consider random combinations
+        elif num_to_add == 2 and not exhaustive_query:             # Consider random combinations for greedy
             num_queries_max = 2 * len(self.reward_space_proxy)
             query_extensions = self.generate_set_of_queries(num_to_add, num_queries_max)
-        elif num_to_add > 2:              # Consider self.num_queries_max for exhaustive search
+        elif num_to_add >= 2 and exhaustive_query:              # Consider self.num_queries_max for exhaustive search
             query_extensions = self.generate_set_of_queries(num_to_add)
-        else: raise ValueError('Must add >0 proxies to query.')
+        else: raise ValueError('Must add >0 proxies to query (may have selected growth rate >2 for greedy).')
 
         true_reward_matrix, log_prior = self.get_true_reward_space()
         model = self.get_model(len(curr_query) + num_to_add, measure, no_planning=True)
         for query in query_extensions:
             query = curr_query + query  # query must be LIST of one or more arrays
-            try:
-                idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
-            except:
-                pass
+            idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in query]
             feature_exp_input = self.inference.feature_exp_matrix[idx, :]
 
             # Compute objective
@@ -212,7 +216,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         print('Best objective found with optimized discrete query: ' + str(best_objective[0][0]))
         return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
-    def extend_with_optimization(self, curr_query, num_to_add, measure):
+    def extend_with_optimization(self, curr_query, num_to_add, measure, exhaustive_query=False):
         true_reward_matrix, log_prior = self.get_true_reward_space()
         desired_outputs = [measure, 'weights_to_train']
         mdp = self.inference.mdp

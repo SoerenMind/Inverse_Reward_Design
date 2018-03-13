@@ -8,7 +8,7 @@ choosers = ['exhaustive', 'greedy_discrete', 'random']
 query_sizes = ['2','3','5','10']
 mdp_types = ['bandits', 'gridworld']
 true_reward_space_sizes = ['1000000']
-# objectives = ['entropy']
+objectives = ['entropy']
 num_iter = '20'
 num_q_max = '2000'
 
