@@ -80,7 +80,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             num_queries_max = self.num_queries_max
         num_queries = comb(len(self.reward_space_proxy), query_size)
         if num_queries > num_queries_max:
-            return [list(random_combination(self.reward_space_proxy, query_size)) for _ in range(self.num_queries_max)]
+            return [list(random_combination(self.reward_space_proxy, query_size)) for _ in range(num_queries_max)]
         return [list(x) for x in combinations(self.reward_space_proxy, query_size)]
 
     # @profile

@@ -51,7 +51,7 @@ if __name__=='__main__':
     parser.add_argument('--num_states',type=int,default=100)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
     parser.add_argument('--num_traject',type=int,default=1)
-    parser.add_argument('--num_queries_max',type=int,default=500)   # x10 the number tried for greedy
+    parser.add_argument('--num_queries_max',type=int,default=2000)
     parser.add_argument('--height',type=int,default=12)
     parser.add_argument('--width',type=int,default=12)
     parser.add_argument('--lr',type=float,default=0.1)  # Learning rate
