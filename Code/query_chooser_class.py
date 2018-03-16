@@ -377,7 +377,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             desired_outputs, self.sess, mdp, best_query, log_prior,
             feature_expectations_input=feature_exps,
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-        print('Best objective found (continuous): ' + str(objective[0][0]))
+        print('Best full posterior objective found (continuous): ' + str(objective[0][0]))
         return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
 
