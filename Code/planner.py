@@ -95,6 +95,7 @@ class Model(object):
             self.assign_op = self.weights_to_train.assign(self.weight_inputs)
             self.fixed_weights = self.weights_to_train
             self.name_to_op['weights_to_train'] = self.weights_to_train
+            self.name_to_op['weights_to_train[:3]'] = self.weights_to_train[:3]
         else:
             self.fixed_weights = tf.constant(
                 np.zeros([num_fixed], dtype=np.float32))
@@ -265,6 +266,7 @@ class Model(object):
             gradients, vs = zip(*optimizer.compute_gradients(self.objective))
             # self.gradient_norm = tf.norm(tf.stack(gradients, axis=0))
             self.train_op = optimizer.apply_gradients(zip(gradients, vs))
+            # self.name_to_op['gradients'] = gradients
             # self.name_to_op['gradient_norm'] = self.gradient_norm
             self.name_to_op['minimize'] = self.train_op
 

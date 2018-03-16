@@ -110,13 +110,22 @@ class Query_Chooser_Subclass(Query_Chooser):
         elif chooser == 'feature_entropy':
             self.search = False
             self.init_none = False
+            self.no_optimize = False
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         elif chooser == 'feature_entropy_init_none':
             self.search = False
             self.init_none = True
+            self.no_optimize = False
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         elif chooser == 'feature_entropy_search':
             self.search = True
+            self.init_none = False
+            self.no_optimize = False
+            return self.find_feature_query_greedy(query_size, measure, true_reward)
+        elif chooser == 'feature_entropy_random_init_none':
+            self.search = False
+            self.init_none = True
+            self.no_optimize = True
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         else:
             raise NotImplementedError('Calling unimplemented query chooser: '+str(chooser))
@@ -286,12 +295,15 @@ class Query_Chooser_Subclass(Query_Chooser):
                 if not self.init_none:
                     if curr_weights is not None:
                         weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
-
+                if self.no_optimize:
+                    gd_steps = 0
+                else:
+                    gd_steps = self.args.num_iters_optim
                 objective, optimal_weights, feature_exps = model.compute(
                     desired_outputs, self.sess, mdp, query, log_prior,
-                    weights, gradient_steps=self.args.num_iters_optim+1,
+                    weights, gradient_steps=gd_steps,
                     # gradient_logging_outputs=[measure, 'weights_to_train'],
-                    gradient_logging_outputs=[measure],
+                    gradient_logging_outputs=[measure, 'weights_to_train[:3]'],
                     true_reward=true_reward, true_reward_matrix=true_reward_matrix)
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
