@@ -299,11 +299,15 @@ class Query_Chooser_Subclass(Query_Chooser):
             else:
                 # Compare to objective optimized over random setting of other weights
                 num_search = 70
-                objective_disc, best_query_disc = \
+                objective, best_query = \
                     self.test_func(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix,true_reward)
-                if objective_disc <= best_objective_disc:
-                    best_objective_disc = objective_disc
-                    best_query_disc = query
+                objective_plus_cost = objective + self.cost_of_asking * len(query)
+                optimal_weights = None
+                feature_exps = None
+            # if objective <= best_objective:
+            #     best_objective = objective
+            #     best_objective_plus_cost = objective + self.cost_of_asking * len(query)
+            #     best_query = query
             # print('Best objectives with GD vs search over {n} weights: {a} vs {b}'.format(
             #     n=num_search,a=best_objective,b=best_objective_disc))
             # print('Best queries: {a} vs {b}'.format(a=str(best_query), b=str(best_query_disc)))
@@ -316,7 +320,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                 best_optimal_weights = optimal_weights
                 best_query = query
                 best_feature_exps = feature_exps
-
+        print('Objective for size {s}: '.format(s=len(best_query)) + str(best_objective[0][0]))
 
 
 
@@ -373,7 +377,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             desired_outputs, self.sess, mdp, best_query, log_prior,
             feature_expectations_input=feature_exps,
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-        #return best_query, objective, true_posterior, true_entropy[0]
+        print('Best objective found (continuous): ' + str(objective[0][0]))
         return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
 
