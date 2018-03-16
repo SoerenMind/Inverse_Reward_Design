@@ -299,11 +299,9 @@ class Query_Chooser_Subclass(Query_Chooser):
             else:
                 # Compare to objective optimized over random setting of other weights
                 num_search = 70
-                objective, best_query = \
+                objective, optimal_weights, feature_exps = \
                     self.test_func(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix,true_reward)
                 objective_plus_cost = objective + self.cost_of_asking * len(query)
-                optimal_weights = None
-                feature_exps = None
             # if objective <= best_objective:
             #     best_objective = objective
             #     best_objective_plus_cost = objective + self.cost_of_asking * len(query)
@@ -338,9 +336,10 @@ class Query_Chooser_Subclass(Query_Chooser):
                 true_reward=true_reward, true_reward_matrix=true_reward_matrix)
             if objective_disc <= best_objective_disc:
                 best_objective_disc = objective_disc
-                best_query_disc = query
+                best_optimal_weights_disc = optimal_weights_disc
+                best_feature_exps_disc = feature_exps_disc
 
-        return best_objective_disc, best_query_disc
+        return best_objective_disc, best_optimal_weights_disc, best_feature_exps_disc
 
     def get_other_weights_samples(self, length):
         """Generates random other weights from given discretization."""
