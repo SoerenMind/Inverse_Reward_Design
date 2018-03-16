@@ -131,10 +131,10 @@ if __name__=='__main__':
     }
 
     'Sample true rewards and reward spaces'
-    reward_space_true = np.array(np.random.randint(-9, 9, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
-    reward_space_proxy = np.random.randint(-9, 9, size=[size_reward_space_proxy, args.feature_dim])
+    reward_space_true = np.array(np.random.randint(-9, 10, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
+    reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
     if not args.well_spec:
-        true_rewards = [np.random.randint(-9, 9, size=[args.feature_dim]) for _ in range(num_experiments)]
+        true_rewards = [np.random.randint(-9, 10, size=[args.feature_dim]) for _ in range(num_experiments)]
     else:
         true_rewards = [choice(reward_space_true) for _ in range(num_experiments)]
     prior_avg = -0.5 * np.ones(args.feature_dim) + 1e-4 * np.random.exponential(1,args.feature_dim) # post_avg for uniform prior + noise

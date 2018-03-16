@@ -59,7 +59,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         inference.feature_expectations_matrix."""
         proxy_space = [list(reward) for reward in reward_space]
         print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-        model = self.get_model(len(proxy_space), 'entropy')
+        model = self.get_model(len(proxy_space), 'entropy', cache=False)
         model.initialize(self.sess)
 
         desired_outputs = ['feature_exps']
@@ -108,6 +108,15 @@ class Query_Chooser_Subclass(Query_Chooser):
             return self.find_discrete_query_with_optimization(
                 query_size, measure, true_reward, growth_rate=query_size)
         elif chooser == 'feature_entropy':
+            self.search = False
+            self.init_none = False
+            return self.find_feature_query_greedy(query_size, measure, true_reward)
+        elif chooser == 'feature_entropy_init_none':
+            self.search = False
+            self.init_none = True
+            return self.find_feature_query_greedy(query_size, measure, true_reward)
+        elif chooser == 'feature_entropy_search':
+            self.search = True
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         else:
             raise NotImplementedError('Calling unimplemented query chooser: '+str(chooser))
@@ -227,7 +236,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         objective, optimal_new_rewards = model.compute(
             desired_outputs, self.sess, mdp, curr_query, log_prior,
             weight_inits=np.random.randn(num_to_add, dim), gradient_steps=steps,
-            gradient_logging_outputs=[measure, 'weights_to_train'],
+            # gradient_logging_outputs=[measure, 'weights_to_train'],
+            gradient_logging_outputs=[measure],
             true_reward_matrix=true_reward_matrix)
         query = curr_query + list(optimal_new_rewards)
         print('Objective for size {s}: '.format(s=len(query)) + str(objective[0][0]))
@@ -240,8 +250,10 @@ class Query_Chooser_Subclass(Query_Chooser):
         log_probs = self.inference.log_prior
         probs = np.exp(log_probs)
         probs = probs / probs.sum()
-        choices = np.random.choice(self.args.size_true_space, p=probs, size=num_subsamples)
-
+        try:
+            choices = np.random.choice(self.args.size_true_space, p=probs, size=num_subsamples)
+        except:
+            pass
         if self.args.weighting:
             unique_sample_idx, counts = np.unique(choices, return_counts=True)
 
@@ -259,7 +271,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         desired_outputs = [measure, 'weights_to_train', 'feature_exps']
         features = [i for i in range(self.args.feature_dim) if i not in curr_query]
 
-        best_objective, best_objective_plus_cost = float("inf"), float("inf")
+        best_objective, best_objective_plus_cost, best_objective_disc = float("inf"), float("inf"), float("inf")
         best_query, best_optimal_weights, best_feature_exps = None, None, None
         model = self.get_model(
             len(curr_query) + 1, measure, discrete=False, optimize=True)
@@ -270,25 +282,73 @@ class Query_Chooser_Subclass(Query_Chooser):
         for i, feature in enumerate(features):
             query = curr_query+[feature]
             weights = None
-            if curr_weights is not None:
-                weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
+            if not self.search:
+                if not self.init_none:
+                    if curr_weights is not None:
+                        weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
 
-            objective, optimal_weights, feature_exps = model.compute(
-                desired_outputs, self.sess, mdp, query, log_prior,
-                weights, gradient_steps=self.args.num_iters_optim,
-                gradient_logging_outputs=[measure, 'weights_to_train'],
-                true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-            query_cost = self.cost_of_asking * len(query)
-            objective_plus_cost = objective + query_cost
-            print('Model outputs calculated')
+                objective, optimal_weights, feature_exps = model.compute(
+                    desired_outputs, self.sess, mdp, query, log_prior,
+                    weights, gradient_steps=self.args.num_iters_optim+1,
+                    # gradient_logging_outputs=[measure, 'weights_to_train'],
+                    gradient_logging_outputs=[measure],
+                    true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+                query_cost = self.cost_of_asking * len(query)
+                objective_plus_cost = objective + query_cost
+            # Find weights by search over samples
+            else:
+                # Compare to objective optimized over random setting of other weights
+                num_search = 70
+                objective_disc, best_query_disc = \
+                    self.test_func(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix,true_reward)
+                if objective_disc <= best_objective_disc:
+                    best_objective_disc = objective_disc
+                    best_query_disc = query
+            # print('Best objectives with GD vs search over {n} weights: {a} vs {b}'.format(
+            #     n=num_search,a=best_objective,b=best_objective_disc))
+            # print('Best queries: {a} vs {b}'.format(a=str(best_query), b=str(best_query_disc)))
+
+
+            # print('Model outputs calculated')
             if objective_plus_cost <= best_objective_plus_cost + 1e-14:
                 best_objective = objective
                 best_objective_plus_cost = objective_plus_cost
                 best_optimal_weights = optimal_weights
                 best_query = query
                 best_feature_exps = feature_exps
+
+
+
+
+
         return best_query, best_optimal_weights, best_feature_exps
 
+    def test_func(self, desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix,true_reward):
+        best_objective_disc = float("inf")
+        for _ in range(num_search):
+            num_fixed = self.args.feature_dim - len(query)
+            other_weights = self.get_other_weights_samples(num_fixed)
+            objective_disc, optimal_weights_disc, feature_exps_disc = model.compute(
+                desired_outputs, self.sess, mdp, query, log_prior,
+                other_weights,
+                true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+            if objective_disc <= best_objective_disc:
+                best_objective_disc = objective_disc
+                best_query_disc = query
+
+        return best_objective_disc, best_query_disc
+
+    def get_other_weights_samples(self, length):
+        """Generates random other weights from given discretization."""
+        num_posneg_vals = (self.args.discretization_size // 2)
+        const = 9 // num_posneg_vals
+        f_range = range(-num_posneg_vals * const, 10, const)
+        # print 'Using', f_range, 'to discretize the feature'
+        assert len(f_range) == self.args.discretization_size
+        # other_weights = np.random.randint(-9,10,size=length)
+        other_weights = np.random.choice(f_range, size=length)
+        # list(product(f_range, repeat=query_size))
+        return other_weights
 
 
     # @profile
@@ -297,7 +357,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         mdp = self.inference.mdp
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
         best_query = []
-        feature_dim = self.args.feature_dim
         best_weights = None
         while len(best_query) < query_size:
             best_query, best_weights, feature_exps = self.find_next_feature(
@@ -306,7 +365,6 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         print('query found')
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
-        # Add: Get all measures for data recording?
         desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
         model = self.get_model(query_size, measure, discrete=False)
@@ -334,7 +392,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
     def get_model(self, query_size, objective, num_unknown=None,
-                  discrete=True, optimize=False, no_planning=False):
+                  discrete=True, optimize=False, no_planning=False, cache=True):
         mdp = self.inference.mdp
         height, width = None, None
         # TODO: Replace mdp.type with self.args.mdp_type
@@ -372,8 +430,9 @@ class Query_Chooser_Subclass(Query_Chooser):
         else:
             raise ValueError('Unknown model type: ' + str(mdp.type))
 
-        self.model_cache[key] = model
-        print 'Model built and cached!'
+        if cache:
+            self.model_cache[key] = model
+            print 'Model built and cached!'
         return model
 
 
@@ -537,10 +596,10 @@ class Experiment(object):
                         # inference.cache_lhoods()
 
                         # Find best query
-                        print('Finding best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+                        # print('Finding best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
                         query, perf_measure, true_log_posterior, true_entropy, post_avg \
                             = self.query_chooser.find_query(self.query_size, chooser, true_reward)
-                        print('Found best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+                        # print('Found best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
                         query = [np.array(proxy) for proxy in query]
 
                         # Update posterior

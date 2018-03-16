@@ -2,10 +2,10 @@ from subprocess import call
 
 # Discrete experiments
 
-NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
+NUM_EXPERIMENTS = '3'  # Modify this to change the sample size
 
-choosers = ['exhaustive', 'greedy_discrete', 'random']
-query_sizes = ['2','3','5','10']
+choosers = ['incremental_optimize', 'joint_optimize', 'greedy_discrete', 'random']
+query_sizes = ['3','5']
 mdp_types = ['bandits', 'gridworld']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
@@ -71,12 +71,12 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
 # Run as usual
 def run_discrete():
     for mdp_type in mdp_types:
-        run('full', '2', mdp_type, num_iter=num_iter)
 
         for chooser in choosers:
             for qsize in query_sizes:
                 run(chooser, qsize, mdp_type, num_iter=num_iter)
 
+        run('full', '2', mdp_type, num_iter=num_iter)
 
 # Run with different rsize and subsampling values
 def run_subsampling():

@@ -297,7 +297,7 @@ def graph_old(experiments, x_var, dependent_vars, independent_vars, controls,
     subtitle = '{0},{1}'.format(subtitle, other_vals).strip(',')
     title = 'Data for {0}'.format(', '.join(independent_vars))
     plt.title(title + '\n' + subtitle)
-    plt.legend() #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    plt.legend([]) #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
 
     folder = concat('graph', folder)
     filename = '{0}-vs-{1}-for-{2}-with-{3}.png'.format(
@@ -322,13 +322,14 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
     set_style()
     num_rows = len(dependent_vars)
     num_columns = 2 if double_envs else 1
-    fig, axes = plt.subplots(num_rows, num_columns)
+    fig, axes = plt.subplots(num_rows, num_columns, sharex=True)
     sns.set_context(rc={'lines.markeredgewidth': 1.0})   # Thickness or error bars
     capsize = 0.    # length of horizontal line on error bars
     spacing = 100.0
 
     # Draw all lines and labels
     for row, y_var in enumerate(dependent_vars):
+        labels = []
         for experiment in exps:
             col = 0 if experiment.params['mdp'] == 'bandits' else 1
             ax = get_ax(axes, row, num_rows, num_columns, col)
@@ -336,12 +337,14 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
             params = experiment.params
             means, sterrs = experiment.means_data, experiment.sterrs_data
             chooser = ', '.join([str(params[k]) for k in independent_vars])
-            label = chooser_to_label(chooser)   # name in legend
+            label = i_var_to_label(chooser)   # name in legend
             x_data = np.array(means[x_var]) + 1
             ax.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=chooser_to_color(chooser),
                          capsize=capsize, capthick=1, label=label)#,
                          # marker='o', markerfacecolor='white', markeredgecolor=chooser_to_color(chooser),
                          # markersize=4)
+
+            labels.append(label)
 
             ax.set_xlim([0,21])
             ax.set_ylim(-0.2)
@@ -358,8 +361,16 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
 
 
     'Make legend'
+    ax = axes[0]
     plt.sca(ax)
-    plt.legend(fontsize=12)
+    handles, labels = ax.get_legend_handles_labels()
+    hl = sorted(zip(handles, labels, [1,3,2,0]),    # Sorts legend by putting labels 0:k to place as specified
+           key=lambda elem: elem[2])
+    hl = [[handle, label] for handle, label, idx in hl]
+    handles2, labels2 = zip(*hl)
+
+    # ax.legend(handles2, labels2, fontsize=10)
+    plt.legend(handles2, labels2, fontsize=11)
 
 
     'Change global layout'
@@ -381,10 +392,14 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
     if not os.path.exists(folder):
         os.mkdir(folder)
     plt.savefig(concat(folder, filename))
-    plt.show()
+    # plt.show()
 
 
 '''TODO:
+-Make 2nd set of plots
+
+    -Legend for qsizes
+    -Get data for continuous (or at least disc optim with same settings as last experiments)
 -List types of graphs I want and make a general framework for creating them
     -2nd set
         -1-2 -i qsize+continuous+discrete optim
@@ -502,10 +517,10 @@ def var_to_label(varname):
 
 
 def chooser_to_color(chooser):
-    greedy_color = 'lightblue'
-    exhaustive_color = 'crimson'
-    random_color = 'darkorange'
-    full_color = 'grey'
+    greedy_color = 'darkorange' #'lightblue'
+    exhaustive_color = 'orange' # 'peachpuff', 'crimson'
+    random_color = 'darkgrey' # 'darkorange'
+    full_color = 'lightgrey' # 'grey'
 
     if chooser in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
         return greedy_color
@@ -516,19 +531,25 @@ def chooser_to_color(chooser):
     if chooser == 'full':
         return full_color
 
-def chooser_to_label(chooser):
-    if chooser in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
+def i_var_to_label(i_var):
+    if i_var in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
         return 'Greedy'
-    if chooser in ['exhaustive', 'exhaustive_entropy']:
+    if i_var in ['exhaustive', 'exhaustive_entropy']:
         return 'Exhaustive'
-    if chooser == 'full':
+    if i_var == 'full':
         return 'Full IRD'
-    if chooser == 'random':
-        return 'Random baseline'
-    if chooser == 'feature_entropy':
+    if i_var == 'random':
+        return 'Random'
+    if i_var == 'feature_entropy':
         return 'Feature selection'
+    if i_var == 'joint_optimize':
+        return 'Joint optimize'
+    if i_var == 'greedy_optimize':
+        return 'greedy_optimize'
+    if type(i_var) == int:
+        return i_var
     else:
-        return chooser
+        return i_var
 
 def parse_args():
     parser = argparse.ArgumentParser()

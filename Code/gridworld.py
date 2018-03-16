@@ -511,7 +511,7 @@ class GridworldMdp(Mdp):
 
         grid[height // 2][width // 2] = 'A'
         for x, y in goals:
-            grid[y][x] = random.randint(-9, 9)
+            grid[y][x] = random.randint(-9, 10)
 
         # Print grid
         if print_grid:
@@ -572,10 +572,10 @@ class GridworldMdp(Mdp):
         # Sets random starting point for agent
         set_random_position_to('A')
         while random.random() < pr_reward:
-            reward = random.randint(-9, 9)
+            reward = random.randint(-9, 10)
             # Don't allow 0 rewards
             while reward == 0:
-                reward = random.randint(-9, 9)
+                reward = random.randint(-9, 10)
             set_random_position_to(reward)
         for row in grid:
             print row

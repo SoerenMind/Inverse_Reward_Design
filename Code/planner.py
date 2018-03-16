@@ -87,8 +87,9 @@ class Model(object):
             self.proxy_reward_space, dtype=tf.float32, name="query_weights")
 
         if self.optimize:
+            weight_inits = tf.random_normal([num_fixed], stddev=4)
             self.weights_to_train = tf.Variable(
-                tf.zeros([num_fixed]), name="weights_to_train")
+                weight_inits, name="weights_to_train")
             self.weight_inputs = tf.placeholder(
                 tf.float32, shape=[num_fixed], name="weight_inputs")
             self.assign_op = self.weights_to_train.assign(self.weight_inputs)
@@ -184,7 +185,8 @@ class Model(object):
         self.name_to_op['probs'] = tf.exp(log_answer_probs)
 
         # Get true posterior entropy
-        interm_tensor = self.true_log_posterior + tf.log(- self.true_log_posterior)
+        scaled_log_posterior = self.true_log_posterior - 0.0001
+        interm_tensor = scaled_log_posterior + tf.log(- scaled_log_posterior)
         self.true_ent = tf.exp(tf.reduce_logsumexp(
             interm_tensor, axis=0, name="true_entropy", keep_dims=True))
         self.name_to_op['true_entropy'] = self.true_ent
