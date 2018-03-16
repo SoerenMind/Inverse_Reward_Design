@@ -116,16 +116,25 @@ class Query_Chooser_Subclass(Query_Chooser):
             self.search = False
             self.init_none = True
             self.no_optimize = False
+            self.zeros = False
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         elif chooser == 'feature_entropy_search':
             self.search = True
             self.init_none = False
             self.no_optimize = False
+            self.zeros = False
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         elif chooser == 'feature_entropy_random_init_none':
             self.search = False
             self.init_none = True
             self.no_optimize = True
+            self.zeros = False
+            return self.find_feature_query_greedy(query_size, measure, true_reward)
+        elif chooser == 'feature_entropy_zeros_init_none':
+            self.search = False
+            self.init_none = True
+            self.no_optimize = True
+            self.zeros = True
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         else:
             raise NotImplementedError('Calling unimplemented query chooser: '+str(chooser))
@@ -295,6 +304,9 @@ class Query_Chooser_Subclass(Query_Chooser):
                 if not self.init_none:
                     if curr_weights is not None:
                         weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
+                elif self.zeros:
+                    num_fixed = self.args.feature_dim - len(query)
+                    weights = list(np.zeros(num_fixed))
                 if self.no_optimize:
                     gd_steps = 0
                 else:
