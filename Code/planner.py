@@ -262,11 +262,13 @@ class Model(object):
 
         # Set up optimizer
         if self.optimize:
-            optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+            # optimizer = tf.train.AdamOptimizer(learning_rate=self.lr) # Make sure the momentum is reset for each model call
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
             gradients, vs = zip(*optimizer.compute_gradients(self.objective))
             # self.gradient_norm = tf.norm(tf.stack(gradients, axis=0))
             self.train_op = optimizer.apply_gradients(zip(gradients, vs))
-            # self.name_to_op['gradients'] = gradients
+            self.name_to_op['gradients'] = gradients
+            # self.name_to_op['gradients[:4]'] = gradients[0][:4]
             # self.name_to_op['gradient_norm'] = self.gradient_norm
             self.name_to_op['minimize'] = self.train_op
 
@@ -321,7 +323,7 @@ class Model(object):
             other_ops = [self.train_op]
             for step in range(gradient_steps):
                 results = sess.run(ops + other_ops, feed_dict=fd)
-                if ops and step % 5 == 0:
+                if ops and step % 9 == 0:
                     print 'Gradient step {0}: {1}'.format(step, results[:-1])
 
         return sess.run([get_op(name) for name in outputs], feed_dict=fd)
@@ -366,6 +368,8 @@ class BanditsModel(Model):
         self.name_to_op['q_values'] = self.reward_per_state
         self.state_probs = tf.nn.softmax(self.beta_planner * self.reward_per_state, dim=0, name="state_probs")
         self.name_to_op['state_probs'] = self.state_probs
+        self.name_to_op['state_probs_cut'] = self.state_probs[:5]
+
 
         # Calculate feature expectations
         probs_stack = tf.stack([self.state_probs] * self.feature_dim, axis=1)
@@ -416,13 +420,14 @@ class GridworldModel(Model):
         dim += 1
 
         feature_expectations = tf.zeros([K, height, width, dim])
-        for _ in range(self.num_iters):
+        for i in range(self.num_iters):
             q_fes = self.bellman_update(feature_expectations, features_wall)
             q_values = tf.squeeze(tf.matmul(weights_wall, q_fes), [-2])
             policy = tf.nn.softmax(self.beta_planner * q_values, dim=-1)
             repeated_policy = tf.stack([policy] * dim, axis=-2)
             feature_expectations = tf.reduce_sum(
                 tf.multiply(repeated_policy, q_fes), axis=-1)
+            self.name_to_op['policy'+str(i)] = policy
 
         # Remove the wall feature
         self.feature_expectations_grid = feature_expectations[:,:,:,:-1]

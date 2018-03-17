@@ -296,17 +296,21 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         true_reward_matrix, log_prior = self.get_true_reward_space()
 
-        model.initialize(self.sess)
         for i, feature in enumerate(features):
+            # Resampling weights for each feature
+            model.initialize(self.sess)
             query = curr_query+[feature]
             weights = None
             if not self.search:
+                num_fixed = self.args.feature_dim - len(query)
                 if not self.init_none:
                     if curr_weights is not None:
                         weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
                 elif self.zeros:
-                    num_fixed = self.args.feature_dim - len(query)
                     weights = list(np.zeros(num_fixed))
+                # Initialize with random weights
+                else:
+                    weights = np.random.randn(num_fixed)
                 if self.no_optimize:
                     gd_steps = 0
                 else:
@@ -314,8 +318,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                 objective, optimal_weights, feature_exps = model.compute(
                     desired_outputs, self.sess, mdp, query, log_prior,
                     weights, gradient_steps=gd_steps,
-                    # gradient_logging_outputs=[measure, 'weights_to_train'],
-                    gradient_logging_outputs=[measure, 'weights_to_train[:3]'],
+                    # gradient_logging_outputs=[measure, 'weights_to_train[:3]'],#, 'gradients[:4]'],#, 'state_probs_cut'],
                     true_reward=true_reward, true_reward_matrix=true_reward_matrix)
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
@@ -691,8 +694,11 @@ class Experiment(object):
             # regret = optimal_reward - test_reward
             # regrets[i] = regret
             if regret < -1:
+                if inference == None:
+                    text = ' (test_regret)'
+                else: text = ' (post_regret)'
                 print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-                print 'regret: ' +str(regret)
+                print 'regret: ' +str(regret) + text
         return regrets.mean()
 
     def get_normalized_reward_diff(self, post_avg, true_reward):

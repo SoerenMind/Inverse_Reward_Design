@@ -4,8 +4,9 @@ from subprocess import call
 
 NUM_EXPERIMENTS = '3'  # Modify this to change the sample size
 
-choosers = ['incremental_optimize', 'joint_optimize', 'greedy_discrete', 'random']
-query_sizes = ['3','5']
+# choosers = ['incremental_optimize', 'joint_optimize', 'greedy_discrete', 'random']
+choosers = ['feature_entropy_init_none', 'feature_entropy_random_init_none'] #  'feature_entropy_search'
+query_sizes = ['1','2','3']
 mdp_types = ['bandits', 'gridworld']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
@@ -19,16 +20,16 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
         beta = '0.5'
-        beta_planner = '10'
-        dim = '20'                                                              # Increase to 20?
+        beta_planner = '0.5'
+        dim = '20'                                                              # Warning: deterministic policy and tiny gradients if too high
         # TODO: Set the following to the right values
-        lr = '0.1'
+        lr = '20.'
         num_iters_optim = '10'
     else:
         # Values range from 50-100 when using 25 value iterations.
-        beta = '0.2'                                                            # Increased for linear features
-        beta_planner = '10'
-        dim = '20'                                                              # Increase to 20?
+        beta = '0.2'
+        beta_planner = '0.5'                                                     # Warning: deterministic policy and tiny gradients if too high
+        dim = '20'
         # TODO: Set the following to the right values
         lr = '0.1'
         num_iters_optim = '10'
@@ -104,7 +105,9 @@ def run_discrete_optimization():
 def run_continuous():
     for mdp_type in mdp_types:
         for qsize, discretization_size in [('1', '9'), ('2', '5'), ('3', '3')]:
-            run('feature_entropy', qsize, mdp_type, discretization_size=discretization_size, num_iter=num_iter)
+            run('feature_entropy_init_none', qsize, mdp_type, discretization_size=discretization_size, num_iter=num_iter)
+            run('feature_entropy_random_init_none', qsize, mdp_type, discretization_size=discretization_size, num_iter=num_iter)
+
 
 if __name__ == '__main__':
-    run_discrete()
+    run_continuous()
