@@ -5,9 +5,10 @@ from subprocess import call
 NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 # choosers = ['incremental_optimize', 'joint_optimize', 'greedy_discrete', 'random']
-choosers = ['feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_random_init_none']
-query_sizes = ['3']#['1','2','3']
-mdp_types = ['bandits', 'gridworld']
+choosers = ['feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
+# TODO: specify choosers for continuous here
+query_sizes = ['1','2','3']
+mdp_types = ['bandits']#, 'gridworld']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
 num_iter = '20'
@@ -105,9 +106,8 @@ def run_discrete_optimization():
 def run_continuous():
     for mdp_type in mdp_types:
         for qsize, discretization_size in [('1', '9'), ('2', '5'), ('3', '3')]:
-            run('feature_entropy_init_none', qsize, mdp_type, discretization_size=discretization_size, num_iter=num_iter)
-            run('feature_entropy_random_init_none', qsize, mdp_type, discretization_size=discretization_size, num_iter=num_iter)
-
+            for chooser in choosers:
+                run(chooser, qsize, mdp_type, discretization_size=discretization_size, num_iter=num_iter)
 
 if __name__ == '__main__':
     run_continuous()
