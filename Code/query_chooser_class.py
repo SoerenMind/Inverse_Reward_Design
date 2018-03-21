@@ -46,7 +46,10 @@ class Query_Chooser_Subclass(Query_Chooser):
         self.args = args    # all args
         self.t_0 = t_0
         self.model_cache = {}
-        self.sess = tf.Session()
+
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        self.sess = tf.Session(config=config)
 
     # def cache_feature_expectations(self):
     #     """Calculates feature expectations for all proxies and stores them in the dictionary
