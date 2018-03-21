@@ -5,9 +5,8 @@ from subprocess import call
 NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 # choosers = ['incremental_optimize', 'joint_optimize', 'greedy_discrete', 'random']
+discr_query_sizes = ['1', '2', '3']
 choosers = ['feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
-# TODO: specify choosers for continuous here
-query_sizes = ['1','2','3']
 mdp_types = ['bandits']#, 'gridworld']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
@@ -75,7 +74,7 @@ def run_discrete():
     for mdp_type in mdp_types:
 
         for chooser in choosers:
-            for qsize in query_sizes:
+            for qsize in discr_query_sizes:
                 run(chooser, qsize, mdp_type, num_iter=num_iter)
 
         run('full', '2', mdp_type, num_iter=num_iter)
@@ -91,21 +90,21 @@ def run_subsampling():
 
             for objective in objectives:
                 for chooser in choosers:
-                        for qsize in query_sizes:
+                        for qsize in discr_query_sizes:
                             run(chooser, qsize, mdp_type, objective, rsize=rsize, subsampling=subsampling)
                 run('full', '2', mdp_type, objective, rsize=rsize, subsampling=subsampling, num_iter=num_iter)
 
 
 def run_discrete_optimization():
     for mdp_type in mdp_types:
-        for qsize in query_sizes:
+        for qsize in discr_query_sizes:
             for chooser in ['incremental_optimize', 'joint_optimize']:
                 run(chooser, qsize, mdp_type)
 
 
 def run_continuous():
     for mdp_type in mdp_types:
-        for qsize, discretization_size in [('1', '9'), ('2', '5'), ('3', '3')]:
+        for qsize, discretization_size in [('3', '3'), ('2', '5'), ('1', '9')]:
             for chooser in choosers:
                 run(chooser, qsize, mdp_type, discretization_size=discretization_size, num_iter=num_iter)
 
