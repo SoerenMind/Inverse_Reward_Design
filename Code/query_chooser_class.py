@@ -121,6 +121,12 @@ class Query_Chooser_Subclass(Query_Chooser):
         elif chooser == 'feature_entropy_search':
             self.search = True
             self.init_none = False
+            self.no_optimize = True
+            self.zeros = False
+            return self.find_feature_query_greedy(query_size, measure, true_reward)
+        elif chooser == 'feature_entropy_search_then_optim':
+            self.search = True
+            self.init_none = False
             self.no_optimize = False
             self.zeros = False
             return self.find_feature_query_greedy(query_size, measure, true_reward)
@@ -322,20 +328,23 @@ class Query_Chooser_Subclass(Query_Chooser):
                     true_reward=true_reward, true_reward_matrix=true_reward_matrix)
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
+
             # Find weights by search over samples
             else:
                 # Compare to objective optimized over random setting of other weights
-                num_search = 70
+                num_search = self.args.num_iters_optim * 4 * (1 + self.no_optimize)   # GD steps take ca 8x as long as forward passes
                 objective, optimal_weights, feature_exps = \
                     self.test_func(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix,true_reward)
                 objective_plus_cost = objective + self.cost_of_asking * len(query)
-            # if objective <= best_objective:
-            #     best_objective = objective
-            #     best_objective_plus_cost = objective + self.cost_of_asking * len(query)
-            #     best_query = query
-            # print('Best objectives with GD vs search over {n} weights: {a} vs {b}'.format(
-            #     n=num_search,a=best_objective,b=best_objective_disc))
-            # print('Best queries: {a} vs {b}'.format(a=str(best_query), b=str(best_query_disc)))
+
+                # Optimize from best sample if desired
+                if not self.no_optimize:
+                    gd_steps = self.args.num_iters_optim // 2
+                    objective, optimal_weights, feature_exps = model.compute(
+                        desired_outputs, self.sess, mdp, query, log_prior,
+                        optimal_weights, gradient_steps=gd_steps,
+                        # gradient_logging_outputs=[measure, 'weights_to_train[:3]'],#, 'gradients[:4]'],#, 'state_probs_cut'],
+                        true_reward=true_reward, true_reward_matrix=true_reward_matrix)
 
 
             # print('Model outputs calculated')

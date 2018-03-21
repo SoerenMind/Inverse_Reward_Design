@@ -165,44 +165,6 @@ def load_data(folder):
     return experiments, changing_vars, control_var_vals
 
 
-def graph_all_old(experiments, all_vars, x_var, dependent_vars, independent_vars,
-              controls, folder):
-    """Graphs data and saves them.
-
-    Each graph generated plots the dependent_vars against x_var for all
-    valuations of independent_vars, with the control variables set to the values
-    specified in controls. For every valuation of variables not in x_var,
-    dependent_vars, independent_vars, or controls, a separate graph is
-    generated and saved in folder.
-
-    - experiments: Dictionary from keys of the form ((var, val), ...) to
-          Experiment objects
-    - all_vars: List of strings, all the variables that have some variation
-    - x_var: Variable that provides the data for the x-axis
-    - dependent_vars: List of strings, variables to plot on the y-axis
-    - independent_vars: List of strings, experimental conditions to plot on the
-          same graph
-    - controls: Tuple of the form ((var, val), ...) where var is a string and
-          val is a string or number. The values of control variables.
-    - folder: Graphs are saved to graph/<folder>/
-    """
-    control_vars = [var for var, val in controls]
-    vars_so_far = [x_var] + dependent_vars + independent_vars + control_vars
-    remaining_vars = list(set(all_vars) - set(vars_so_far))
-    graphs_data = {}
-
-    for experiment in experiments.values():
-        params = experiment.params
-        if not all(params[k] == v for k, v in controls):
-            continue
-
-        key = ','.join(['{0}={1}'.format(k, params[k]) for k in remaining_vars])
-        if key not in graphs_data:
-            graphs_data[key] = []
-        graphs_data[key].append(experiment)
-
-    for key, exps in graphs_data.items():
-        graph(exps, x_var, dependent_vars, independent_vars, controls, key, folder)
 
 def get_matching_experiments(experiments, params_to_match):
     """Returns a list of Experiments whose param values match the bindings in
@@ -271,41 +233,6 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
 
 
 
-def graph_old(experiments, x_var, dependent_vars, independent_vars, controls,
-          other_vals, folder):
-    """Creates and saves a single graph.
-
-    Arguments are almost the same as for graph_all.
-    - other_vals: String of the form "{var}={val},..." specifying values of
-          variables not in x_var, dependent_vars, independent_vars, or
-          controls.
-    """
-    assert len(dependent_vars) == 1
-    y_var = dependent_vars[0]
-
-    plt.figure()
-    for experiment in experiments:
-        params = experiment.params
-        means, sterrs = experiment.means_data, experiment.sterrs_data
-        label = ', '.join([str(params[k]) for k in independent_vars])
-        plt.errorbar(means[x_var], means[y_var], sterrs[y_var], label=label)
-
-    plt.xlabel(x_var)
-    plt.ylabel(y_var)
-
-    subtitle = ','.join(['{0}={1}'.format(k, v) for k, v in controls])
-    subtitle = '{0},{1}'.format(subtitle, other_vals).strip(',')
-    title = 'Data for {0}'.format(', '.join(independent_vars))
-    plt.title(title + '\n' + subtitle)
-    plt.legend([]) #loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-
-    folder = concat('graph', folder)
-    filename = '{0}-vs-{1}-for-{2}-with-{3}.png'.format(
-        ','.join(dependent_vars), x_var, ','.join(independent_vars), subtitle)
-    if not os.path.exists(folder):
-        os.mkdir(folder)
-    plt.savefig(concat(folder, filename))
-
 
 
 def graph(exps, x_var, dependent_vars, independent_vars, controls,
@@ -336,10 +263,11 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
 
             params = experiment.params
             means, sterrs = experiment.means_data, experiment.sterrs_data
-            chooser = ', '.join([str(params[k]) for k in independent_vars])
-            label = i_var_to_label(chooser)   # name in legend
+            i_var_val = ', '.join([str(params[k]) for k in independent_vars])
+            label = i_var_to_label(i_var_val) + ', '+ str(params['qsize']) # name in legend
+            color = chooser_to_color(i_var_val, qsize=params['qsize'])
             x_data = np.array(means[x_var]) + 1
-            ax.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=chooser_to_color(chooser),
+            ax.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=color,
                          capsize=capsize, capthick=1, label=label)#,
                          # marker='o', markerfacecolor='white', markeredgecolor=chooser_to_color(chooser),
                          # markersize=4)
@@ -347,7 +275,7 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
             labels.append(label)
 
             ax.set_xlim([0,21])
-            ax.set_ylim(-0.2)
+            ax.set_ylim(-0.15)
 
             # Set ylabel
             ax_left = get_ax(axes, row, num_rows, num_columns, 0)
@@ -364,7 +292,7 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
     ax = axes[0]
     plt.sca(ax)
     handles, labels = ax.get_legend_handles_labels()
-    hl = sorted(zip(handles, labels, [1,3,2,0]),    # Sorts legend by putting labels 0:k to place as specified
+    hl = sorted(zip(handles, labels, range(len(labels))),    # Sorts legend by putting labels 0:k to place as specified
            key=lambda elem: elem[2])
     hl = [[handle, label] for handle, label, idx in hl]
     handles2, labels2 = zip(*hl)
@@ -391,8 +319,8 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
         ','.join(dependent_vars), x_var, ','.join(independent_vars), subtitle)
     if not os.path.exists(folder):
         os.mkdir(folder)
-    plt.savefig(concat(folder, filename))
     # plt.show()
+    plt.savefig(concat(folder, filename))
 
 
 '''TODO:
@@ -516,11 +444,24 @@ def var_to_label(varname):
         return 'Number of queries asked'
 
 
-def chooser_to_color(chooser):
+def chooser_to_color(chooser, qsize=None):
     greedy_color = 'darkorange' #'lightblue'
     exhaustive_color = 'orange' # 'peachpuff', 'crimson'
     random_color = 'darkgrey' # 'darkorange'
     full_color = 'lightgrey' # 'grey'
+    feature_color = 'blue'
+    feature_color_random = 'lightblue'
+
+
+    if chooser.startswith('greedy'):
+        if qsize == 2:
+            return 'peachpuff'
+        if qsize == 3:
+            return 'orange'
+        if qsize == 5:
+            return 'darkorange'
+        if qsize == 10:
+            return 'orangered'
 
     if chooser in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
         return greedy_color
@@ -530,6 +471,16 @@ def chooser_to_color(chooser):
         return exhaustive_color
     if chooser == 'full':
         return full_color
+    if chooser == 'feature_entropy_init_none':
+        return feature_color
+    if chooser == 'feature_entropy_random_init_none':
+        return feature_color_random
+    # if chooser == 'Feature selection, random init':
+    #     return 'lightorange'
+    # if chooser == 'Feature selection, no optimization':
+    #     return '=orange'
+    # if chooser == 'Feature selection, random init':
+    #     return 'darkorange'
 
 def i_var_to_label(i_var):
     if i_var in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
@@ -540,6 +491,10 @@ def i_var_to_label(i_var):
         return 'Full IRD'
     if i_var == 'random':
         return 'Random'
+    if i_var == 'feature_entropy_init_none':
+        return 'Feature selection, random init'
+    if i_var == 'feature_entropy_random_init_none':
+        return 'Feature selection, no optimization, random init'
     if i_var == 'feature_entropy':
         return 'Feature selection'
     if i_var == 'joint_optimize':

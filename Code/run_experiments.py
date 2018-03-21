@@ -2,16 +2,16 @@ from subprocess import call
 
 # Discrete experiments
 
-NUM_EXPERIMENTS = '3'  # Modify this to change the sample size
+NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 # choosers = ['incremental_optimize', 'joint_optimize', 'greedy_discrete', 'random']
-choosers = ['feature_entropy_init_none', 'feature_entropy_random_init_none'] #  'feature_entropy_search'
+choosers = ['feature_entropy_search', 'feature_entropy_init_none', 'feature_entropy_random_init_none']
 query_sizes = ['1','2','3']
 mdp_types = ['bandits', 'gridworld']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
 num_iter = '20'
-num_q_max = '2000'
+num_q_max = '10000'
 
 
 def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', viter='15', rsize='1000000',
@@ -21,17 +21,17 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
         # the worst Q-value e^10 times less likely than the best one
         beta = '0.5'
         beta_planner = '0.5'
-        dim = '20'                                                              # Warning: deterministic policy and tiny gradients if too high
+        dim = '20'
         # TODO: Set the following to the right values
         lr = '20.'
         num_iters_optim = '10'
     else:
         # Values range from 50-100 when using 25 value iterations.
-        beta = '0.2'
-        beta_planner = '0.5'                                                     # Warning: deterministic policy and tiny gradients if too high
+        beta = '0.2'                                                    # Set to 0.5 as well to show entropy=0 for qsize-=10?
+        beta_planner = '0.5'
         dim = '20'
         # TODO: Set the following to the right values
-        lr = '0.1'
+        lr = '20'
         num_iters_optim = '10'
 
     command = ['python', 'run_IRD.py',
