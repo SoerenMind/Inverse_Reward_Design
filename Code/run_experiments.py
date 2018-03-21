@@ -5,8 +5,8 @@ from subprocess import call
 NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 # choosers = ['incremental_optimize', 'joint_optimize', 'greedy_discrete', 'random']
-choosers = ['feature_entropy_search', 'feature_entropy_init_none', 'feature_entropy_random_init_none']
-query_sizes = ['1','2','3']
+choosers = ['feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_random_init_none']
+query_sizes = ['3']#['1','2','3']
 mdp_types = ['bandits', 'gridworld']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
