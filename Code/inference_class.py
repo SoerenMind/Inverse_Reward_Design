@@ -378,14 +378,14 @@ class InferenceDiscrete(Inference):
             self.reward_index_proxy[tuple(proxy)] = i
 
 
-def test_inference(inference, rfunc_proxy_given, reward_space):
-    '''Tests if posterior adds up to 1 by calculating it for every possible true reward function.'''
-    cum_post = 0
-    # for true_reward in itertools.product([0,1],repeat=num_states):
-    for true_reward in reward_space:
-        post = inference.get_posterior(true_reward, inference.reward_space_proxy, rfunc_proxy_given)
-        cum_post += post
-    return cum_post
+# def test_inference(inference, rfunc_proxy_given, reward_space):
+#     '''Tests if posterior adds up to 1 by calculating it for every possible true reward function.'''
+#     cum_post = 0
+#     # for true_reward in itertools.product([0,1],repeat=num_states):
+#     for true_reward in reward_space:
+#         post = inference.get_posterior(true_reward, inference.reward_space_proxy, rfunc_proxy_given)
+#         cum_post += post
+#     return cum_post
 
 
 

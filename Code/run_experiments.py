@@ -7,11 +7,12 @@ NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 # choosers = ['incremental_optimize', 'joint_optimize', 'greedy_discrete', 'random']
 discr_query_sizes = ['1', '2', '3']
 choosers = ['feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
-mdp_types = ['bandits']#, 'gridworld']
+mdp_types = ['bandits', 'gridworld']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
 num_iter = '20'
 num_q_max = '10000'
+rational_test_planner = 1
 
 
 def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', viter='15', rsize='1000000',
@@ -63,7 +64,8 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                   '--weighting', '1',
                   '--well_spec', '1',
                   '--linear_features', '1',
-                  '--objective',objective
+                  '--objective',objective,
+                  '--rational_test_planner', rational_test_planner
                ]
     print 'Running command', ' '.join(command)
     call(command)

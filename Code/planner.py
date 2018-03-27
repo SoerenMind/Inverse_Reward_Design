@@ -366,7 +366,13 @@ class BanditsModel(Model):
         self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
         self.name_to_op['reward_per_state'] = self.reward_per_state
         self.name_to_op['q_values'] = self.reward_per_state
-        self.state_probs = tf.nn.softmax(self.beta_planner * self.reward_per_state, dim=0, name="state_probs")
+        if self.beta_planner == 'inf':
+            self.best_state = tf.argmax(self.reward_per_state)
+            self.num_states = tf.shape(tf.reshape(self.reward_per_state, [-1]))[0]
+            self.state_probs = tf.one_hot(self.best_state[0], self.num_states)
+            self.state_probs = tf.reshape(self.state_probs, [-1,1])
+        else:
+            self.state_probs = tf.nn.softmax(self.beta_planner * self.reward_per_state, dim=0, name="state_probs")
         self.name_to_op['state_probs'] = self.state_probs
         self.name_to_op['state_probs_cut'] = self.state_probs[:5]
 

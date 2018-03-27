@@ -434,7 +434,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
     def get_model(self, query_size, objective, num_unknown=None,
-                  discrete=True, optimize=False, no_planning=False, cache=True):
+                  discrete=True, optimize=False, no_planning=False, cache=True, rational_planner=False):
         mdp = self.inference.mdp
         height, width = None, None
         # TODO: Replace mdp.type with self.args.mdp_type
@@ -442,6 +442,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             height, width = mdp.height, mdp.width
         dim, gamma, lr = self.args.feature_dim, self.args.gamma, self.args.lr
         beta, beta_planner = self.args.beta, self.args.beta_planner
+        if rational_planner:
+            beta_planner = 'inf'
         discretization_size, num_iters = self.args.discretization_size, self.args.value_iters
         true_reward_space_size = None
         # true_reward_space_size = len(self.inference.true_reward_matrix)
@@ -690,7 +692,8 @@ class Experiment(object):
         for i, inference in enumerate(inferences):
             # New method using TF:
             test_mdp = inference.mdp
-            planning_model = self.query_chooser.get_model(1, 'entropy')
+            planning_model = self.query_chooser.get_model(1, 'entropy',
+                rational_planner=self.query_chooser.args.rational_test_planner)
 
             [post_avg_feature_exps] = planning_model.compute(['feature_exps'], self.query_chooser.sess, test_mdp, [list(post_avg)])
             [true_reward_feature_exps] = planning_model.compute(['feature_exps'], self.query_chooser.sess, test_mdp, [list(true_reward)])
@@ -706,11 +709,11 @@ class Experiment(object):
             # regret = optimal_reward - test_reward
             # regrets[i] = regret
             if regret < -1:
-                if inference == None:
-                    text = ' (test_regret)'
-                else: text = ' (post_regret)'
-                print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-                print 'regret: ' +str(regret) + text
+                if len(inferences) == 1:
+                    text = ' (post_regret)'
+                else: text = ' (test_regret)'
+                print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+                print 'regret: ' + str(regret) + text
         return regrets.mean()
 
     def get_normalized_reward_diff(self, post_avg, true_reward):

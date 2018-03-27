@@ -54,7 +54,7 @@ if __name__=='__main__':
     parser.add_argument('--num_queries_max',type=int,default=2000)
     parser.add_argument('--height',type=int,default=12)
     parser.add_argument('--width',type=int,default=12)
-    parser.add_argument('--lr',type=float,default=0.1)  # Learning rate
+    parser.add_argument('--lr',type=float,default=20)  # Learning rate
     parser.add_argument('--num_iters_optim',type=int,default=10)
     parser.add_argument('--value_iters',type=int,default=15)    # max_reward / (1-gamma) or height+width
     parser.add_argument('--mdp_type',type=str,default='gridworld')
@@ -67,6 +67,7 @@ if __name__=='__main__':
     parser.add_argument('--weighting',type=int,default=1)
     parser.add_argument('--linear_features',type=int,default=1)
     parser.add_argument('--objective',type=str,default='entropy')
+    parser.add_argument('--rational_test_planner',type=int,default=1)
 
 
 
@@ -76,8 +77,7 @@ if __name__=='__main__':
 
     # Experiment description
     adapted_description = False
-    print "Adapted description: ", adapted_description
-    exp_description = pprint("Comparing to entropy with many states and few true rewards. {nexp} experiments.")
+    # print "Adapted description: ", adapted_description
 
     # Set parameters
     feature_dim = args.feature_dim
@@ -109,6 +109,7 @@ if __name__=='__main__':
 
     # These will be in the folder name of the log
     exp_params = {
+        'rational_test_planner': args.rational_test_planner,
         'qsize': query_size,
         'mdp': args.mdp_type,
         'dim': feature_dim,
@@ -132,7 +133,7 @@ if __name__=='__main__':
 
     'Sample true rewards and reward spaces'
     reward_space_true = np.array(np.random.randint(-9, 10, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
-    reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
+    # reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
     if not args.well_spec:
         true_rewards = [np.random.randint(-9, 10, size=[args.feature_dim]) for _ in range(num_experiments)]
     else:
@@ -170,7 +171,7 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=1, prior=None)
 
             test_inferences.append(inference)
 
@@ -179,6 +180,7 @@ if __name__=='__main__':
             mdp = train_mdps[i]
             env = GridworldEnvironment(mdp)
             agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
+            reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
             inference = InferenceDiscrete(
                 agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None)
 
@@ -195,7 +197,7 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             agent = OptimalAgent(gamma, num_iters=args.value_iters)
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=num_traject, prior=None)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=num_traject, prior=None)
 
             test_inferences.append(inference)
 
@@ -206,6 +208,7 @@ if __name__=='__main__':
             mdp = GridworldMdpWithDistanceFeatures(grid, args.linear_features, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
             env = GridworldEnvironment(mdp)
             agent = OptimalAgent(gamma, num_iters=args.value_iters)
+            reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
             inference = InferenceDiscrete(
                 agent, mdp, env, beta, reward_space_true, reward_space_proxy,
                 num_traject=num_traject, prior=None)
@@ -261,64 +264,15 @@ if __name__=='__main__':
 
 
     'Experiment'
-    def experiment(query_size, train_inferences, test_inferences, true_rewards, prior_avg):
-        # test_planning_speed(inference, reward_space_proxy); print('tested planning speed')
-        # mean, std, failures, gain, mean_std_actual, regret_compare, regret_exp_vs_actual \
-        #     = experiment(inference, reward_space_proxy, query_size, iterations_optimized=num_experiments, greedy=greedy,
-        #                  num_queries_max=num_queries_max)
-        # print mean, std, failures, gain, mean_std_actual
-        # print 'Expected regret improvement over random query (mean): {r}'.format(r=mean)
-        # print 'Expected regret improvement over no query (mean): {r}'.format(r=gain)
-        # print 'Mean actual -reduction and std(mean) over random query: {r}'.format(r=mean_std_actual)
-        # print 'Actual regret diff optimized vs random:{r}'.format(r=regret_compare)
-        # print 'Expected vs actual regret: {vs}'.format(vs=regret_exp_vs_actual)
+    def run_experiment(query_size, train_inferences, test_inferences, true_rewards, prior_avg):
         experiment = Experiment(true_rewards, reward_space_proxy, query_size, num_queries_max,
                                 args, choosers, SEED, exp_params, train_inferences, test_inferences, prior_avg)
         results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
 
 
-        # 'Print results'
-        # print "Choosers:                        {c}".format(c=choosers)
-        # print "Avg post exp regret per chooser: {x}".format(x=avg_post_exp_regrets)
-        # print "Avg post regret per chooser: {x}".format(x=avg_post_regrets)
-        # print "Std post exp regret per chooser: {x}".format(x=std_post_exp_regrets)
-        # print "Std post regret per chooser: {x}".format(x=std_post_regrets)
-        # # print [-results['greedy_exp_reward','perf_measure',4, n] for n in range(num_experiments)]
-        # # print [results['greedy_exp_reward','post_exp_regret',4, n] for n in range(num_experiments)]
-        # print [results['greedy_entropy','post_exp_regret',num_iter_per_experiment-1, n] for n in range(num_experiments)]
-        # print [results['greedy_entropy','perf_measure',num_iter_per_experiment-1, n] for n in range(num_experiments)]
-        # # print [results['greedy','perf_measure',4, n] for n in range(num_experiments)]
-        #
-        # print "Entropy per iteration for greedy_entropy:"
-        # print [np.array([results['greedy_entropy','perf_measure',i, n] for n in range(num_experiments)]).mean() for i in range(num_iter_per_experiment)]
-        # # print "Entropy per iteration for greedy:"
-        # # print [[results['greedy','post_entropy',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
-        #
-        # # print("Test environment regret for greedy:")
-        # # print [results['greedy','test_regret',num_iter_per_experiment-1,n] for n in range(num_experiments)]
-        # print("Test environment regret for greedy_entropy:")
-        # print [results['greedy_entropy','test_regret',num_iter_per_experiment-1,n] for n in range(num_experiments)]
-        #
-        # # print "Exp regret per iteration for greedy:"
-        # # print [[results['greedy','post_exp_regret',i, n] for n in range(num_experiments)] for i in range(num_iter_per_experiment)]
-        # print "Exp regret per iteration for greedy_entropy:"
-        # print [np.array([results['greedy_entropy','post_exp_regret',i, n] for n in range(num_experiments)]).mean() for i in range(num_iter_per_experiment)]
-        #
-        #
-        # # print 'mdp_features:'
-        # # print np.array([np.concatenate([[state], mdp.features[state]]) for state in range(num_states)])
-        # # print np.array([np.concatenate([[state], mdp.get_features(state)]) for state in range(num_states)])
-        # # # # print('mdp features: {features}'.format(features=mdp_test.features))
-        # # print(best_query)
-        # # # print('Best post_avg:{post_avg}').format(post_avg=best_post_avg)
-        # # # print('Best posterior:{posterior}').format(posterior=best_posterior)
-        # print 'Total time:{deltat}'.format(deltat=time.clock() - start)
-        # print 'Finished experiment: ', exp_description.format(nexp=num_experiments) + 'Updated description: '+str(adapted_description)
+        print('__________________________Finished experiment__________________________')
 
-    # for q_size in range(2,50):
-    #     if q_size % 4 == 0:
-    #         experiment(q_size)
-    experiment(query_size, train_inferences, test_inferences, true_rewards, prior_avg)
+    run_experiment(query_size, train_inferences, test_inferences, true_rewards, prior_avg)
 
 
     'Create interface'
