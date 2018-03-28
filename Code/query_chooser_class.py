@@ -312,6 +312,8 @@ class Query_Chooser_Subclass(Query_Chooser):
             query = curr_query+[feature]
             weights = None
             if not self.search:
+
+                # Set weight inits
                 num_fixed = self.args.feature_dim - len(query)
                 if not self.init_none:
                     if curr_weights is not None:
@@ -325,13 +327,20 @@ class Query_Chooser_Subclass(Query_Chooser):
                     elif self.args.weights_dist_init == 'uniform':
                         weights = self.get_other_weights_samples(num_fixed)
                     else: raise ValueError('weights distribution unknown')
+
+                # Set gradient steps
+                gd_steps_if_optim = self.args.num_iters_optim
                 if self.no_optimize:
                     gd_steps = 0
                 elif self.args.only_optim_biggest:
                     if len(query) < max_query_size:
                         gd_steps = 0
+                    else:
+                        gd_steps = gd_steps_if_optim
                 else:
-                    gd_steps = self.args.num_iters_optim
+                    gd_steps = gd_steps_if_optim
+
+                # Calculate (optimized) objective
                 objective, optimal_weights, feature_exps = model.compute(
                     desired_outputs, self.sess, mdp, query, log_prior,
                     weights, gradient_steps=gd_steps,
@@ -349,15 +358,27 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
                 """
-                # Compare to objective optimized over random setting of other weights
-                num_search = self.args.num_iters_optim * 4 * (1 + self.no_optimize)   # GD steps take ca 8x as long as forward passes
+
+                # Set gradient steps and num_search
+                gd_steps_if_optim = self.args.num_iters_optim // 2
+                num_search_if_optim = self.args.num_iters_optim * 4 * (1 + self.no_optimize)  # GD steps take ca 8x as long as forward passes
+                # Optionally only optimize if at maximum query size
+                if self.args.only_optim_biggest:
+                    if len(query) < max_query_size:
+                        gd_steps = 0
+                        num_search = 1
+                    else:
+                        gd_steps = gd_steps_if_optim
+                        num_search = num_search_if_optim
+                else:
+                    gd_steps = gd_steps_if_optim
+                    num_search = num_search_if_optim
                 objective, optimal_weights, feature_exps = \
                     self.random_search(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix, true_reward)
                 objective_search = objective.copy()
 
                 # Optimize from best sample if desired
                 if not self.no_optimize:
-                    gd_steps = self.args.num_iters_optim // 2
                     objective, optimal_weights, feature_exps = model.compute(
                         desired_outputs, self.sess, mdp, query, log_prior,
                         optimal_weights, gradient_steps=gd_steps,
@@ -415,16 +436,21 @@ class Query_Chooser_Subclass(Query_Chooser):
         for _ in range(num_search):
             num_fixed = self.args.feature_dim - len(query)
 
+            # Sample weights
             if self.args.weights_dist_search == 'normal':
                 other_weights = np.random.randn(num_fixed)
             elif self.args.weights_dist_search == 'uniform':
                 other_weights = self.get_other_weights_samples(num_fixed)
             else:
                 raise ValueError('weights distribution unknown')
+
+            # Calculate objective
             objective_disc, optimal_weights_disc, feature_exps_disc = model.compute(
                 desired_outputs, self.sess, mdp, query, log_prior,
                 other_weights,
                 true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+
+            # Update best variables
             if objective_disc <= best_objective_disc:
                 best_objective_disc = objective_disc
                 best_optimal_weights_disc = optimal_weights_disc
