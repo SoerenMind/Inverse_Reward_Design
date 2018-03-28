@@ -16,7 +16,7 @@ num_q_max = '10000'
 square_probs = '1'  # REMOVE PARAMETER FOR NEXT RUN
 weights_dist_init = 'normal'
 weights_dist_search = 'normal'
-
+only_optim_biggest = '1'    # Change back to zero
 
 def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', viter='15', rsize='1000000',
         subsampling='1', num_iter='20'):
@@ -71,6 +71,7 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                   '--rational_test_planner', '1',
                   '-weights_dist_init', weights_dist_init,
                   '-weights_dist_search', weights_dist_search,
+                  '-only_optim_biggest', only_optim_biggest
                ]
     print 'Running command', ' '.join(command)
     call(command)

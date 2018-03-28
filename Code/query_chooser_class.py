@@ -294,7 +294,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             return self.inference.true_reward_matrix[choices], unif_log_prior
 
 
-    def find_next_feature(self, curr_query, curr_weights, measure, true_reward):
+    def find_next_feature(self, curr_query, curr_weights, measure, true_reward, max_query_size):
         mdp = self.inference.mdp
         desired_outputs = [measure, 'weights_to_train', 'feature_exps']
         features = [i for i in range(self.args.feature_dim) if i not in curr_query]
@@ -327,6 +327,9 @@ class Query_Chooser_Subclass(Query_Chooser):
                     else: raise ValueError('weights distribution unknown')
                 if self.no_optimize:
                     gd_steps = 0
+                elif self.args.only_optim_biggest:
+                    if len(query) < max_query_size:
+                        gd_steps = 0
                 else:
                     gd_steps = self.args.num_iters_optim
                 objective, optimal_weights, feature_exps = model.compute(
@@ -388,7 +391,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_weights = None
         while len(best_query) < query_size:
             best_query, best_weights, feature_exps = self.find_next_feature(
-                best_query, best_weights, measure, true_reward)
+                best_query, best_weights, measure, true_reward, query_size)
             print 'Query length increased to {s}'.format(s=len(best_query))
 
         print('query found')

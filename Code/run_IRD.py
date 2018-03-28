@@ -68,9 +68,10 @@ if __name__=='__main__':
     parser.add_argument('--linear_features',type=int,default=1)
     parser.add_argument('--objective',type=str,default='entropy')
     parser.add_argument('--rational_test_planner',type=int,default=1)
-    parser.add_argument('-weights_dist_init', type=str)
-    parser.add_argument('-weights_dist_search', type=str)
-    parser.add_argument('-square_probs', type=int, default=0)
+    parser.add_argument('-weights_dist_init',type=str)
+    parser.add_argument('-weights_dist_search',type=str)
+    parser.add_argument('-square_probs',type=int,default=0)
+    parser.add_argument('--only_optim_biggest',type=int,default=0)
 
 
 
