@@ -13,7 +13,7 @@ objectives = ['entropy']
 num_iter = '20'
 num_q_max = '10000'
 # Keeping this bug because our old data had it
-square_probs = '1'  # REMOVE PARAMETER FOR NEXT RUN
+square_probs_bug = '1'  # REMOVE PARAMETER FOR NEXT RUN
 weights_dist_init = 'normal'
 weights_dist_search = 'normal'
 only_optim_biggest = '1'    # Change back to zero
@@ -71,7 +71,7 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                   '--rational_test_planner', '1',
                   '-weights_dist_init', weights_dist_init,
                   '-weights_dist_search', weights_dist_search,
-                  '-only_optim_biggest', only_optim_biggest
+                  '--only_optim_biggest', only_optim_biggest
                ]
     print 'Running command', ' '.join(command)
     call(command)

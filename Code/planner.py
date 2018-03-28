@@ -366,13 +366,17 @@ class BanditsModel(Model):
         self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
         self.name_to_op['reward_per_state'] = self.reward_per_state
         self.name_to_op['q_values'] = self.reward_per_state
+
+        # Rational planner
         if self.beta_planner == 'inf':
             self.best_state = tf.argmax(self.reward_per_state)
             self.num_states = tf.shape(tf.reshape(self.reward_per_state, [-1]))[0]
             self.state_probs = tf.one_hot(self.best_state[0], self.num_states)
             self.state_probs = tf.reshape(self.state_probs, [-1,1])
+        # Boltzmann rational planner
         else:
             self.state_probs = tf.nn.softmax(self.beta_planner * self.reward_per_state, dim=0, name="state_probs")
+
         self.name_to_op['state_probs'] = self.state_probs
         self.name_to_op['state_probs_cut'] = self.state_probs[:5]
 
@@ -429,11 +433,16 @@ class GridworldModel(Model):
         for i in range(self.num_iters):
             q_fes = self.bellman_update(feature_expectations, features_wall)
             q_values = tf.squeeze(tf.matmul(weights_wall, q_fes), [-2])
-            policy = tf.nn.softmax(self.beta_planner * q_values, dim=-1)
+            if self.beta_planner == 'inf':
+                best_actions = tf.argmax(q_values, axis=-1)
+                policy = tf.one_hot(best_actions[0], 4)
+            else:
+                policy = tf.nn.softmax(self.beta_planner * q_values, dim=-1)
             repeated_policy = tf.stack([policy] * dim, axis=-2)
             feature_expectations = tf.reduce_sum(
                 tf.multiply(repeated_policy, q_fes), axis=-1)
             self.name_to_op['policy'+str(i)] = policy
+
 
         # Remove the wall feature
         self.feature_expectations_grid = feature_expectations[:,:,:,:-1]
