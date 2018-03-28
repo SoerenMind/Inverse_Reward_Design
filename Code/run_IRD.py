@@ -47,7 +47,7 @@ if __name__=='__main__':
     parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--seed',type=int,default=1)
     parser.add_argument('--beta',type=float,default=0.2)
-    parser.add_argument('--beta_planner',type=float,default=10.) # 1 for small version of results
+    parser.add_argument('--beta_planner',type=float,default=0.5) # 1 for small version of results
     parser.add_argument('--num_states',type=int,default=100)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.5) # test briefly to get ent down
     parser.add_argument('--num_traject',type=int,default=1)
@@ -68,6 +68,10 @@ if __name__=='__main__':
     parser.add_argument('--linear_features',type=int,default=1)
     parser.add_argument('--objective',type=str,default='entropy')
     parser.add_argument('--rational_test_planner',type=int,default=1)
+    parser.add_argument('-weights_dist_init', type=str)
+    parser.add_argument('-weights_dist_search', type=str)
+    parser.add_argument('-square_probs', type=int, default=0)
+
 
 
 
@@ -109,7 +113,7 @@ if __name__=='__main__':
 
     # These will be in the folder name of the log
     exp_params = {
-        'rational_test_planner': args.rational_test_planner,
+        # 'rational_test_planner': args.rational_test_planner,
         'qsize': query_size,
         'mdp': args.mdp_type,
         'dim': feature_dim,
@@ -118,17 +122,19 @@ if __name__=='__main__':
         'size_proxy': size_reward_space_proxy,
         'seed': SEED,
         'beta': beta,
-        'num_states': num_states,
+        # 'num_states': num_states,
         # 'dist_scale': dist_scale,
         'n_q_max': num_queries_max,
         # 'num_iters_optim': num_iters_optim,
         'well_spec': args.well_spec,
-        'subsamp': args.subsampling,
-        'num_subsamp': args.num_subsamples,
-        'weighting': args.weighting,
-        'viters': args.value_iters,
-        'linfeat': args.linear_features,
-        'objective': args.objective
+        # 'subsamp': args.subsampling,
+        # 'num_subsamp': args.num_subsamples,
+        # 'weighting': args.weighting,
+        # 'viters': args.value_iters,
+        # 'linfeat': args.linear_features,
+        # 'objective': args.objective,
+        'w_dist_i': args.weights_dist_init,
+        'w_dist_s': args.weights_dist_search,
     }
 
     'Sample true rewards and reward spaces'

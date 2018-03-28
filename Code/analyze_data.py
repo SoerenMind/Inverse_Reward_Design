@@ -319,8 +319,8 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
         ','.join(dependent_vars), x_var, ','.join(independent_vars), subtitle)
     if not os.path.exists(folder):
         os.mkdir(folder)
-    plt.show()
-    # plt.savefig(concat(folder, filename))
+    # plt.show()
+    plt.savefig(concat(folder, filename))
 
 
 '''TODO:

@@ -4,15 +4,18 @@ from subprocess import call
 
 NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
-# choosers = ['incremental_optimize', 'joint_optimize', 'greedy_discrete', 'random']
-discr_query_sizes = ['1', '2', '3']
+# choosers = ['greedy_discrete', 'random']
+discr_query_sizes = ['3']
 choosers = ['feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
-mdp_types = ['bandits', 'gridworld']
+mdp_types = ['bandits']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
 num_iter = '20'
 num_q_max = '10000'
-rational_test_planner = 1
+# Keeping this bug because our old data had it
+square_probs = '1'  # REMOVE PARAMETER FOR NEXT RUN
+weights_dist_init = 'normal'
+weights_dist_search = 'normal'
 
 
 def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', viter='15', rsize='1000000',
@@ -65,7 +68,9 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                   '--well_spec', '1',
                   '--linear_features', '1',
                   '--objective',objective,
-                  '--rational_test_planner', rational_test_planner
+                  '--rational_test_planner', '1',
+                  '-weights_dist_init', weights_dist_init,
+                  '-weights_dist_search', weights_dist_search,
                ]
     print 'Running command', ' '.join(command)
     call(command)

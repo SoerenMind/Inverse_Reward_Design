@@ -123,13 +123,13 @@ class Query_Chooser_Subclass(Query_Chooser):
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         elif chooser == 'feature_entropy_search':
             self.search = True
-            self.init_none = False
+            # self.init_none = False
             self.no_optimize = True
             self.zeros = False
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         elif chooser == 'feature_entropy_search_then_optim':
             self.search = True
-            self.init_none = False
+            # self.init_none = False
             self.no_optimize = False
             self.zeros = False
             return self.find_feature_query_greedy(query_size, measure, true_reward)
@@ -271,8 +271,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         return query, objective[0][0]
 
     def sample_true_reward_matrix(self):
-        # Problem: Samples will be likelihood-weighted in graph. Gotta feed in uniform prior.
-
         num_subsamples = self.args.num_subsamples
         log_probs = self.inference.log_prior
         probs = np.exp(log_probs)
@@ -284,8 +282,11 @@ class Query_Chooser_Subclass(Query_Chooser):
         if self.args.weighting:
             unique_sample_idx, counts = np.unique(choices, return_counts=True)
 
-            # Not using log probabilities
-            weighted_probs = probs[unique_sample_idx] * counts
+            if self.args.square_probs:
+                # This was a bug that leads to ~squared probabilities (which are then renormalized)
+                weighted_probs = probs[unique_sample_idx] * counts
+            else:
+                weighted_probs = np.ones(len(counts)) * counts
             weighted_probs = weighted_probs / weighted_probs.sum()
             return self.inference.true_reward_matrix[unique_sample_idx], np.log(weighted_probs)
         else:
@@ -319,7 +320,11 @@ class Query_Chooser_Subclass(Query_Chooser):
                     weights = list(np.zeros(num_fixed))
                 # Initialize with random weights
                 else:
-                    weights = np.random.randn(num_fixed)
+                    if self.args.weights_dist_init == 'normal':
+                        weights = np.random.randn(num_fixed)
+                    elif self.args.weights_dist_init == 'uniform':
+                        weights = self.get_other_weights_samples(num_fixed)
+                    else: raise ValueError('weights distribution unknown')
                 if self.no_optimize:
                     gd_steps = 0
                 else:
@@ -331,14 +336,21 @@ class Query_Chooser_Subclass(Query_Chooser):
                     true_reward=true_reward, true_reward_matrix=true_reward_matrix)
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
-
             # Find weights by search over samples
             else:
+                """Note: For bandits at iteration 2, 100 searches lower entropy by ca 0.5 compared to average entropy at qsize=1. Slightly more at qsize=2.
+                Optimisation after search helps about 0.2 at iteration 2, query size 2.
+                Next:
+                -Observe if the 0.5 gain due to better weights holds for the optimal feature and also at full reward space. Then check for finer query.
+                -Why the hell does 'both' do badly?
+
+
+                """
                 # Compare to objective optimized over random setting of other weights
                 num_search = self.args.num_iters_optim * 4 * (1 + self.no_optimize)   # GD steps take ca 8x as long as forward passes
                 objective, optimal_weights, feature_exps = \
-                    self.test_func(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix,true_reward)
-                objective_plus_cost = objective + self.cost_of_asking * len(query)
+                    self.random_search(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix, true_reward)
+                objective_search = objective.copy()
 
                 # Optimize from best sample if desired
                 if not self.no_optimize:
@@ -348,7 +360,8 @@ class Query_Chooser_Subclass(Query_Chooser):
                         optimal_weights, gradient_steps=gd_steps,
                         # gradient_logging_outputs=[measure, 'weights_to_train[:3]'],#, 'gradients[:4]'],#, 'state_probs_cut'],
                         true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-
+                objective_plus_cost = objective + self.cost_of_asking * len(query)
+                self.optim_diff = objective - objective_search
 
             # print('Model outputs calculated')
             if objective_plus_cost <= best_objective_plus_cost + 1e-14:
@@ -364,11 +377,47 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         return best_query, best_optimal_weights, best_feature_exps
 
-    def test_func(self, desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix,true_reward):
+
+
+    # @profile
+    def find_feature_query_greedy(self, query_size, measure, true_reward):
+        """Returns feature query of size query_size that minimizes the objective (e.g. posterior entropy)."""
+        mdp = self.inference.mdp
+        cost_of_asking = self.cost_of_asking    # could use this to decide query length
+        best_query = []
+        best_weights = None
+        while len(best_query) < query_size:
+            best_query, best_weights, feature_exps = self.find_next_feature(
+                best_query, best_weights, measure, true_reward)
+            print 'Query length increased to {s}'.format(s=len(best_query))
+
+        print('query found')
+        # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
+        desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
+        true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
+        model = self.get_model(query_size, measure, discrete=False)
+        model.initialize(self.sess)
+        objective, true_log_posterior, true_entropy, post_avg = model.compute(
+            desired_outputs, self.sess, mdp, None, log_prior,
+            feature_expectations_input=feature_exps,
+            true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+        print('Best full posterior objective found (continuous): ' + str(objective[0][0]))
+        return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg
+
+
+
+    def random_search(self, desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix, true_reward):
+        """Returns the objective, weights, and feature expectations that minimized the objective in a random search."""
         best_objective_disc = float("inf")
         for _ in range(num_search):
             num_fixed = self.args.feature_dim - len(query)
-            other_weights = self.get_other_weights_samples(num_fixed)
+
+            if self.args.weights_dist_search == 'normal':
+                other_weights = np.random.randn(num_fixed)
+            elif self.args.weights_dist_search == 'uniform':
+                other_weights = self.get_other_weights_samples(num_fixed)
+            else:
+                raise ValueError('weights distribution unknown')
             objective_disc, optimal_weights_disc, feature_exps_disc = model.compute(
                 desired_outputs, self.sess, mdp, query, log_prior,
                 other_weights,
@@ -393,30 +442,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         return other_weights
 
 
-    # @profile
-    def find_feature_query_greedy(self, query_size, measure, true_reward):
-        """Returns feature query of size query_size that minimizes the objective (e.g. posterior entropy)."""
-        mdp = self.inference.mdp
-        cost_of_asking = self.cost_of_asking    # could use this to decide query length
-        best_query = []
-        best_weights = None
-        while len(best_query) < query_size:
-            best_query, best_weights, feature_exps = self.find_next_feature(
-                best_query, best_weights, measure, true_reward)
-            print 'Query length increased to {s}'.format(s=len(best_query))
 
-        print('query found')
-        # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
-        desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
-        true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
-        model = self.get_model(query_size, measure, discrete=False)
-        model.initialize(self.sess)
-        objective, true_log_posterior, true_entropy, post_avg = model.compute(
-            desired_outputs, self.sess, mdp, best_query, log_prior,
-            feature_expectations_input=feature_exps,
-            true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-        print('Best full posterior objective found (continuous): ' + str(objective[0][0]))
-        return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
 
 
@@ -628,26 +654,10 @@ class Experiment(object):
                 iter_start_time = time.clock()
                 print "==========Iteration: {i}/{m} ({c}). Total time: {t}==========".format(i=i+1,m=num_iter,c=chooser,t=iter_start_time-self.t_0)
                 if i > -1:
-                    # Do iteration for feature-based choosers:
-                    if chooser in ['feature_entropy']:
-                        query, perf_measure, true_log_posterior, true_entropy, post_avg \
-                            = self.query_chooser.find_query(self.query_size, chooser, true_reward)
-                        inference.update_prior(None, None, true_log_posterior)
-                    else:
-                        # Cache feature expectations and likelihoods
-                        # # TODO: Automatically move these outside the loop if the env isn't changing
-                        # self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
-                        # inference.cache_lhoods()
-
-                        # Find best query
-                        # print('Finding best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-                        query, perf_measure, true_log_posterior, true_entropy, post_avg \
-                            = self.query_chooser.find_query(self.query_size, chooser, true_reward)
-                        # print('Found best query. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-                        query = [np.array(proxy) for proxy in query]
-
-                        # Update posterior
-                        inference.update_prior(None, None, true_log_posterior)
+                    query, perf_measure, true_log_posterior, true_entropy, post_avg \
+                        = self.query_chooser.find_query(self.query_size, chooser, true_reward)
+                    query = [np.array(proxy) for proxy in query]
+                    inference.update_prior(None, None, true_log_posterior)
                 # Log outcomes before 1st query
                 else:
                     query = None

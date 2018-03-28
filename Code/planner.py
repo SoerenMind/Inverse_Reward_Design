@@ -263,12 +263,12 @@ class Model(object):
         # Set up optimizer
         if self.optimize:
             # optimizer = tf.train.AdamOptimizer(learning_rate=self.lr) # Make sure the momentum is reset for each model call
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
-            gradients, vs = zip(*optimizer.compute_gradients(self.objective))
+            self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
+            self.gradients, self.vs = zip(*self.optimizer.compute_gradients(self.objective))
             # self.gradient_norm = tf.norm(tf.stack(gradients, axis=0))
-            self.train_op = optimizer.apply_gradients(zip(gradients, vs))
-            self.name_to_op['gradients'] = gradients
-            # self.name_to_op['gradients[:4]'] = gradients[0][:4]
+            self.train_op = self.optimizer.apply_gradients(zip(self.gradients, self.vs))
+            self.name_to_op['gradients'] = self.gradients
+            # self.name_to_op['gradients[:4]'] = self.gradients[0][:4]
             # self.name_to_op['gradient_norm'] = self.gradient_norm
             self.name_to_op['minimize'] = self.train_op
 
