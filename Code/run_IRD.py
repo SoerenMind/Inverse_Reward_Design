@@ -136,7 +136,8 @@ if __name__=='__main__':
         # 'objective': args.objective,
         'w_dist_i': args.weights_dist_init,
         'w_dist_s': args.weights_dist_search,
-        'optim_big': args.only_optim_biggest
+        'optim_big': args.only_optim_biggest,
+        'rational_test': args.rational_test_planner
     }
 
     'Sample true rewards and reward spaces'

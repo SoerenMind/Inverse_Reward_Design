@@ -359,33 +359,29 @@ class BanditsModel(Model):
         self.name_to_op['features'] = self.features
 
         # Calculate state probabilities
-        # TODO(soerenmind): Calculate q-values instead of rewards
-        weights_expand = tf.expand_dims(self.weights,axis=0)
-        weights_reshaped = tf.transpose(weights_expand, perm=[0,2,1])
-        intermediate_tensor = tf.multiply(tf.stack([self.features]*self.K,axis=2), weights_reshaped)
-        self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=1, keep_dims=False, name="rewards_per_state")
+        weights_expand = tf.expand_dims(self.weights,axis=1)
+        intermediate_tensor = tf.multiply(tf.stack([self.features]*self.K,axis=0), weights_expand)
+        self.reward_per_state = tf.reduce_sum(intermediate_tensor, axis=-1, keep_dims=False, name="rewards_per_state")
         self.name_to_op['reward_per_state'] = self.reward_per_state
         self.name_to_op['q_values'] = self.reward_per_state
 
         # Rational planner
         if self.beta_planner == 'inf':
-            self.best_state = tf.argmax(self.reward_per_state)
-            self.num_states = tf.shape(tf.reshape(self.reward_per_state, [-1]))[0]
-            self.state_probs = tf.one_hot(self.best_state[0], self.num_states)
-            self.state_probs = tf.reshape(self.state_probs, [-1,1])
+            self.best_state = tf.argmax(self.reward_per_state, axis=-1)
+            self.num_states = tf.shape(self.reward_per_state)[1]
+            self.state_probs = tf.one_hot(self.best_state, self.num_states)
         # Boltzmann rational planner
         else:
             self.state_probs = tf.nn.softmax(self.beta_planner * self.reward_per_state, dim=0, name="state_probs")
 
         self.name_to_op['state_probs'] = self.state_probs
         self.name_to_op['state_probs_cut'] = self.state_probs[:5]
-
+        """Changes: remove [0] from best state; remove reshape; stack probs on axis 2 (was 1); stack features on axis 1 (was 2); sum features on axis 1 (was 0); remove transpose."""
 
         # Calculate feature expectations
-        probs_stack = tf.stack([self.state_probs] * self.feature_dim, axis=1)
-        features_stack = tf.multiply(tf.stack([self.features] * self.K, axis=2), probs_stack, name='multi')
-        self.feature_expectations = tf.reduce_sum(features_stack, axis=0, keep_dims=False, name="feature_exps")
-        self.feature_expectations = tf.transpose(self.feature_expectations)
+        probs_stack = tf.stack([self.state_probs] * self.feature_dim, axis=2)
+        features_stack = tf.multiply(tf.stack([self.features] * self.K, axis=0), probs_stack, name='multi')
+        self.feature_expectations = tf.reduce_sum(features_stack, axis=1, keep_dims=False, name="feature_exps")
         self.name_to_op['feature_exps'] = self.feature_expectations
 
 
