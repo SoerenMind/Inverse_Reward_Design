@@ -134,11 +134,15 @@ class Query_Chooser_Subclass(Query_Chooser):
             self.zeros = False
             return self.find_feature_query_greedy(query_size, measure, true_reward)
         elif chooser == 'feature_entropy_random_init_none':
+            "Chooses feature that minimizes entropy given random weights"
             self.search = False
             self.init_none = True
             self.no_optimize = True
             self.zeros = False
             return self.find_feature_query_greedy(query_size, measure, true_reward)
+        elif chooser == 'feature_random':
+            "Chooses feature queries and weights at random"
+            return self.find_feature_query_greedy(query_size, measure, true_reward, random_query=True)
         elif chooser == 'feature_entropy_zeros_init_none':
             self.search = False
             self.init_none = True
@@ -294,7 +298,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             return self.inference.true_reward_matrix[choices], unif_log_prior
 
 
-    def find_next_feature(self, curr_query, curr_weights, measure, true_reward, max_query_size):
+    def find_next_feature(self, curr_query, curr_weights, measure, max_query_size):
         mdp = self.inference.mdp
         desired_outputs = [measure, 'weights_to_train', 'feature_exps']
         features = [i for i in range(self.args.feature_dim) if i not in curr_query]
@@ -345,7 +349,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                     desired_outputs, self.sess, mdp, query, log_prior,
                     weights, gradient_steps=gd_steps,
                     # gradient_logging_outputs=[measure, 'weights_to_train[:3]'],#, 'gradients[:4]'],#, 'state_probs_cut'],
-                    true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+                    true_reward_matrix=true_reward_matrix)
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
             # Find weights by search over samples
@@ -374,7 +378,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                     gd_steps = gd_steps_if_optim
                     num_search = num_search_if_optim
                 objective, optimal_weights, feature_exps = \
-                    self.random_search(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix, true_reward)
+                    self.random_search(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix)
                 objective_search = objective.copy()
 
                 # Optimize from best sample if desired
@@ -383,7 +387,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                         desired_outputs, self.sess, mdp, query, log_prior,
                         optimal_weights, gradient_steps=gd_steps,
                         # gradient_logging_outputs=[measure, 'weights_to_train[:3]'],#, 'gradients[:4]'],#, 'state_probs_cut'],
-                        true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+                        true_reward_matrix=true_reward_matrix)
                 objective_plus_cost = objective + self.cost_of_asking * len(query)
                 self.optim_diff = objective - objective_search
 
@@ -404,15 +408,18 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
     # @profile
-    def find_feature_query_greedy(self, query_size, measure, true_reward):
+    def find_feature_query_greedy(self, query_size, measure, true_reward, random_query=False):
         """Returns feature query of size query_size that minimizes the objective (e.g. posterior entropy)."""
         mdp = self.inference.mdp
         cost_of_asking = self.cost_of_asking    # could use this to decide query length
         best_query = []
         best_weights = None
         while len(best_query) < query_size:
-            best_query, best_weights, feature_exps = self.find_next_feature(
-                best_query, best_weights, measure, true_reward, query_size)
+            if random_query:
+                best_query, best_weights, feature_exps = self.add_random_feature(best_query, measure)
+            else:
+                best_query, best_weights, feature_exps = self.find_next_feature(
+                    best_query, best_weights, measure, query_size)
             print 'Query length increased to {s}'.format(s=len(best_query))
 
         print('query found')
@@ -429,8 +436,35 @@ class Query_Chooser_Subclass(Query_Chooser):
         return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
 
+    def add_random_feature(self, curr_query, measure):
+        """Same as self.find_next_feature, except the added feature is not optimized, i.e. random."""
+        mdp = self.inference.mdp
+        desired_outputs = [measure, 'weights_to_train', 'feature_exps']
+        features = [i for i in range(self.args.feature_dim) if i not in curr_query]
+        model = self.get_model(
+            len(curr_query) + 1, measure, discrete=False, optimize=True)
+        true_reward_matrix, log_prior = self.get_true_reward_space()
 
-    def random_search(self, desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix, true_reward):
+        query = curr_query + [choice(features)]
+
+        # Initialize with random weights
+        num_fixed = self.args.feature_dim - len(query)
+        if self.args.weights_dist_init == 'normal':
+            weights = np.random.randn(num_fixed)
+        elif self.args.weights_dist_init == 'uniform':
+            weights = self.get_other_weights_samples(num_fixed)
+        else:
+            raise ValueError('weights distribution unknown')
+
+        objective, weights, feature_exps = model.compute(
+            desired_outputs, self.sess, mdp, query, log_prior,
+            weights,
+            true_reward_matrix=true_reward_matrix)
+
+        return query, weights, feature_exps
+
+
+    def random_search(self, desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix):
         """Returns the objective, weights, and feature expectations that minimized the objective in a random search."""
         best_objective_disc = float("inf")
         for _ in range(num_search):
@@ -447,8 +481,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             # Calculate objective
             objective_disc, optimal_weights_disc, feature_exps_disc = model.compute(
                 desired_outputs, self.sess, mdp, query, log_prior,
-                other_weights,
-                true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+                other_weights, true_reward_matrix=true_reward_matrix)
 
             # Update best variables
             if objective_disc <= best_objective_disc:
@@ -535,80 +568,80 @@ class Query_Chooser_Subclass(Query_Chooser):
         return model
 
 
-    def find_random_query(self, query_size):
-        query = [choice(self.reward_space_proxy) for _ in range(query_size)]
-        # exp_regret = self.get_exp_regret_from_query([])
-        return query, None, None
-    
-    # @profile
-    def get_exp_exp_post_regret(self, query, total_reward=False):
-        """Returns the expected regret after getting query answered. This measure should be minimized over queries.
-        The calculation is done by calculating the probability of each answer and then the regret conditioned on it."""
-
-        if len(query) == 0:
-            return self.get_exp_regret_from_prior()
-
-        posterior, post_averages, probs_proxy_choice, _ = self.inference.calc_posterior(query)
-        avg_reward_matrix = self.inference.get_avg_reward_for_post_averages(post_averages)
-        if total_reward:    # Optimizes total reward instead of regret
-            regrets = -avg_reward_matrix
-        else:
-            optimal_rewards = self.inference.true_reward_avg_reward_vec
-            regrets = optimal_rewards.reshape(1,-1) - avg_reward_matrix
-
-        exp_regrets = np.dot(regrets * posterior, np.ones(posterior.shape[1]))  # Make sure there's no broadcasting
-        exp_exp_regret = np.dot(probs_proxy_choice, exp_regrets)
-
-        return exp_exp_regret
-
-    def get_conditional_entropy(self, query):
-        posteriors, conditional_entropy, probs_proxy_choice, _ = self.inference.calc_posterior(query, get_entropy=True)
-        return conditional_entropy
-
-    # @profile
-    def get_exp_regret_from_prior(self):
-        """Returns the expected regret from the prior."""
-        # inference has to have cached the posterior for the right proxy & query here.
-        exp_regret = 0
-        prior_avg = sum([self.inference.get_prior(true_reward) * true_reward
-                         for true_reward in self.inference.reward_space_true])
-        for true_reward in self.inference.reward_space_true:
-            p_true_reward = self.inference.get_prior(true_reward)
-            optimal_reward = self.inference.get_avg_reward(true_reward,true_reward)
-            prior_reward = self.inference.get_avg_reward(prior_avg, true_reward)
-            regret = optimal_reward - prior_reward
-            exp_regret += regret * p_true_reward
-        return exp_regret
-
-    # @profile
-    def get_regret(self, proxy, true_reward):
-        """Gets difference of reward under true_reward-function for optimizing for true_reward vs proxy."""
-        optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)
-        proxy_reward = self.inference.get_avg_reward(proxy, true_reward)
-        regret = optimal_reward - proxy_reward
-        return regret
-
-    # @profile
-    def get_exp_regret_from_query(self, query):
-        """Calculates the actual regret from a query by looping through (and weighting) true rewards."""
-        if len(query) == 0:
-            prior_avg = np.array(sum([self.inference.get_prior(true_reward) * true_reward
-                                      for true_reward in self.inference.reward_space_true]))
-            regret_vec = np.array([self.get_regret(prior_avg, true_reward) for true_reward in self.inference.reward_space_true])
-            exp_regret = np.dot(regret_vec, self.inference.prior)
-            return exp_regret
-        else:
-            raise NotImplementedError
-
-    # @profile
-    def get_regret_from_query_and_true_reward(self, query, true_reward):
-        """Calculates the regret given the current prior. Only implemented for query lenget zero."""
-        if len(query) == 0:
-            prior_avg = self.inference.get_prior_avg()
-            regret = self.get_regret(prior_avg, true_reward)
-            return regret
-        else:
-            raise NotImplementedError
+    # def find_random_query(self, query_size):
+    #     query = [choice(self.reward_space_proxy) for _ in range(query_size)]
+    #     # exp_regret = self.get_exp_regret_from_query([])
+    #     return query, None, None
+    #
+    # # @profile
+    # def get_exp_exp_post_regret(self, query, total_reward=False):
+    #     """Returns the expected regret after getting query answered. This measure should be minimized over queries.
+    #     The calculation is done by calculating the probability of each answer and then the regret conditioned on it."""
+    #
+    #     if len(query) == 0:
+    #         return self.get_exp_regret_from_prior()
+    #
+    #     posterior, post_averages, probs_proxy_choice, _ = self.inference.calc_posterior(query)
+    #     avg_reward_matrix = self.inference.get_avg_reward_for_post_averages(post_averages)
+    #     if total_reward:    # Optimizes total reward instead of regret
+    #         regrets = -avg_reward_matrix
+    #     else:
+    #         optimal_rewards = self.inference.true_reward_avg_reward_vec
+    #         regrets = optimal_rewards.reshape(1,-1) - avg_reward_matrix
+    #
+    #     exp_regrets = np.dot(regrets * posterior, np.ones(posterior.shape[1]))  # Make sure there's no broadcasting
+    #     exp_exp_regret = np.dot(probs_proxy_choice, exp_regrets)
+    #
+    #     return exp_exp_regret
+    #
+    # def get_conditional_entropy(self, query):
+    #     posteriors, conditional_entropy, probs_proxy_choice, _ = self.inference.calc_posterior(query, get_entropy=True)
+    #     return conditional_entropy
+    #
+    # # @profile
+    # def get_exp_regret_from_prior(self):
+    #     """Returns the expected regret from the prior."""
+    #     # inference has to have cached the posterior for the right proxy & query here.
+    #     exp_regret = 0
+    #     prior_avg = sum([self.inference.get_prior(true_reward) * true_reward
+    #                      for true_reward in self.inference.reward_space_true])
+    #     for true_reward in self.inference.reward_space_true:
+    #         p_true_reward = self.inference.get_prior(true_reward)
+    #         optimal_reward = self.inference.get_avg_reward(true_reward,true_reward)
+    #         prior_reward = self.inference.get_avg_reward(prior_avg, true_reward)
+    #         regret = optimal_reward - prior_reward
+    #         exp_regret += regret * p_true_reward
+    #     return exp_regret
+    #
+    # # @profile
+    # def get_regret(self, proxy, true_reward):
+    #     """Gets difference of reward under true_reward-function for optimizing for true_reward vs proxy."""
+    #     optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)
+    #     proxy_reward = self.inference.get_avg_reward(proxy, true_reward)
+    #     regret = optimal_reward - proxy_reward
+    #     return regret
+    #
+    # # @profile
+    # def get_exp_regret_from_query(self, query):
+    #     """Calculates the actual regret from a query by looping through (and weighting) true rewards."""
+    #     if len(query) == 0:
+    #         prior_avg = np.array(sum([self.inference.get_prior(true_reward) * true_reward
+    #                                   for true_reward in self.inference.reward_space_true]))
+    #         regret_vec = np.array([self.get_regret(prior_avg, true_reward) for true_reward in self.inference.reward_space_true])
+    #         exp_regret = np.dot(regret_vec, self.inference.prior)
+    #         return exp_regret
+    #     else:
+    #         raise NotImplementedError
+    #
+    # # @profile
+    # def get_regret_from_query_and_true_reward(self, query, true_reward):
+    #     """Calculates the regret given the current prior. Only implemented for query lenget zero."""
+    #     if len(query) == 0:
+    #         prior_avg = self.inference.get_prior_avg()
+    #         regret = self.get_regret(prior_avg, true_reward)
+    #         return regret
+    #     else:
+    #         raise NotImplementedError
 
 
 
@@ -685,7 +718,7 @@ class Experiment(object):
                 if i > -1:
                     query, perf_measure, true_log_posterior, true_entropy, post_avg \
                         = self.query_chooser.find_query(self.query_size, chooser, true_reward)
-                    query = [np.array(proxy) for proxy in query]
+                    query = [np.array(proxy) for proxy in query]    # unnecessary?
                     inference.update_prior(None, None, true_log_posterior)
                 # Log outcomes before 1st query
                 else:
