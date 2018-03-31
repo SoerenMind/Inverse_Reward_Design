@@ -395,7 +395,6 @@ class Query_Chooser_Subclass(Query_Chooser):
                 best_query, best_weights, feature_exps = self.find_next_feature(
                     best_query, best_weights, measure, query_size)
             print 'Query length increased to {s}'.format(s=len(best_query))
-            print 'self.optim_diff: ' + str(self.optim_diff) + '\n mean: ' + str(np.mean(self.optim_diff)) + '\n std: ' + str(np.std(self.optim_diff))
 
         print('query found')
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
