@@ -337,7 +337,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             else:
                  # Set gradient steps and num_search
                 gd_steps_if_optim = self.args.num_iters_optim // 2
-                num_search_if_optim = self.args.num_iters_optim * 4 * (1 + self.no_optimize)  # GD steps take ca 8x as long as forward passes
+                num_search_if_optim = self.args.num_iters_optim * (1 + self.no_optimize)  # GD steps take ca 2x as long as forward passes
                 # Optionally only optimize if at maximum query size
                 if self.args.only_optim_biggest:
                     if len(query) < max_query_size:
