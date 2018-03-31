@@ -274,28 +274,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         print('Objective for size {s}: '.format(s=len(query)) + str(objective[0][0]))
         return query, objective[0][0]
 
-    def sample_true_reward_matrix(self):
-        num_subsamples = self.args.num_subsamples
-        log_probs = self.inference.log_prior
-        probs = np.exp(log_probs)
-        probs = probs / probs.sum()
-        try:
-            choices = np.random.choice(self.args.size_true_space, p=probs, size=num_subsamples)
-        except:
-            pass
-        if self.args.weighting:
-            unique_sample_idx, counts = np.unique(choices, return_counts=True)
-
-            if self.args.square_probs:
-                # This was a bug that leads to ~squared probabilities (which are then renormalized)
-                weighted_probs = probs[unique_sample_idx] * counts
-            else:
-                weighted_probs = np.ones(len(counts)) * counts
-            weighted_probs = weighted_probs / weighted_probs.sum()
-            return self.inference.true_reward_matrix[unique_sample_idx], np.log(weighted_probs)
-        else:
-            unif_log_prior = np.log(np.ones(num_subsamples) / num_subsamples)
-            return self.inference.true_reward_matrix[choices], unif_log_prior
 
 
     def find_next_feature(self, curr_query, curr_weights, measure, max_query_size):
@@ -307,9 +285,10 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_query, best_optimal_weights, best_feature_exps = None, None, None
         model = self.get_model(
             len(curr_query) + 1, measure, discrete=False, optimize=True)
-
         true_reward_matrix, log_prior = self.get_true_reward_space()
-
+        self.optim_diff = []
+        ent = -np.dot(np.exp(log_prior), log_prior)
+        lr = ent.round(0) if ent > 1 else ent.round(1)
         for i, feature in enumerate(features):
             # Resampling weights for each feature
             model.initialize(self.sess)
@@ -326,11 +305,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                     weights = list(np.zeros(num_fixed))
                 # Initialize with random weights
                 else:
-                    if self.args.weights_dist_init == 'normal':
-                        weights = np.random.randn(num_fixed)
-                    elif self.args.weights_dist_init == 'uniform':
-                        weights = self.get_other_weights_samples(num_fixed)
-                    else: raise ValueError('weights distribution unknown')
+                    weights = self.sample_weights('init', num_fixed)
 
                 # Set gradient steps
                 gd_steps_if_optim = self.args.num_iters_optim
@@ -345,25 +320,22 @@ class Query_Chooser_Subclass(Query_Chooser):
                     gd_steps = gd_steps_if_optim
 
                 # Calculate (optimized) objective
+                "REMOVE THIS!"
+                objective_before_optim = model.compute(
+                    desired_outputs, self.sess, mdp, query, log_prior,
+                    weights, lr=lr,
+                    true_reward_matrix=true_reward_matrix)
                 objective, optimal_weights, feature_exps = model.compute(
                     desired_outputs, self.sess, mdp, query, log_prior,
-                    weights, gradient_steps=gd_steps,
+                    weights, gradient_steps=gd_steps, lr=lr,
                     # gradient_logging_outputs=[measure, 'weights_to_train[:3]'],#, 'gradients[:4]'],#, 'state_probs_cut'],
                     true_reward_matrix=true_reward_matrix)
+                self.optim_diff.append(objective[0][0] - objective_before_optim[0][0])
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
             # Find weights by search over samples
             else:
-                """Note: For bandits at iteration 2, 100 searches lower entropy by ca 0.5 compared to average entropy at qsize=1. Slightly more at qsize=2.
-                Optimisation after search helps about 0.2 at iteration 2, query size 2.
-                Next:
-                -Observe if the 0.5 gain due to better weights holds for the optimal feature and also at full reward space. Then check for finer query.
-                -Why the hell does 'both' do badly?
-
-
-                """
-
-                # Set gradient steps and num_search
+                 # Set gradient steps and num_search
                 gd_steps_if_optim = self.args.num_iters_optim // 2
                 num_search_if_optim = self.args.num_iters_optim * 4 * (1 + self.no_optimize)  # GD steps take ca 8x as long as forward passes
                 # Optionally only optimize if at maximum query size
@@ -377,6 +349,8 @@ class Query_Chooser_Subclass(Query_Chooser):
                 else:
                     gd_steps = gd_steps_if_optim
                     num_search = num_search_if_optim
+
+                # Random search
                 objective, optimal_weights, feature_exps = \
                     self.random_search(desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix)
                 objective_search = objective.copy()
@@ -385,11 +359,11 @@ class Query_Chooser_Subclass(Query_Chooser):
                 if not self.no_optimize:
                     objective, optimal_weights, feature_exps = model.compute(
                         desired_outputs, self.sess, mdp, query, log_prior,
-                        optimal_weights, gradient_steps=gd_steps,
+                        optimal_weights, gradient_steps=gd_steps, lr=lr,
                         # gradient_logging_outputs=[measure, 'weights_to_train[:3]'],#, 'gradients[:4]'],#, 'state_probs_cut'],
                         true_reward_matrix=true_reward_matrix)
                 objective_plus_cost = objective + self.cost_of_asking * len(query)
-                self.optim_diff = objective - objective_search
+                self.optim_diff.append(objective[0][0] - objective_search[0][0])
 
             # print('Model outputs calculated')
             if objective_plus_cost <= best_objective_plus_cost + 1e-14:
@@ -421,6 +395,7 @@ class Query_Chooser_Subclass(Query_Chooser):
                 best_query, best_weights, feature_exps = self.find_next_feature(
                     best_query, best_weights, measure, query_size)
             print 'Query length increased to {s}'.format(s=len(best_query))
+            print 'self.optim_diff: ' + str(self.optim_diff) + '\n mean: ' + str(np.mean(self.optim_diff)) + '\n std: ' + str(np.std(self.optim_diff))
 
         print('query found')
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
@@ -449,12 +424,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # Initialize with random weights
         num_fixed = self.args.feature_dim - len(query)
-        if self.args.weights_dist_init == 'normal':
-            weights = np.random.randn(num_fixed)
-        elif self.args.weights_dist_init == 'uniform':
-            weights = self.get_other_weights_samples(num_fixed)
-        else:
-            raise ValueError('weights distribution unknown')
+        weights = self.sample_weights('init', num_fixed)
 
         objective, weights, feature_exps = model.compute(
             desired_outputs, self.sess, mdp, query, log_prior,
@@ -464,6 +434,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         return query, weights, feature_exps
 
 
+
     def random_search(self, desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix):
         """Returns the objective, weights, and feature expectations that minimized the objective in a random search."""
         best_objective_disc = float("inf")
@@ -471,12 +442,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             num_fixed = self.args.feature_dim - len(query)
 
             # Sample weights
-            if self.args.weights_dist_search == 'normal':
-                other_weights = np.random.randn(num_fixed)
-            elif self.args.weights_dist_search == 'uniform':
-                other_weights = self.get_other_weights_samples(num_fixed)
-            else:
-                raise ValueError('weights distribution unknown')
+            other_weights = self.sample_weights('search', num_fixed)
 
             # Calculate objective
             objective_disc, optimal_weights_disc, feature_exps_disc = model.compute(
@@ -505,6 +471,33 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
 
+    def sample_weights(self, search_or_init, num_fixed):
+        if search_or_init == 'search':
+            if self.args.weights_dist_search == 'normal':
+                weights = np.random.randn(num_fixed)
+            elif self.args.weights_dist_search == 'normal2':
+                weights = 2 * np.random.randn(num_fixed)
+            elif self.args.weights_dist_search == 'normal4':
+                weights = 4 * np.random.randn(num_fixed)
+            elif self.args.weights_dist_search == 'uniform':
+                weights = self.get_other_weights_samples(num_fixed)
+            else:
+                raise ValueError('weight distribution unknown')
+        elif search_or_init == 'init':
+            if self.args.weights_dist_init == 'normal':
+                weights = np.random.randn(num_fixed)
+            elif self.args.weights_dist_search == 'normal2':
+                weights = 2 * np.random.randn(num_fixed)
+            elif self.args.weights_dist_search == 'normal4':
+                weights = 4 * np.random.randn(num_fixed)
+            elif self.args.weights_dist_init == 'uniform':
+                weights = self.get_other_weights_samples(num_fixed)
+            else:
+                raise ValueError('weights distribution unknown')
+        else: raise ValueError('weights sampling method unknown')
+
+        return weights
+
 
 
 
@@ -519,6 +512,29 @@ class Query_Chooser_Subclass(Query_Chooser):
             log_prior = self.inference.log_prior
         return true_reward_matrix, log_prior
 
+
+    def sample_true_reward_matrix(self):
+        num_subsamples = self.args.num_subsamples
+        log_probs = self.inference.log_prior
+        probs = np.exp(log_probs)
+        probs = probs / probs.sum()
+        try:
+            choices = np.random.choice(self.args.size_true_space, p=probs, size=num_subsamples)
+        except:
+            pass
+        if self.args.weighting:
+            unique_sample_idx, counts = np.unique(choices, return_counts=True)
+
+            if self.args.square_probs:
+                # This was a bug that leads to ~squared probabilities (which are then renormalized)
+                weighted_probs = probs[unique_sample_idx] * counts
+            else:
+                weighted_probs = np.ones(len(counts)) * counts
+            weighted_probs = weighted_probs / weighted_probs.sum()
+            return self.inference.true_reward_matrix[unique_sample_idx], np.log(weighted_probs)
+        else:
+            unif_log_prior = np.log(np.ones(num_subsamples) / num_subsamples)
+            return self.inference.true_reward_matrix[choices], unif_log_prior
 
 
     def get_model(self, query_size, objective, num_unknown=None,

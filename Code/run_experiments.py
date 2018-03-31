@@ -6,16 +6,16 @@ NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 # choosers = ['greedy_discrete', 'random']
 discr_query_sizes = ['3']
-choosers = ['feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
-mdp_types = ['bandits']
+choosers = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
+mdp_types = ['bandits','gridworld']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
-num_iter = '20'
+num_iter = '20'     # Maybe do 40 for gridworld
 num_q_max = '10000'
 # Keeping this bug because our old data had it
 square_probs_bug = '1'  # REMOVE PARAMETER FOR NEXT RUN
-weights_dist_init = 'normal'
-weights_dist_search = 'normal'
+weights_dist_init = 'normal2'
+weights_dist_search = 'normal2'
 only_optim_biggest = '1'    # Change back to zero
 
 def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', viter='15', rsize='1000000',
@@ -32,7 +32,7 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
     else:
         # Values range from 50-100 when using 25 value iterations.
         beta = '0.2'                                                    # Set to 0.5 as well to show entropy=0 for qsize-=10?
-        beta_planner = '0.5'
+        beta_planner = '1'
         dim = '20'
         # TODO: Set the following to the right values
         lr = '20'
@@ -68,7 +68,6 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                   '--well_spec', '1',
                   '--linear_features', '1',
                   '--objective',objective,
-                  '--rational_test_planner', '1',
                   '-weights_dist_init', weights_dist_init,
                   '-weights_dist_search', weights_dist_search,
                   '--only_optim_biggest', only_optim_biggest

@@ -87,7 +87,7 @@ class Model(object):
             self.proxy_reward_space, dtype=tf.float32, name="query_weights")
 
         if self.optimize:
-            weight_inits = tf.random_normal([num_fixed], stddev=4)
+            weight_inits = tf.random_normal([num_fixed], stddev=2)
             self.weights_to_train = tf.Variable(
                 weight_inits, name="weights_to_train")
             self.weight_inputs = tf.placeholder(
@@ -263,18 +263,20 @@ class Model(object):
         # Set up optimizer
         if self.optimize:
             # optimizer = tf.train.AdamOptimizer(learning_rate=self.lr) # Make sure the momentum is reset for each model call
-            self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
+            self.lr_tensor = tf.constant(self.lr)
+            self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr_tensor)
             self.gradients, self.vs = zip(*self.optimizer.compute_gradients(self.objective))
             # self.gradient_norm = tf.norm(tf.stack(gradients, axis=0))
             self.train_op = self.optimizer.apply_gradients(zip(self.gradients, self.vs))
-            self.name_to_op['gradients'] = self.gradients
-            # self.name_to_op['gradients[:4]'] = self.gradients[0][:4]
+            self.name_to_op['gradients'] = self.gradients[-1]
+            self.name_to_op['gradients[:4]'] = self.gradients[-1][:4]
             # self.name_to_op['gradient_norm'] = self.gradient_norm
             self.name_to_op['minimize'] = self.train_op
+            self.name_to_op['lr_tensor'] = self.lr_tensor
 
 
     def compute(self, outputs, sess, mdp, query=None, log_prior=None, weight_inits=None, feature_expectations_input=None,
-                gradient_steps=0, gradient_logging_outputs=[], true_reward=None, true_reward_matrix=None):
+                gradient_steps=0, gradient_logging_outputs=[], true_reward=None, true_reward_matrix=None, lr=None):
         """
         Takes gradient steps to set the non-query features to the values that
         best optimize the objective. After optimization, calculates the values
@@ -319,11 +321,13 @@ class Model(object):
             return self.name_to_op[name]
 
         if gradient_steps > 0:
+            if lr is not None:
+                fd[self.lr_tensor] = lr
             ops = [get_op(name) for name in gradient_logging_outputs]
             other_ops = [self.train_op]
             for step in range(gradient_steps):
                 results = sess.run(ops + other_ops, feed_dict=fd)
-                if ops and step % 9 == 0:
+                if ops and step % 1 == 0:
                     print 'Gradient step {0}: {1}'.format(step, results[:-1])
 
         return sess.run([get_op(name) for name in outputs], feed_dict=fd)
@@ -372,7 +376,7 @@ class BanditsModel(Model):
             self.state_probs = tf.one_hot(self.best_state, self.num_states)
         # Boltzmann rational planner
         else:
-            self.state_probs = tf.nn.softmax(self.beta_planner * self.reward_per_state, dim=0, name="state_probs")
+            self.state_probs = tf.nn.softmax(self.beta_planner * self.reward_per_state, dim=-1, name="state_probs")
 
         self.name_to_op['state_probs'] = self.state_probs
         self.name_to_op['state_probs_cut'] = self.state_probs[:5]

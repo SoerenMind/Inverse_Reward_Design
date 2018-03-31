@@ -449,9 +449,12 @@ def chooser_to_color(chooser, qsize=None):
     exhaustive_color = 'orange' # 'peachpuff', 'crimson'
     random_color = 'darkgrey' # 'darkorange'
     full_color = 'lightgrey' # 'grey'
+
+
     feature_color = 'blue'
     feature_color_random = 'lightblue'
-
+    search_color = 'olivedrab'
+    both_color = 'steelblue'
 
     if chooser.startswith('greedy'):
         if qsize == 2:
@@ -475,6 +478,10 @@ def chooser_to_color(chooser, qsize=None):
         return feature_color
     if chooser == 'feature_entropy_random_init_none':
         return feature_color_random
+    if chooser == 'feature_entropy_search_then_optim':
+        return both_color
+    if chooser == 'feature_entropy_search':
+        return search_color
     # if chooser == 'Feature selection, random init':
     #     return 'lightorange'
     # if chooser == 'Feature selection, no optimization':
