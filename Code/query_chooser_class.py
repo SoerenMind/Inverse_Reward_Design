@@ -397,16 +397,31 @@ class Query_Chooser_Subclass(Query_Chooser):
             print 'Query length increased to {s}'.format(s=len(best_query))
 
         print('query found')
+
         # For the chosen query, get posterior from human answer. If using human input, replace with feature exps or trajectories.
         desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
+
+        '''With small human queries'''
         model = self.get_model(query_size, measure, discrete=False)
         model.initialize(self.sess)
         objective, true_log_posterior, true_entropy, post_avg = model.compute(
             desired_outputs, self.sess, mdp, None, log_prior,
             feature_expectations_input=feature_exps,
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-        print('Best full posterior objective found (continuous): ' + str(objective[0][0]))
+        print('Best full posterior objective found (small, continuous): ' + str(objective[0][0]))
+
+        '''With large human queries'''
+        disc_size = self.args.discretization_size_human
+        model = self.get_model(query_size, measure, discrete=False, discretization_size=disc_size, optimize=True)
+        model.initialize(self.sess)
+        objective, true_log_posterior, true_entropy, post_avg = model.compute(
+            desired_outputs, self.sess, mdp, best_query, log_prior,
+            weight_inits=best_weights,
+            true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+        print('Best full posterior objective found (large, continuous): ' + str(objective[0][0]))
+
+
         return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
 
@@ -537,7 +552,8 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
     def get_model(self, query_size, objective, num_unknown=None,
-                  discrete=True, optimize=False, no_planning=False, cache=True, rational_planner=False):
+                  discrete=True, optimize=False, no_planning=False, cache=True, rational_planner=False,
+                  discretization_size=None):
         mdp = self.inference.mdp
         height, width = None, None
         # TODO: Replace mdp.type with self.args.mdp_type
@@ -547,7 +563,9 @@ class Query_Chooser_Subclass(Query_Chooser):
         beta, beta_planner = self.args.beta, self.args.beta_planner
         if rational_planner:
             beta_planner = 'inf'
-        discretization_size, num_iters = self.args.discretization_size, self.args.value_iters
+        num_iters = self.args.value_iters
+        if discretization_size is None:
+            discretization_size = self.args.discretization_size
         true_reward_space_size = None
         # true_reward_space_size = len(self.inference.true_reward_matrix)
         key = (no_planning, mdp.type, dim, gamma, query_size,

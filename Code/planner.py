@@ -28,7 +28,8 @@ class Model(object):
             const = 9 // num_posneg_vals
             f_range = range(-num_posneg_vals * const, 10, const)
             print 'Using', f_range, 'to discretize the feature'
-            assert len(f_range) == discretization_size
+            if len(f_range) != discretization_size:
+                print 'discretization size is off by ' + str(len(f_range) - discretization_size)
             # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
             self.proxy_reward_space = list(product(f_range, repeat=query_size))
             self.K = len(self.proxy_reward_space)
@@ -86,19 +87,19 @@ class Model(object):
         self.query_weights= tf.constant(
             self.proxy_reward_space, dtype=tf.float32, name="query_weights")
 
-        if self.optimize:
-            weight_inits = tf.random_normal([num_fixed], stddev=2)
-            self.weights_to_train = tf.Variable(
-                weight_inits, name="weights_to_train")
-            self.weight_inputs = tf.placeholder(
-                tf.float32, shape=[num_fixed], name="weight_inputs")
-            self.assign_op = self.weights_to_train.assign(self.weight_inputs)
-            self.fixed_weights = self.weights_to_train
-            self.name_to_op['weights_to_train'] = self.weights_to_train
-            self.name_to_op['weights_to_train[:3]'] = self.weights_to_train[:3]
-        else:
-            self.fixed_weights = tf.constant(
-                np.zeros([num_fixed], dtype=np.float32))
+        # if self.optimize:
+        weight_inits = tf.random_normal([num_fixed], stddev=2)
+        self.weights_to_train = tf.Variable(
+            weight_inits, name="weights_to_train")
+        self.weight_inputs = tf.placeholder(
+            tf.float32, shape=[num_fixed], name="weight_inputs")
+        self.assign_op = self.weights_to_train.assign(self.weight_inputs)
+        self.fixed_weights = self.weights_to_train
+        self.name_to_op['weights_to_train'] = self.weights_to_train
+        self.name_to_op['weights_to_train[:3]'] = self.weights_to_train[:3]
+        # else:
+        #     self.fixed_weights = tf.constant(
+        #         np.zeros([num_fixed], dtype=np.float32))
 
         # Let's say query is [1, 3] and there are 6 features.
         # query_weights = [10, 11] and weight_inputs = [12, 13, 14, 15].

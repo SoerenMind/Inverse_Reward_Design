@@ -6,8 +6,8 @@ NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 # choosers = ['greedy_discrete', 'random']
 discr_query_sizes = ['3']
-choosers = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
-mdp_types = ['bandits','gridworld']
+choosers = ['feature_entropy_search_then_optim', 'feature_random', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
+mdp_types = ['gridworld','bandits']
 true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
 num_iter = '20'     # Maybe do 40 for gridworld
