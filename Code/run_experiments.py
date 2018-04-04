@@ -6,7 +6,7 @@ NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 # choosers = ['greedy_discrete', 'random']
 discr_query_sizes = ['3']
-choosers = ['feature_entropy_search_then_optim', 'feature_random', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
+choosers = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
 mdp_types = ['gridworld','bandits']
 objectives = ['entropy']
 num_iter = '20'     # Maybe do 40 for gridworld
@@ -17,8 +17,8 @@ weights_dist_init = 'normal2'
 weights_dist_search = 'normal2'
 only_optim_biggest = '1'    # Change back to zero
 
-def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', viter='15', rsize='1000000',
-        subsampling='1', num_iter='20'):
+def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', discretization_size_human='5',
+        viter='15', rsize='1000000',subsampling='1', num_iter='20'):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
@@ -60,6 +60,7 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                   '--mdp_type', mdp_type,
                   '--feature_dim', dim,
                   '--discretization_size', discretization_size,
+                  '--discretization_size_human', discretization_size_human,
                   '--num_test_envs', '100',
                   '--subsampling', subsampling,
                   '--num_subsamples','10000',
@@ -85,20 +86,20 @@ def run_discrete():
 
         run('full', '2', mdp_type, num_iter=num_iter)
 
-# Run with different rsize and subsampling values
-def run_subsampling():
-    for mdp_type in mdp_types:
-        for rsize in true_reward_space_sizes:
-            if rsize == '10000':
-                subsampling = '0'
-            else: subsampling = '1'
-
-
-            for objective in objectives:
-                for chooser in choosers:
-                        for qsize in discr_query_sizes:
-                            run(chooser, qsize, mdp_type, objective, rsize=rsize, subsampling=subsampling)
-                run('full', '2', mdp_type, objective, rsize=rsize, subsampling=subsampling, num_iter=num_iter)
+# # Run with different rsize and subsampling values
+# def run_subsampling():
+#     for mdp_type in mdp_types:
+#         for rsize in true_reward_space_sizes:
+#             if rsize == '10000':
+#                 subsampling = '0'
+#             else: subsampling = '1'
+#
+#
+#             for objective in objectives:
+#                 for chooser in choosers:
+#                         for qsize in discr_query_sizes:
+#                             run(chooser, qsize, mdp_type, objective, rsize=rsize, subsampling=subsampling)
+#                 run('full', '2', mdp_type, objective, rsize=rsize, subsampling=subsampling, num_iter=num_iter)
 
 
 def run_discrete_optimization():
@@ -110,9 +111,12 @@ def run_discrete_optimization():
 
 def run_continuous():
     for mdp_type in mdp_types:
-        for qsize, discretization_size in [('3', '3'), ('2', '5'), ('1', '9')]:
+        for qsize, discretization_size, discretization_size_human in [('3', '3', '5'), ('2', '5', '7'), ('1', '9', '18')]:
             for chooser in choosers:
-                run(chooser, qsize, mdp_type, discretization_size=discretization_size, num_iter=num_iter)
+                run(chooser, qsize, mdp_type,
+                    discretization_size=discretization_size,
+                    discretization_size_human=discretization_size_human,
+                    num_iter=num_iter)
 
 if __name__ == '__main__':
     run_continuous()
