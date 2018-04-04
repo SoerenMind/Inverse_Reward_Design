@@ -111,7 +111,7 @@ def run_discrete_optimization():
 
 def run_continuous():
     for mdp_type in mdp_types:
-        for qsize, discretization_size, discretization_size_human in [('3', '3', '5'), ('2', '5', '7'), ('1', '9', '18')]:
+        for qsize, discretization_size, discretization_size_human in [('3', '3', '3'), ('2', '5', '5'), ('1', '9', '9')]:
             for chooser in choosers:
                 run(chooser, qsize, mdp_type,
                     discretization_size=discretization_size,

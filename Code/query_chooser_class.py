@@ -403,13 +403,13 @@ class Query_Chooser_Subclass(Query_Chooser):
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
 
         '''With small human queries'''
-        model = self.get_model(query_size, measure, discrete=False)
-        model.initialize(self.sess)
-        objective, true_log_posterior, true_entropy, post_avg = model.compute(
-            desired_outputs, self.sess, mdp, None, log_prior,
-            feature_expectations_input=feature_exps,
-            true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-        print('Best full posterior objective found (small, continuous): ' + str(objective[0][0]))
+        # model = self.get_model(query_size, measure, discrete=False)
+        # model.initialize(self.sess)
+        # objective, true_log_posterior, true_entropy, post_avg = model.compute(
+        #     desired_outputs, self.sess, mdp, None, log_prior,
+        #     feature_expectations_input=feature_exps,
+        #     true_reward=true_reward, true_reward_matrix=true_reward_matrix)
+        # print('Best full posterior objective found (small, continuous): ' + str(objective[0][0]))
 
         '''With large human queries'''
         disc_size = self.args.discretization_size_human
@@ -419,7 +419,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             desired_outputs, self.sess, mdp, best_query, log_prior,
             weight_inits=best_weights,
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-        print('Best full posterior objective found (large, continuous): ' + str(objective[0][0]))
+        print('Best full posterior objective found (human discretization, continuous): ' + str(objective[0][0]))
 
 
         return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg
