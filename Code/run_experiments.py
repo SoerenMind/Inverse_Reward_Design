@@ -5,11 +5,12 @@ from subprocess import call
 NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 # choosers = ['greedy_discrete', 'random']
-discr_query_sizes = ['3']
-choosers = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
+discr_query_sizes = ['2','3','5','10']
+# choosers = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
+choosers = ['greedy', 'random', 'exhaustive']
 mdp_types = ['gridworld','bandits']
 objectives = ['entropy']
-num_iter = '20'     # Maybe do 40 for gridworld
+num_iter = {'gridworld': '20', 'bandits': '20'}
 num_q_max = '10000'
 # Keeping this bug because our old data had it
 square_probs_bug = '0'  # REMOVE PARAMETER FOR NEXT RUN
@@ -41,7 +42,7 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                   '-c', chooser,
                   '--query_size', qsize,
                   '--num_experiments', NUM_EXPERIMENTS,
-                  '--num_iter', num_iter,
+                  '--num_iter', num_iter[mdp_type],
                   '--gamma', '1.',
                   '--size_true_space', rsize,
                   '--size_proxy_space', '100',

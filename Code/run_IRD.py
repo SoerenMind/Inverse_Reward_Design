@@ -275,7 +275,7 @@ if __name__=='__main__':
 
     'Experiment'
     def run_experiment(query_size, train_inferences, test_inferences, true_rewards, prior_avg):
-        experiment = Experiment(true_rewards, reward_space_proxy, query_size, num_queries_max,
+        experiment = Experiment(true_rewards, query_size, num_queries_max,
                                 args, choosers, SEED, exp_params, train_inferences, test_inferences, prior_avg)
         results = experiment.get_experiment_stats(num_iter_per_experiment, num_experiments)
 

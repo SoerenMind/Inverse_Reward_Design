@@ -36,10 +36,10 @@ class Query_Chooser(object):
         pass
 
 class Query_Chooser_Subclass(Query_Chooser):
-    def __init__(self, reward_space_proxy, num_queries_max, args, prior=None, cost_of_asking=0, t_0 = None):
+    def __init__(self, num_queries_max, args, prior=None, cost_of_asking=0, t_0 = None):
         super(Query_Chooser_Subclass, self).__init__()
         # self.inference = inference
-        self.reward_space_proxy = reward_space_proxy
+        # self.reward_space_proxy = reward_space_proxy
         # self.prior = prior
         self.cost_of_asking = cost_of_asking
         self.num_queries_max = num_queries_max
@@ -57,34 +57,37 @@ class Query_Chooser_Subclass(Query_Chooser):
     #     for proxy in self.reward_space_proxy:
     #         feature_expectations = self.inference.get_feature_expectations(proxy)
 
-    def cache_feature_expectations(self, reward_space):
-        """Is run in self.__init__. Computes feature expectations for each proxy using TF and stores them in
+    def cache_feature_expectations(self):
+        """Computes feature expectations for each proxy using TF and stores them in
         inference.feature_expectations_matrix."""
-        proxy_space = [list(reward) for reward in reward_space]
+        proxy_list = [list(reward) for reward in self.inference.reward_space_proxy]
         print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-        model = self.get_model(len(proxy_space), 'entropy', cache=False)
+        model = self.get_model(len(proxy_list), 'entropy', cache=False)
         model.initialize(self.sess)
 
         desired_outputs = ['feature_exps']
         mdp = self.inference.mdp
         print('Computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
         [feature_exp_matrix] = model.compute(
-            desired_outputs, self.sess, mdp, proxy_space, self.inference.log_prior)
+            desired_outputs, self.sess, mdp, proxy_list, self.inference.log_prior)
         self.inference.feature_exp_matrix = feature_exp_matrix
         print('Done computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
 
-
+    def set_inference(self, inference, cache_feature_exps):
+        self.inference = inference
+        if cache_feature_exps:
+            self.cache_feature_expectations()
 
 
     def generate_set_of_queries(self, query_size, num_queries_max=None):
         if num_queries_max == None:
             # Use hyperparameter for exhaustive chooser
             num_queries_max = self.num_queries_max
-        num_queries = comb(len(self.reward_space_proxy), query_size)
+        num_queries = comb(len(self.inference.reward_space_proxy), query_size)
         if num_queries > num_queries_max:
-            return [list(random_combination(self.reward_space_proxy, query_size)) for _ in range(num_queries_max)]
-        return [list(x) for x in combinations(self.reward_space_proxy, query_size)]
+            return [list(random_combination(self.inference.reward_space_proxy, query_size)) for _ in range(num_queries_max)]
+        return [list(x) for x in combinations(self.inference.reward_space_proxy, query_size)]
 
     # @profile
     def find_query(self, query_size, chooser, true_reward):
@@ -159,10 +162,10 @@ class Query_Chooser_Subclass(Query_Chooser):
         """Computes a random or full query or calls a function to greedily grow a query until it reaches query_size.
         """
         if full_query:
-            best_query = self.reward_space_proxy
-            query_size = len(self.reward_space_proxy)
+            best_query = self.inference.reward_space_proxy
+            query_size = len(self.inference.reward_space_proxy)
         elif random_query:
-            best_query = [choice(self.reward_space_proxy) for _ in range(query_size)]
+            best_query = [choice(self.inference.reward_space_proxy) for _ in range(query_size)]
         # Find best query by greedy or exhaustive search
         elif exhaustive_query:
             best_query = self.build_discrete_query(
@@ -213,9 +216,9 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         # Select set of extensions to consider
         if num_to_add == 1:               # Consider whole proxy space
-            query_extensions = [[proxy] for proxy in self.reward_space_proxy]
+            query_extensions = [[proxy] for proxy in self.inference.reward_space_proxy]
         elif num_to_add == 2 and not exhaustive_query:             # Consider random combinations for greedy
-            num_queries_max = 2 * len(self.reward_space_proxy)
+            num_queries_max = 2 * len(self.inference.reward_space_proxy)
             query_extensions = self.generate_set_of_queries(num_to_add, num_queries_max)
         elif num_to_add >= 2 and exhaustive_query:              # Consider self.num_queries_max for exhaustive search
             query_extensions = self.generate_set_of_queries(num_to_add)
@@ -602,7 +605,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 
     # def find_random_query(self, query_size):
-    #     query = [choice(self.reward_space_proxy) for _ in range(query_size)]
+    #     query = [choice(self.inference.reward_space_proxy) for _ in range(query_size)]
     #     # exp_regret = self.get_exp_regret_from_query([])
     #     return query, None, None
     #
@@ -683,15 +686,14 @@ class Query_Chooser_Subclass(Query_Chooser):
 
 class Experiment(object):
     """"""
-    def __init__(self, true_rewards, reward_space_proxy, query_size, num_queries_max, args, choosers, SEED, exp_params,
+    def __init__(self, true_rewards, query_size, num_queries_max, args, choosers, SEED, exp_params,
                  train_inferences, test_inferences, prior_avg):
-        self.reward_space_proxy = reward_space_proxy
         self.query_size = query_size
         self.num_queries_max = num_queries_max
         self.choosers = choosers
         self.seed = SEED
         self.t_0 = time.clock()
-        self.query_chooser = Query_Chooser_Subclass(reward_space_proxy, num_queries_max, args, t_0=self.t_0)
+        self.query_chooser = Query_Chooser_Subclass(num_queries_max, args, t_0=self.t_0)
         self.results = {}
         # Add variance
         self.measures = ['true_entropy','test_regret','norm post_avg-true','post_regret','perf_measure']
@@ -723,22 +725,14 @@ class Experiment(object):
 
         # Set run parameters
         inference = self.train_inferences[exp_num]
-        self.query_chooser.inference = inference
         seed(self.seed)
         self.seed += 1
-        'Note: true reward no longer in true reward space'
         true_reward = self.true_rewards[exp_num]
-        self.results['true_reward', exp_num] = true_reward
 
-        # Cache feature_exps and lhoods
-        # print 'NOT CACHING FEATURES!'
+        # Cache feature_exps for discrete experiments
         if any(chooser in self.choosers for chooser in ['greedy_discrete','exhaustive','random','full']):
-            print('caching likelihoods. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-            self.query_chooser.cache_feature_expectations(self.query_chooser.reward_space_proxy)
-            inference.cache_lhoods() # Only run this if the environment isn't changed each iteration
-            print('done caching likelihoods. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-
-
+            cache_feature_exps = True
+        self.query_chooser.set_inference(inference, cache_feature_exps=cache_feature_exps)
 
         # Run experiment for each query chooser
         for chooser in self.choosers:
