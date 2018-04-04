@@ -8,12 +8,11 @@ NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 discr_query_sizes = ['3']
 choosers = ['feature_entropy_search_then_optim', 'feature_random', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
 mdp_types = ['gridworld','bandits']
-true_reward_space_sizes = ['1000000']
 objectives = ['entropy']
 num_iter = '20'     # Maybe do 40 for gridworld
 num_q_max = '10000'
 # Keeping this bug because our old data had it
-square_probs_bug = '1'  # REMOVE PARAMETER FOR NEXT RUN
+square_probs_bug = '0'  # REMOVE PARAMETER FOR NEXT RUN
 weights_dist_init = 'normal2'
 weights_dist_search = 'normal2'
 only_optim_biggest = '1'    # Change back to zero
