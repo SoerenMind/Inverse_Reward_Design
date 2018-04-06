@@ -46,7 +46,7 @@ class Inference:
 
 
 class InferenceDiscrete(Inference):
-    def __init__(self, agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None):
+    def __init__(self, agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None,index_true_space=False):
         """
         :param agent: Agent object or subclass
         :param env: Environment object or subclass
@@ -74,7 +74,7 @@ class InferenceDiscrete(Inference):
         self.reset_prior()
         self.feature_expectations_dict = {}
         self.avg_reward_dict = {}
-        self.make_reward_to_index_dict()
+        self.make_reward_to_index_dict(index_true_space)
 
     # # @profile
     def get_prior(self, true_reward):
@@ -368,14 +368,16 @@ class InferenceDiscrete(Inference):
         if reset_mdp: self.mdp.populate_features()
         # Reset other cached variables if new ones added!
 
-    def make_reward_to_index_dict(self):
-        """This dictionary is used to find the cached posterior or prior of a reward function."""
-        # self.reward_index = {}
+    def make_reward_to_index_dict(self,index_true_space):
+        """Creates dictionary from proxy reward tuples to their index in proxy space. If index_true_space, it does the
+        same for the true reward space."""
         self.reward_index_proxy = {}
-        # for i, true_reward in enumerate(self.reward_space_true):
-        #     self.reward_index[tuple(true_reward)] = i
         for i, proxy in enumerate(self.reward_space_proxy):
             self.reward_index_proxy[tuple(proxy)] = i
+        if index_true_space:
+            self.reward_index = {}
+            for i, true_reward in enumerate(self.reward_space_true):
+                self.reward_index[tuple(true_reward)] = i
 
 
 # def test_inference(inference, rfunc_proxy_given, reward_space):

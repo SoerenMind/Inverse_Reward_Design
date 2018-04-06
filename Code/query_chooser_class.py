@@ -71,6 +71,17 @@ class Query_Chooser_Subclass(Query_Chooser):
         [feature_exp_matrix] = model.compute(
             desired_outputs, self.sess, mdp, proxy_list, self.inference.log_prior)
         self.inference.feature_exp_matrix = feature_exp_matrix
+
+
+        # Cache for true rewards:
+        # if self.args.full_IRD_w_true_space:
+        #     true_reward_list = [list(reward) for reward in self.inference.reward_space_true]
+        #     print('building graph. Total experiment time: {t}'.format(t=time.clock() - self.t_0))
+        #     model = self.get_model(len(true_reward_list), 'entropy', cache=False)
+        #     model.initialize(self.sess)
+        #     [feature_exp_matrix_true] = model.compute(
+        #         desired_outputs, self.sess, mdp, true_reward_list, self.inference.log_prior)
+        #     self.inference.feature_exp_matrix_true = feature_exp_matrix_true
         print('Done computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
 
@@ -162,8 +173,9 @@ class Query_Chooser_Subclass(Query_Chooser):
         """Computes a random or full query or calls a function to greedily grow a query until it reaches query_size.
         """
         if full_query:
-            best_query = self.inference.reward_space_proxy
-            query_size = len(self.inference.reward_space_proxy)
+            best_query = self.inference.reward_space_true if self.args.full_IRD_w_true_space \
+                    else self.inference.reward_space_proxy
+            query_size = len(best_query)
         elif random_query:
             best_query = [choice(self.inference.reward_space_proxy) for _ in range(query_size)]
         # Find best query by greedy or exhaustive search
@@ -186,6 +198,7 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         print('Best objective found with a discrete query: ' + str(best_objective[0][0]))
         return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
+
 
     def build_discrete_query(self, query_size, measure, growth_rate, extend_fn, exhaustive_query=False):
         """Builds a discrete query by starting from the empty query and calling
@@ -730,8 +743,7 @@ class Experiment(object):
         true_reward = self.true_rewards[exp_num]
 
         # Cache feature_exps for discrete experiments
-        if any(chooser in self.choosers for chooser in ['greedy_discrete','exhaustive','random','full']):
-            cache_feature_exps = True
+        cache_feature_exps = any(chooser in self.choosers for chooser in ['greedy_discrete','exhaustive','random','full'])
         self.query_chooser.set_inference(inference, cache_feature_exps=cache_feature_exps)
 
         # Run experiment for each query chooser

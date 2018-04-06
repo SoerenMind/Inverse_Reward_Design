@@ -207,8 +207,7 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
     vars_so_far = [x_var] + dependent_vars + independent_vars + control_vars
     remaining_vars = list(set(all_vars) - set(vars_so_far))
     graphs_data = {}
-    double_envs = args.double_envs
-    if double_envs:
+    if args.double_envs:
         remaining_vars = list(set(remaining_vars) - set(['mdp', 'beta']))
 
     extra_experiments = []
@@ -226,7 +225,7 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
 
     for key, exps in graphs_data.items():
         # keys.append(key), graphs_list.append(exps)
-        graph(exps, x_var, dependent_vars, independent_vars, controls, key, folder, double_envs)
+        graph(exps, x_var, dependent_vars, independent_vars, controls, key, folder, args)
 
 
 
@@ -236,7 +235,7 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
 
 
 def graph(exps, x_var, dependent_vars, independent_vars, controls,
-          other_vals, folder, double_envs):
+          other_vals, folder, args):
     """Creates and saves a single graph.
 
     Arguments are almost the same as for graph_all.
@@ -248,7 +247,7 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
     # Whole figure layout setting
     set_style()
     num_rows = len(dependent_vars)
-    num_columns = 2 if double_envs else 1
+    num_columns = 2 if args.double_envs else 1
     fig, axes = plt.subplots(num_rows, num_columns, sharex=True)
     sns.set_context(rc={'lines.markeredgewidth': 1.0})   # Thickness or error bars
     capsize = 0.    # length of horizontal line on error bars
@@ -262,10 +261,11 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
             ax = get_ax(axes, row, num_rows, num_columns, col)
 
             params = experiment.params
+            if params['choosers'] in args.exclude: continue
             means, sterrs = experiment.means_data, experiment.sterrs_data
             i_var_val = ', '.join([str(params[k]) for k in independent_vars])
-            label = i_var_to_label(i_var_val) + ', '+ str(params['qsize']) # name in legend
-            color = chooser_to_color(i_var_val, qsize=params['qsize'])
+            label = i_var_to_label(i_var_val) + (', '+ str(params['qsize'])) * args.compare_qsizes # name in legend
+            color = chooser_to_color(i_var_val, qsize=params['qsize'], compare_qsizes=args.compare_qsizes)
             x_data = np.array(means[x_var]) + 1
             ax.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=color,
                          capsize=capsize, capthick=1, label=label)#,
@@ -289,7 +289,10 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
 
 
     'Make legend'
-    ax = axes[0]
+    try:
+        ax = axes[-1][-1]
+    except:
+        ax = axes[-1]
     plt.sca(ax)
     handles, labels = ax.get_legend_handles_labels()
     hl = sorted(zip(handles, labels, range(len(labels))),    # Sorts legend by putting labels 0:k to place as specified
@@ -298,7 +301,7 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
     handles2, labels2 = zip(*hl)
 
     # ax.legend(handles2, labels2, fontsize=10)
-    plt.legend(handles2, labels2, fontsize=11)
+    plt.legend(handles2, labels2, fontsize=10)
 
 
     'Change global layout'
@@ -444,27 +447,37 @@ def var_to_label(varname):
         return 'Number of queries asked'
 
 
-def chooser_to_color(chooser, qsize=None):
+def chooser_to_color(chooser, qsize=None, compare_qsizes=False):
     greedy_color = 'darkorange' #'lightblue'
     exhaustive_color = 'orange' # 'peachpuff', 'crimson'
     random_color = 'darkgrey' # 'darkorange'
     full_color = 'lightgrey' # 'grey'
 
 
-    feature_color = 'blue'
-    feature_color_random = 'lightblue'
-    search_color = 'olivedrab'
-    both_color = 'steelblue'
+    # Colors to distinguish optimizers
+    # feature_color = 'blue'
+    # feature_color_random = 'lightblue'
+    # search_color = 'olivedrab'
+    # both_color = 'steelblue'
 
-    if chooser.startswith('greedy'):
-        if qsize == 2:
-            return 'peachpuff'
-        if qsize == 3:
-            return 'orange'
-        if qsize == 5:
-            return 'darkorange'
-        if qsize == 10:
-            return 'orangered'
+    # Colors to only distinguish optimized vs not optimized
+    optimized_color = 'orange'
+    feature_color = optimized_color
+    feature_color_random = 'lightblue'
+    search_color = optimized_color
+    both_color = optimized_color
+
+    # Different colors per qsize if comparing qsizes
+    if compare_qsizes:
+        if chooser.startswith('greedy'):
+            if qsize == 2:
+                return 'peachpuff'
+            if qsize == 3:
+                return 'orange'
+            if qsize == 5:
+                return 'darkorange'
+            if qsize == 10:
+                return 'orangered'
 
     if chooser in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
         return greedy_color
@@ -482,6 +495,8 @@ def chooser_to_color(chooser, qsize=None):
         return both_color
     if chooser == 'feature_entropy_search':
         return search_color
+    if chooser == 'feature_random':
+        return random_color
     # if chooser == 'Feature selection, random init':
     #     return 'lightorange'
     # if chooser == 'Feature selection, no optimization':
@@ -490,6 +505,8 @@ def chooser_to_color(chooser, qsize=None):
     #     return 'darkorange'
 
 def i_var_to_label(i_var):
+
+    # Discrete choosers
     if i_var in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
         return 'Greedy'
     if i_var in ['exhaustive', 'exhaustive_entropy']:
@@ -498,18 +515,25 @@ def i_var_to_label(i_var):
         return 'Full IRD'
     if i_var == 'random':
         return 'Random'
-    if i_var == 'feature_entropy_init_none':
-        return 'Feature selection, random init'
-    if i_var == 'feature_entropy_random_init_none':
-        return 'Feature selection, no optimization, random init'
-    if i_var == 'feature_entropy':
-        return 'Feature selection'
     if i_var == 'joint_optimize':
         return 'Joint optimize'
     if i_var == 'greedy_optimize':
         return 'greedy_optimize'
     if type(i_var) == int:
         return i_var
+
+    # Continuous choosers
+    if i_var == 'feature_entropy_init_none':
+        return 'Features and weights optimized (GD)'
+    if i_var == 'feature_entropy_random_init_none':
+        return 'Only features optimized'
+    if i_var == 'feature_entropy_search':
+        return 'Features and weights optimized (search)'
+    if i_var == 'feature_entropy_search_then_optim':
+        return 'Features and weights optimized'
+    if i_var == 'feature_random':
+        return 'Unoptimized'
+
     else:
         return i_var
 
@@ -522,6 +546,8 @@ def parse_args():
     parser.add_argument('-c', '--control_var_val', action='append', default=[])
     parser.add_argument('-e', '--experiment', action='append', default=[])
     parser.add_argument('--double_envs', action='store_true')
+    parser.add_argument('--compare_qsizes', action='store_true')
+    parser.add_argument('--exclude', action='append')
     # parser.add_argument('-choosers', '--cho', action='append', default=[])
     return parser.parse_args()
 

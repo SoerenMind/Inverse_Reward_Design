@@ -73,6 +73,7 @@ if __name__=='__main__':
     parser.add_argument('-weights_dist_search',type=str,default='normal2')
     parser.add_argument('-square_probs',type=int,default=0)
     parser.add_argument('--only_optim_biggest',type=int,default=1)
+    parser.add_argument('--full_IRD_w_true_space', type=int, default=0)
 
 
 
@@ -80,6 +81,8 @@ if __name__=='__main__':
     args = parser.parse_args()
     print args
     assert args.discretization_size % 2 == 1
+    print args.size_true_space
+    print args.size_proxy_space
 
     # Experiment description
     adapted_description = False
@@ -181,7 +184,8 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=1, prior=None)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=1, prior=None,
+                index_true_space=args.full_IRD_w_true_space)
 
             test_inferences.append(inference)
 
@@ -192,7 +196,8 @@ if __name__=='__main__':
             agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
             reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None,
+                index_true_space=args.full_IRD_w_true_space)
 
             train_inferences.append(inference)
 
@@ -207,7 +212,8 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             agent = OptimalAgent(gamma, num_iters=args.value_iters)
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=num_traject, prior=None)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=num_traject, prior=None,
+                index_true_space=args.full_IRD_w_true_space)
 
             test_inferences.append(inference)
 
@@ -220,56 +226,14 @@ if __name__=='__main__':
             agent = OptimalAgent(gamma, num_iters=args.value_iters)
             reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy,
-                num_traject=num_traject, prior=None)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy,num_traject=num_traject, prior=None,
+                index_true_space=args.full_IRD_w_true_space)
 
             train_inferences.append(inference)
 
 
     else:
         raise ValueError('Unknown MDP type: ' + str(args.mdp_type))
-
-
-
-    # # Set up inference
-    # env = GridworldEnvironment(mdp)
-    # inference = InferenceDiscrete(
-    #     agent, mdp, env, beta, reward_space_true, reward_space_proxy,
-    #     num_traject=num_traject, prior=None)
-
-    'Print derived parameters'
-    # print('Size of reward_space_true:{size}'.format(size=size_reward_space_true))
-    # print('Size of reward_space_proxy:{size}'.format(size=len(reward_space_proxy)))
-    # print('Query size:{size}'.format(size=query_size))
-    # print('Choosers: {c}').format(c=choosers)
-    # if greedy == False:
-    #     num_queries = min([comb(len(reward_space_proxy), query_size),    num_queries_max])
-    #     # num_queries = comb(len(reward_space_proxy), query_size)
-    #     num_post_avg_plans = num_queries * query_size
-    # else:
-    #     num_queries = (query_size-1) * len(reward_space_proxy)
-    #     avg_query_size = (query_size+2)/2.
-    #     num_post_avg_plans = num_queries * avg_query_size
-    # print('Number of queries: min({size},{max})'.format(size=num_queries,max=num_queries_max))
-    # num_planning_problems = len(reward_space_proxy) + num_post_avg_plans + size_reward_space_true
-    # print('Number of rewards to plan with:{size}'.format(size=num_planning_problems))
-    # print('Greedy: {g}').format(g=greedy)
-    print('======================================================================================================')
-
-
-
-    'Set up test environment (not used)'
-    # print 'starting posterior calculation'
-    # inference.get_full_posterior(reward_space_proxy, proxy_given)
-    # prior = dict([(tuple(true_reward), inference.get_posterior(true_reward, reward_space_proxy, proxy_given))
-    #               for true_reward in reward_space_true])
-    # print('new prior: {prior}'.format(prior=prior))
-    # mdp_test = NStateMdpGaussianFeatures(num_states=num_states, rewards=proxy_given, start_state=0, preterminal_states=[],   # proxy_given should have no effect
-    #                                      feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED)
-    # mdp_test.add_feature_map(mdp.features)
-    # env_test = GridworldEnvironment(mdp_test)
-    # inference_test = InferenceDiscrete(agent, mdp_test, env_test, beta=1., reward_space_true=reward_space_true, num_traject=1, prior=prior)
-
 
 
 
