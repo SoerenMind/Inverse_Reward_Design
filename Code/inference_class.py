@@ -10,43 +10,8 @@ class Inference:
     pass
 
 
-"""Main vectorization
-        -Cache feature_exp for whole proxy space in a matrix (cache self.matrix)
-        -Multiply by true reward matrix to get all avg_rewards (cache self.matrix)
-        -Take exp(avg_rewards)
-        -Cache lhoods = exp(beta * reward_matrix)
-
-
-        -Cache log_lhoods = np.log(lhoods)
-            -Calculate on demand per query
-            -Function: inference.get_likelihoods(true, query):  # Gets likelihoods for all proxies in query
-                -Or: Function: inference.get_likelihoods_for_query:
-                    -Calculate log_Z
-                    -Calculate each get_likelihood(log_Z=given)
-                -log_Z = logsumexp(lhoods[i,{j in q}])
-                -log_P_ijq = log_lhoods[ij] - log_Z
-                -Cache logsumexp for a query and then substract it from the log_lhood[ij]
-        -Function: get_full_posterior(query, answer):
-            -Do not cache (self.)likelihoods unless you use the same query again at some point
-            -Calculate log_Z
-            -Make probabilities-vector with get_likelihood
-                -Use indexes for rewards (or an index map)
-            -return posterior_vec = likelihoods_vec * self.prior / self.evidence
-            -Cache post_avg?
-        -What about posterior averages?
-            -We can already calculate the likelihood of proxy choices and the posteriors.
-            -We need post_reward but we've only got avg_reward matrix for proxy/true pairs.
-                (-Precompute all the post averages | proxy, query? No because queries are unknown.)
-                    -But maybe precompute for all queries you know you'll consider next. Make set_of_queries and do
-                     get_full_posterior for each answer. Get and cache feature_exp for all the post_averages.
-                     Multiply with true_reward matrix to get avg_rewards given all true rewards.
-                     -Get feature_exp for true_rewards too and get diagonal of multiplication with true_reward_matrix.
-                -Don't need to get avg rewards / likelihoods for the post_averages!
-"""
-
-
 class InferenceDiscrete(Inference):
-    def __init__(self, agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None,index_true_space=False):
+    def __init__(self, agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None):
         """
         :param agent: Agent object or subclass
         :param env: Environment object or subclass
@@ -368,16 +333,12 @@ class InferenceDiscrete(Inference):
         if reset_mdp: self.mdp.populate_features()
         # Reset other cached variables if new ones added!
 
-    def make_reward_to_index_dict(self,index_true_space):
+    def make_reward_to_index_dict(self):
         """Creates dictionary from proxy reward tuples to their index in proxy space. If index_true_space, it does the
         same for the true reward space."""
         self.reward_index_proxy = {}
         for i, proxy in enumerate(self.reward_space_proxy):
             self.reward_index_proxy[tuple(proxy)] = i
-        if index_true_space:
-            self.reward_index = {}
-            for i, true_reward in enumerate(self.reward_space_true):
-                self.reward_index[tuple(true_reward)] = i
 
 
 # def test_inference(inference, rfunc_proxy_given, reward_space):

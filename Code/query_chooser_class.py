@@ -173,8 +173,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         """Computes a random or full query or calls a function to greedily grow a query until it reaches query_size.
         """
         if full_query:
-            best_query = self.inference.reward_space_true if self.args.full_IRD_w_true_space \
-                    else self.inference.reward_space_proxy
+            best_query = self.inference.reward_space_proxy
             query_size = len(best_query)
         elif random_query:
             best_query = [choice(self.inference.reward_space_proxy) for _ in range(query_size)]

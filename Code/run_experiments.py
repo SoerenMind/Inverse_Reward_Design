@@ -9,15 +9,15 @@ discr_query_sizes = ['2','3','5','10']
 # choosers = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
 choosers = ['greedy', 'random', 'exhaustive']
 mdp_types = ['gridworld','bandits']
-objectives = ['entropy']
 num_iter = {'gridworld': '20', 'bandits': '20'}
 beta_both_mdps = '0.5'
 num_q_max = '10000'
 rsize = '10000'
-full_IRD_w_true_space = '1'
+full_IRD_full_proxy_space = '1'
+
 
 def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', discretization_size_human='5',
-        viter='15', rsize=rsize,subsampling='1', num_iter='20'):
+        viter='15', rsize=rsize, subsampling='1', num_iter='20', proxy_space_is_true_space=False):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
@@ -70,7 +70,7 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                '-weights_dist_init', 'normal2',
                '-weights_dist_search', 'normal2',
                '--only_optim_biggest', '1',
-               '--full_IRD_w_true_space', full_IRD_w_true_space,
+               '--proxy_space_is_true_space', proxy_space_is_true_space,
                ]
     print 'Running command', ' '.join(command)
     call(command)
@@ -80,11 +80,12 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
 def run_discrete():
     for mdp_type in mdp_types:
 
-        run('full', '2', mdp_type, num_iter=num_iter)
+        run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space)
 
         for chooser in choosers:
             for qsize in discr_query_sizes:
                 run(chooser, qsize, mdp_type, num_iter=num_iter)
+
 
 
 # # Run with different rsize and subsampling values

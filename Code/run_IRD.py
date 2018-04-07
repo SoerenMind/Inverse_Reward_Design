@@ -59,8 +59,8 @@ if __name__=='__main__':
     parser.add_argument('--value_iters',type=int,default=15)    # max_reward / (1-gamma) or height+width
     parser.add_argument('--mdp_type',type=str,default='gridworld')
     parser.add_argument('--feature_dim',type=int,default=20)    # 10 if positions fixed, 100 otherwise
-    parser.add_argument('--discretization_size',type=int,default=5)
-    parser.add_argument('--discretization_size_human',type=int,default=5)
+    parser.add_argument('--discretization_size',type=int,default=0)
+    parser.add_argument('--discretization_size_human',type=int,default=0)
     parser.add_argument('--num_test_envs',type=int,default=100)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--well_spec',type=int,default=1)    # default is well-specified
     parser.add_argument('--subsampling',type=int,default=1)
@@ -73,7 +73,8 @@ if __name__=='__main__':
     parser.add_argument('-weights_dist_search',type=str,default='normal2')
     parser.add_argument('-square_probs',type=int,default=0)
     parser.add_argument('--only_optim_biggest',type=int,default=1)
-    parser.add_argument('--full_IRD_w_true_space', type=int, default=0)
+    # parser.add_argument('--full_IRD_w_true_space', type=int, default=0)
+    parser.add_argument('--proxy_space_is_true_space', type=int, default=0)
 
 
 
@@ -146,7 +147,6 @@ if __name__=='__main__':
 
     'Sample true rewards and reward spaces'
     reward_space_true = np.array(np.random.randint(-9, 10, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
-    # reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
     if not args.well_spec:
         true_rewards = [np.random.randint(-9, 10, size=[args.feature_dim]) for _ in range(num_experiments)]
     else:
@@ -184,8 +184,7 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=1, prior=None,
-                index_true_space=args.full_IRD_w_true_space)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=1, prior=None)
 
             test_inferences.append(inference)
 
@@ -194,10 +193,10 @@ if __name__=='__main__':
             mdp = train_mdps[i]
             env = GridworldEnvironment(mdp)
             agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
-            reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
+            reward_space_proxy = reward_space_true if args.proxy_space_is_true_space \
+                else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None,
-                index_true_space=args.full_IRD_w_true_space)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None)
 
             train_inferences.append(inference)
 
@@ -212,8 +211,7 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             agent = OptimalAgent(gamma, num_iters=args.value_iters)
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=num_traject, prior=None,
-                index_true_space=args.full_IRD_w_true_space)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=num_traject, prior=None)
 
             test_inferences.append(inference)
 
@@ -224,10 +222,10 @@ if __name__=='__main__':
             mdp = GridworldMdpWithDistanceFeatures(grid, args.linear_features, dist_scale, living_reward=-0.01, noise=0, rewards=dummy_rewards)
             env = GridworldEnvironment(mdp)
             agent = OptimalAgent(gamma, num_iters=args.value_iters)
-            reward_space_proxy = np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
+            reward_space_proxy = reward_space_true if args.proxy_space_is_true_space \
+                else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy,num_traject=num_traject, prior=None,
-                index_true_space=args.full_IRD_w_true_space)
+                agent, mdp, env, beta, reward_space_true, reward_space_proxy,num_traject=num_traject, prior=None)
 
             train_inferences.append(inference)
 
