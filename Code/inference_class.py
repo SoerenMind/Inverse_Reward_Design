@@ -39,7 +39,7 @@ class InferenceDiscrete(Inference):
         self.reset_prior()
         self.feature_expectations_dict = {}
         self.avg_reward_dict = {}
-        self.make_reward_to_index_dict(index_true_space)
+        self.make_reward_to_index_dict()
 
     # # @profile
     def get_prior(self, true_reward):

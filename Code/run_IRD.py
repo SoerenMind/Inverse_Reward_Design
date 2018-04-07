@@ -76,7 +76,7 @@ if __name__=='__main__':
     parser.add_argument('--only_optim_biggest',type=int,default=1)
     # parser.add_argument('--full_IRD_w_true_space', type=int, default=0)
     parser.add_argument('--proxy_space_is_true_space', type=int, default=0)
-
+    parser.add_argument('--full_IRD_subsample_belief', type=str, default='no')  # other options: yes, uniform
 
 
 
@@ -145,6 +145,8 @@ if __name__=='__main__':
         # 'w_dist_s': args.weights_dist_search,
         # 'optim_big': args.only_optim_biggest,
         # 'rational_test': args.rational_test_planner
+        'proxy_is_true': args.proxy_space_is_true_space,
+        'full_IRD_subs': args.full_IRD_subsample_belief
     }
 
     'Sample true rewards and reward spaces'

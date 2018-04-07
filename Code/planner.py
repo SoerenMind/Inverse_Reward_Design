@@ -438,7 +438,7 @@ class GridworldModel(Model):
                 best_actions = tf.argmax(q_values, axis=-1)
                 policy = tf.one_hot(best_actions[0], 4)
             else:
-                policy = tf.nn.softmax(self.beta_planner * q_values, axis=-1)
+                policy = tf.nn.softmax(self.beta_planner * q_values, dim=-1)
             repeated_policy = tf.stack([policy] * dim, axis=-2)
             feature_expectations = tf.reduce_sum(
                 tf.multiply(repeated_policy, q_fes), axis=-1)

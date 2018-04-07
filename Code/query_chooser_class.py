@@ -35,6 +35,8 @@ class Query_Chooser(object):
     def __init__(self):
         pass
 
+
+
 class Query_Chooser_Subclass(Query_Chooser):
     def __init__(self, num_queries_max, args, prior=None, cost_of_asking=0, t_0 = None):
         super(Query_Chooser_Subclass, self).__init__()
@@ -57,21 +59,35 @@ class Query_Chooser_Subclass(Query_Chooser):
     #     for proxy in self.reward_space_proxy:
     #         feature_expectations = self.inference.get_feature_expectations(proxy)
 
-    def cache_feature_expectations(self):
+    def cache_feature_expectations(self, reward_space=None):
         """Computes feature expectations for each proxy using TF and stores them in
         inference.feature_expectations_matrix."""
-        proxy_list = [list(reward) for reward in self.inference.reward_space_proxy]
-        print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-        model = self.get_model(len(proxy_list), 'entropy', cache=False)
-        model.initialize(self.sess)
+        if reward_space is None:
+            proxy_list = [list(reward) for reward in self.inference.reward_space_proxy]
+            print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+            model = self.get_model(len(proxy_list), 'entropy', cache=False)
+            model.initialize(self.sess)
 
-        desired_outputs = ['feature_exps']
-        mdp = self.inference.mdp
-        print('Computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-        [feature_exp_matrix] = model.compute(
-            desired_outputs, self.sess, mdp, proxy_list, self.inference.log_prior)
-        self.inference.feature_exp_matrix = feature_exp_matrix
+            desired_outputs = ['feature_exps']
+            mdp = self.inference.mdp
+            print('Computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+            [feature_exp_matrix] = model.compute(
+                desired_outputs, self.sess, mdp, proxy_list, self.inference.log_prior)
+            self.inference.feature_exp_matrix = feature_exp_matrix
+        else:
+            true_reward_list = [list(reward) for reward in reward_space]
+            print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
+            # TODO: This will build a separate model for every reward space size after eliminating duplicates
+            model = self.get_model(len(true_reward_list), 'entropy', cache=False)
+            model.initialize(self.sess)
+
+            desired_outputs = ['feature_exps']
+            mdp = self.inference.mdp
+            print('Computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+            [feature_exp_matrix] = model.compute(
+                desired_outputs, self.sess, mdp, true_reward_list)
+            return feature_exp_matrix
 
         # Cache for true rewards:
         # if self.args.full_IRD_w_true_space:
@@ -85,20 +101,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         print('Done computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
 
-    def set_inference(self, inference, cache_feature_exps):
-        self.inference = inference
-        if cache_feature_exps:
-            self.cache_feature_expectations()
-
-
-    def generate_set_of_queries(self, query_size, num_queries_max=None):
-        if num_queries_max == None:
-            # Use hyperparameter for exhaustive chooser
-            num_queries_max = self.num_queries_max
-        num_queries = comb(len(self.inference.reward_space_proxy), query_size)
-        if num_queries > num_queries_max:
-            return [list(random_combination(self.inference.reward_space_proxy, query_size)) for _ in range(num_queries_max)]
-        return [list(x) for x in combinations(self.inference.reward_space_proxy, query_size)]
 
     # @profile
     def find_query(self, query_size, chooser, true_reward):
@@ -173,8 +175,20 @@ class Query_Chooser_Subclass(Query_Chooser):
         """Computes a random or full query or calls a function to greedily grow a query until it reaches query_size.
         """
         if full_query:
-            best_query = self.inference.reward_space_proxy
-            query_size = len(best_query)
+            if self.args.full_IRD_subsample_belief == 'yes':
+                # TODO(soerenmind): prevent decreasing query size for double samples?
+                query_matrix_sample, log_prior_sample = self.sample_true_reward_matrix()
+                feature_exp_input = self.cache_feature_expectations(query_matrix_sample)
+                query_size = len(query_matrix_sample)
+            elif self.args.full_IRD_subsample_belief == 'uniform':
+                query_matrix_sample, log_prior_sample = self.sample_true_reward_matrix(uniform_sampling=True)
+                feature_exp_input = self.cache_feature_expectations(query_matrix_sample)
+                query_size = len(query_matrix_sample)
+            elif self.args.full_IRD_subsample_belief == 'no':
+                best_query = self.inference.reward_space_proxy
+                query_size = len(best_query)
+            else:
+                raise ValueError('unknown full query method')
         elif random_query:
             best_query = [choice(self.inference.reward_space_proxy) for _ in range(query_size)]
         # Find best query by greedy or exhaustive search
@@ -186,9 +200,11 @@ class Query_Chooser_Subclass(Query_Chooser):
                 query_size, measure, growth_rate, self.extend_with_discretization, exhaustive_query=False)
 
         desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
+        # Set model inputs if they're not set
+        if not (full_query and self.args.full_IRD_subsample_belief):
+            idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
+            feature_exp_input = self.inference.feature_exp_matrix[idx, :]
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
-        idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
-        feature_exp_input = self.inference.feature_exp_matrix[idx, :]
         model = self.get_model(query_size, measure, no_planning=True)
         best_objective, true_log_posterior, true_entropy, post_avg = model.compute(
             desired_outputs, self.sess, None, None, log_prior,
@@ -196,7 +212,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
 
         print('Best objective found with a discrete query: ' + str(best_objective[0][0]))
-        return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
+        return None, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
 
 
     def build_discrete_query(self, query_size, measure, growth_rate, extend_fn, exhaustive_query=False):
@@ -528,6 +544,20 @@ class Query_Chooser_Subclass(Query_Chooser):
         return weights
 
 
+    def set_inference(self, inference, cache_feature_exps):
+        self.inference = inference
+        if cache_feature_exps:
+            self.cache_feature_expectations()
+
+
+    def generate_set_of_queries(self, query_size, num_queries_max=None):
+        if num_queries_max == None:
+            # Use hyperparameter for exhaustive chooser
+            num_queries_max = self.num_queries_max
+        num_queries = comb(len(self.inference.reward_space_proxy), query_size)
+        if num_queries > num_queries_max:
+            return [list(random_combination(self.inference.reward_space_proxy, query_size)) for _ in range(num_queries_max)]
+        return [list(x) for x in combinations(self.inference.reward_space_proxy, query_size)]
 
 
     def get_true_reward_space(self, no_subsampling=False):
@@ -542,16 +572,18 @@ class Query_Chooser_Subclass(Query_Chooser):
         return true_reward_matrix, log_prior
 
 
-    def sample_true_reward_matrix(self):
+    def sample_true_reward_matrix(self, uniform_sampling=False):
         num_subsamples = self.args.num_subsamples
-        log_probs = self.inference.log_prior
-        probs = np.exp(log_probs)
+        if uniform_sampling:
+            probs = np.ones(len(self.inference.log_prior))
+            weighting = False
+        else:
+            log_probs = self.inference.log_prior
+            probs = np.exp(log_probs)
+            weighting = self.args.weighting
         probs = probs / probs.sum()
-        try:
-            choices = np.random.choice(self.args.size_true_space, p=probs, size=num_subsamples)
-        except:
-            pass
-        if self.args.weighting:
+        choices = np.random.choice(self.args.size_true_space, p=probs, size=num_subsamples)
+        if weighting:
             unique_sample_idx, counts = np.unique(choices, return_counts=True)
 
             if self.args.square_probs:
@@ -756,7 +788,7 @@ class Experiment(object):
                 if i > -1:
                     query, perf_measure, true_log_posterior, true_entropy, post_avg \
                         = self.query_chooser.find_query(self.query_size, chooser, true_reward)
-                    query = [np.array(proxy) for proxy in query]    # unnecessary?
+                    # query = [np.array(proxy) for proxy in query]    # unnecessary?
                     inference.update_prior(None, None, true_log_posterior)
                 # Log outcomes before 1st query
                 else:
