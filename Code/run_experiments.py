@@ -14,6 +14,7 @@ beta_both_mdps = '0.5'
 num_q_max = '10000'
 rsize = '10000'
 full_IRD_full_proxy_space = '1'
+exp_name = 'no_exp_name'
 
 
 def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', discretization_size_human='5',
@@ -71,6 +72,7 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                '-weights_dist_search', 'normal2',
                '--only_optim_biggest', '1',
                '--proxy_space_is_true_space', proxy_space_is_true_space,
+               '--exp_name', exp_name
                ]
     print 'Running command', ' '.join(command)
     call(command)

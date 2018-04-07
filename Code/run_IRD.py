@@ -39,6 +39,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     # parser.add_argument('choosers',type=list,default='[greedy_entropy]')
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
+    parser.add_argument('--exp_name',type=str,default='no_exp_name')
     parser.add_argument('--query_size',type=int,default=3)
     parser.add_argument('--num_experiments',type=int,default=2) # 3-5
     parser.add_argument('--num_iter',type=int,default=20)    # number of queries asked
@@ -128,21 +129,22 @@ if __name__=='__main__':
         'size_proxy': size_reward_space_proxy,
         'seed': SEED,
         'beta': beta,
+        'exp_name': args.exp_name,
         # 'num_states': num_states,
         # 'dist_scale': dist_scale,
-        'n_q_max': num_queries_max,
+        # 'n_q_max': num_queries_max,
         # 'num_iters_optim': num_iters_optim,
-        'well_spec': args.well_spec,
+        # 'well_spec': args.well_spec,
         # 'subsamp': args.subsampling,
         # 'num_subsamp': args.num_subsamples,
         # 'weighting': args.weighting,
         # 'viters': args.value_iters,
         # 'linfeat': args.linear_features,
         # 'objective': args.objective,
-        'w_dist_i': args.weights_dist_init,
-        'w_dist_s': args.weights_dist_search,
-        'optim_big': args.only_optim_biggest,
-        'rational_test': args.rational_test_planner
+        # 'w_dist_i': args.weights_dist_init,
+        # 'w_dist_s': args.weights_dist_search,
+        # 'optim_big': args.only_optim_biggest,
+        # 'rational_test': args.rational_test_planner
     }
 
     'Sample true rewards and reward spaces'
