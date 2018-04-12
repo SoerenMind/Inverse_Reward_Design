@@ -94,21 +94,41 @@ def simplify_keys(experiments):
           their values that did not change over the experiments.
     """
     keys = list(experiments.keys())
-    first_key = keys[0]
+    default_values = {}
+    for key in keys:
+        for name, val in key:
+            default_values[name] = val
+
+    flag_name_sets = [set([name for name, _ in key]) for key in keys]
+    all_names = set([])
+    for name_set in flag_name_sets:
+        all_names = all_names.union(name_set)
+
+    def extend_key(key):
+        def find_value(flag_name):
+            values = [value for name, value in key if name == flag_name]
+            return values[0] if values else None
+        return tuple([(name, find_value(name)) for name in all_names])
+
+    keys = [extend_key(key) for key in keys]
 
     indices_with_no_variation = []
     indices_with_variation = []
-    for index in range(len(first_key)):
-        if all(key[index] == first_key[index] for key in keys):
-            indices_with_no_variation.append(index)
-        else:
-            indices_with_variation.append(index)
+    for index in range(len(default_values)):
+        try:
+            if all(key[index][1] == None or key[index][1] == default_values[key[index][0]] for key in keys):
+                indices_with_no_variation.append(index)
+            else:
+                indices_with_variation.append(index)
+        except:
+            pass
+            # indices_with_no_variation.append(index)
 
     def simple_key(key):
         return tuple((key[index] for index in indices_with_variation))
 
-    new_experiments = {simple_key(k):v for k, v in experiments.items()}
-    controls = dict([first_key[index] for index in indices_with_no_variation])
+    new_experiments = {simple_key(extend_key(k)): v for k, v in experiments.items()}
+    controls = dict([(keys[0][index][0], default_values[keys[0][index][0]]) for index in indices_with_no_variation])
     return new_experiments, controls
 
 def fix_special_cases(experiments):
@@ -159,6 +179,8 @@ def load_data(folder):
             key = key + (('choosers', chooser),)
             params_dict['choosers'] = chooser
         experiments[key] = Experiment(params_dict, means, sterrs)
+    if len(experiments) < 1:
+        raise ValueError('No suitable experiments in folder')
     experiments, control_var_vals = simplify_keys(experiments)
     fix_special_cases(experiments)
     changing_vars = [var for var, val in experiments.keys()[0]]
@@ -217,11 +239,14 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
         # assert set([e.params['mdp'] for e in identified_experiments]) == set(['gridworld', 'bandits'])
         extra_experiments.extend(identified_experiments)
 
+    # if args.only_extras:
+    #     experiments = {}
     for exp in get_matching_experiments(experiments, controls):
         key = ','.join(['{0}={1}'.format(k, exp.params[k]) for k in remaining_vars])
         if key not in graphs_data:
             graphs_data[key] = extra_experiments[:]  # Make a copy of the list
-        graphs_data[key].append(exp)
+        if not args.only_extras:
+            graphs_data[key].append(exp)
 
     for key, exps in graphs_data.items():
         # keys.append(key), graphs_list.append(exps)
@@ -261,7 +286,8 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
             ax = get_ax(axes, row, num_rows, num_columns, col)
 
             params = experiment.params
-            if params['choosers'] in args.exclude: continue
+            if args.exclude:
+                if params['choosers'] in args.exclude: continue
             means, sterrs = experiment.means_data, experiment.sterrs_data
             i_var_val = ', '.join([str(params[k]) for k in independent_vars])
             label = i_var_to_label(i_var_val) + (', '+ str(params['qsize'])) * args.compare_qsizes # name in legend
@@ -291,14 +317,19 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
     'Make legend'
     try:
         ax = axes[-1][-1]
-    except:
-        ax = axes[-1]
+    except TypeError:
+        try: ax = axes[-1]
+        except TypeError:
+            ax = axes
     plt.sca(ax)
     handles, labels = ax.get_legend_handles_labels()
     hl = sorted(zip(handles, labels, range(len(labels))),    # Sorts legend by putting labels 0:k to place as specified
            key=lambda elem: elem[2])
     hl = [[handle, label] for handle, label, idx in hl]
-    handles2, labels2 = zip(*hl)
+    try:
+        handles2, labels2 = zip(*hl)
+    except ValueError:
+        raise ValueError('Possibly data only exists for one environment')
 
     # ax.legend(handles2, labels2, fontsize=10)
     plt.legend(handles2, labels2, fontsize=10)
@@ -324,6 +355,7 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
         os.mkdir(folder)
     # plt.show()
     plt.savefig(concat(folder, filename))
+    # plt.savefig(concat(folder, 'bla.png'))
 
 
 '''TODO:
@@ -471,13 +503,22 @@ def chooser_to_color(chooser, qsize=None, compare_qsizes=False):
     if compare_qsizes:
         if chooser.startswith('greedy'):
             if qsize == 2:
-                return 'peachpuff'
+                return '#00CCFF'
             if qsize == 3:
-                return 'orange'
+                return '#0066FF'
             if qsize == 5:
-                return 'darkorange'
+                return '#0000FF'
             if qsize == 10:
-                return 'orangered'
+                return '#000099'
+        elif chooser.startswith('feature_entropy'):
+            if qsize == 1:
+                return '#FF6666'
+            if qsize == 2:
+                return '#FF0000'
+            if qsize == 3:
+                return '#CC0000'
+
+    # chooser = chooser.split(",")
 
     if chooser in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
         return greedy_color
@@ -548,6 +589,7 @@ def parse_args():
     parser.add_argument('--double_envs', action='store_true')
     parser.add_argument('--compare_qsizes', action='store_true')
     parser.add_argument('--exclude', action='append')
+    parser.add_argument('--only_extras', action='store_true')
     # parser.add_argument('-choosers', '--cho', action='append', default=[])
     return parser.parse_args()
 
