@@ -13,7 +13,7 @@ num_iter = {'gridworld': '20', 'bandits': '20'}
 num_subsamples_full = '100'; num_subsamples_not_full = '10000'
 beta_both_mdps = '0.5'
 num_q_max = '10000'
-rsize = '10000'
+rsize = '1000000'
 full_IRD_full_proxy_space = '0'
 exp_name = 'no_exp_name'
 
@@ -93,11 +93,16 @@ def run_discrete():
 
 def run_full():
     for mdp_type in mdp_types:
-        for num_subsamples_full in ['2','5','10','100']:
-            for full_IRD_subsample_belief in ['yes','uniform']:
+        for num_subsamples_full in ['1000', '500','100','50','10','5','2','10000']:
+            for full_IRD_subsample_belief in ['yes','uniform','no']:
+                if full_IRD_subsample_belief == 'no':
+                    run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space,
+                        subs_full=num_subsamples_full,full_IRD_subsample_belief=full_IRD_subsample_belief,size_proxy_space=num_subsamples_full)
                 run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space,
                     subs_full=num_subsamples_full,full_IRD_subsample_belief=full_IRD_subsample_belief)
-
+        # Interesting question: How high can 'uniform' go before it gets worse? (could be pretty high)
+        # Test with smaller r_size if the turning point turns out >100.
+        # Hypothesis: 'yes' gets monotonely better with larger sizes bc only top samples matter (but flattens out quite quickly)
 
 # # Run with different rsize and subsampling values
 # def run_subsampling():

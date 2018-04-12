@@ -136,7 +136,7 @@ if __name__=='__main__':
         # 'num_iters_optim': num_iters_optim,
         # 'well_spec': args.well_spec,
         # 'subsamp': args.subsampling,
-        # 'num_subsamp': args.num_subsamples,
+        'num_subsamp': args.num_subsamples,
         # 'weighting': args.weighting,
         # 'viters': args.value_iters,
         # 'linfeat': args.linear_features,
