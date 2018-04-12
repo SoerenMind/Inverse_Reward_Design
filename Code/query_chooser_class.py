@@ -53,11 +53,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
 
-    # def cache_feature_expectations(self):
-    #     """Calculates feature expectations for all proxies and stores them in the dictionary
-    #     inference.feature_expectations_dict. This function is only needed if you want to front-load these computations."""
-    #     for proxy in self.reward_space_proxy:
-    #         feature_expectations = self.inference.get_feature_expectations(proxy)
 
     def cache_feature_expectations(self, reward_space=None):
         """Computes feature expectations for each proxy using TF and stores them in
@@ -79,7 +74,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
             # TODO: This will build a separate model for every reward space size after eliminating duplicates
-            model = self.get_model(len(true_reward_list), 'entropy', cache=False)
+            model = self.get_model(len(true_reward_list), 'entropy')
             model.initialize(self.sess)
 
             desired_outputs = ['feature_exps']
@@ -199,9 +194,11 @@ class Query_Chooser_Subclass(Query_Chooser):
             best_query = self.build_discrete_query(
                 query_size, measure, growth_rate, self.extend_with_discretization, exhaustive_query=False)
 
+        time_last_query_found = time.clock()
+
         desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
         # Set model inputs if they're not set
-        if not (full_query and self.args.full_IRD_subsample_belief):
+        if not (full_query and self.args.full_IRD_subsample_belief != 'no'):
             idx = [self.inference.reward_index_proxy[tuple(reward)] for reward in best_query]
             feature_exp_input = self.inference.feature_exp_matrix[idx, :]
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
@@ -212,7 +209,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
 
         print('Best objective found with a discrete query: ' + str(best_objective[0][0]))
-        return None, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
+        return None, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg, time_last_query_found
 
 
     def build_discrete_query(self, query_size, measure, growth_rate, extend_fn, exhaustive_query=False):
@@ -276,6 +273,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         best_query = self.build_discrete_query(
             query_size, measure, growth_rate, self.extend_with_optimization)
 
+        time_last_query_found = time.clock
+
         desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
         mdp = self.inference.mdp
@@ -285,7 +284,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             true_reward=true_reward, true_reward_matrix=true_reward_matrix)
 
         print('Best objective found with optimized discrete query: ' + str(best_objective[0][0]))
-        return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg
+        return best_query, best_objective[0][0], true_log_posterior, true_entropy[0], post_avg, time_last_query_found
 
     def extend_with_optimization(self, curr_query, num_to_add, measure, exhaustive_query=False):
         true_reward_matrix, log_prior = self.get_true_reward_space()
@@ -351,17 +350,16 @@ class Query_Chooser_Subclass(Query_Chooser):
                     gd_steps = gd_steps_if_optim
 
                 # Calculate (optimized) objective
-                "REMOVE THIS!"
-                objective_before_optim = model.compute(
-                    desired_outputs, self.sess, mdp, query, log_prior,
-                    weights, lr=lr,
-                    true_reward_matrix=true_reward_matrix)
+                # objective_before_optim = model.compute(
+                #     desired_outputs, self.sess, mdp, query, log_prior,
+                #     weights, lr=lr,
+                #     true_reward_matrix=true_reward_matrix)
                 objective, optimal_weights, feature_exps = model.compute(
                     desired_outputs, self.sess, mdp, query, log_prior,
                     weights, gradient_steps=gd_steps, lr=lr,
                     # gradient_logging_outputs=[measure, 'weights_to_train[:3]'],#, 'gradients[:4]'],#, 'state_probs_cut'],
                     true_reward_matrix=true_reward_matrix)
-                self.optim_diff.append(objective[0][0] - objective_before_optim[0][0])
+                # self.optim_diff.append(objective[0][0] - objective_before_optim[0][0])
                 query_cost = self.cost_of_asking * len(query)
                 objective_plus_cost = objective + query_cost
             # Find weights by search over samples
@@ -433,6 +431,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         desired_outputs = [measure, 'true_log_posterior', 'true_entropy', 'post_avg']
         true_reward_matrix, log_prior = self.get_true_reward_space(no_subsampling=True)
 
+        time_last_query_found = time.clock()
+
         '''With small human queries'''
         # model = self.get_model(query_size, measure, discrete=False)
         # model.initialize(self.sess)
@@ -453,7 +453,7 @@ class Query_Chooser_Subclass(Query_Chooser):
         print('Best full posterior objective found (human discretization, continuous): ' + str(objective[0][0]))
 
 
-        return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg
+        return best_query, objective[0][0], true_log_posterior, true_entropy[0], post_avg, time_last_query_found
 
 
     def add_random_feature(self, curr_query, measure):
@@ -786,7 +786,7 @@ class Experiment(object):
                 iter_start_time = time.clock()
                 print "==========Iteration: {i}/{m} ({c}). Total time: {t}==========".format(i=i+1,m=num_iter,c=chooser,t=iter_start_time-self.t_0)
                 if i > -1:
-                    query, perf_measure, true_log_posterior, true_entropy, post_avg \
+                    query, perf_measure, true_log_posterior, true_entropy, post_avg, time_last_query_found \
                         = self.query_chooser.find_query(self.query_size, chooser, true_reward)
                     # query = [np.array(proxy) for proxy in query]    # unnecessary?
                     inference.update_prior(None, None, true_log_posterior)
@@ -796,11 +796,13 @@ class Experiment(object):
                     true_entropy = np.log(len(inference.prior))
                     perf_measure = float('inf')
                     post_avg = self.prior_avg
+                    time_last_query_found = iter_start_time
 
 
                 # Outcome measures
                 iter_end_time = time.clock()
-                duration = iter_end_time - iter_start_time
+                duration_iter = iter_end_time - iter_start_time
+                duration_query_chooser = time_last_query_found - iter_start_time
                 # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
                 post_regret = self.compute_regret(post_avg, true_reward, inference) # TODO: Still plans with Python. May use wrong gamma, or trajectory length
                 norm_to_true = self.get_normalized_reward_diff(post_avg, true_reward)
@@ -815,8 +817,9 @@ class Experiment(object):
                 self.results[chooser, 'test_regret', i, exp_num], \
                 self.results[chooser, 'norm post_avg-true', i, exp_num], \
                 self.results[chooser, 'query', i, exp_num], \
-                self.results[chooser, 'time', i, exp_num] \
-                    = true_entropy, perf_measure, post_regret, test_regret, norm_to_true, query, duration
+                self.results[chooser, 'time', i, exp_num], \
+                self.results[chooser, 'time_query_chooser', i, exp_num] \
+                    = true_entropy, perf_measure, post_regret, test_regret, norm_to_true, query, duration_iter, duration_query_chooser
 
 
     def compute_regret(self, post_avg, true_reward, inference=None):
@@ -918,14 +921,14 @@ class Experiment(object):
             Warning('Existing experiment stats overwritten')
         for chooser in self.choosers:
             f = open('data/'+self.folder_name+'/'+chooser+str(exp_num)+'.csv','w')  # Open CSV in folder with name exp_params
-            writer = csv.DictWriter(f, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+            writer = csv.DictWriter(f, fieldnames=['iteration']+self.measures+self.cum_measures+['time', 'time_query_chooser'])
             writer.writeheader()
             rows = []
             cum_test_regret, cum_post_regret = 0, 0
             for i in range(-1,num_iter):
                 csvdict = {}
                 csvdict['iteration'] = i
-                for measure in self.measures + ['time']:
+                for measure in self.measures + ['time', 'time_query_chooser']:
                     entry = self.results[chooser, measure, i, exp_num]
                     csvdict[measure] = entry
                     if measure == 'test_regret':
@@ -941,29 +944,29 @@ class Experiment(object):
     def write_mean_and_median_results_to_csv(self, num_experiments, num_iter):
         """Writes a CSV for every chooser averaged (and median-ed, standard-error-ed) across experiments.
         Saves in the same folder as CSVs per experiment. Columns are 'iteration' and all measures in
-        self.measures + self.cum_measures + ['time']."""
+        self.measures + self.cum_measures + ['time', 'time_query_chooser']."""
         if not os.path.exists('data/' + self.folder_name):
             os.mkdir('data/' + self.folder_name)
         else:
             Warning('Existing experiment stats overwritten')
 
         f_mean_all = open('data/'+self.folder_name+'/'+'all choosers'+'-means-'+'.csv','w')
-        writer_mean_all_choosers = csv.DictWriter(f_mean_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+        writer_mean_all_choosers = csv.DictWriter(f_mean_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time', 'time_query_chooser'])
 
         f_median_all = open('data/'+self.folder_name+'/'+'all choosers'+'-medians-'+'.csv','w')
-        writer_medians_all_choosers = csv.DictWriter(f_median_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+        writer_medians_all_choosers = csv.DictWriter(f_median_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time', 'time_query_chooser'])
 
         f_sterr_all = open('data/'+self.folder_name+'/'+'all choosers'+'-sterr-'+'.csv','w')
-        writer_sterr_all_choosers = csv.DictWriter(f_sterr_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+        writer_sterr_all_choosers = csv.DictWriter(f_sterr_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time', 'time_query_chooser'])
 
         for chooser in self.choosers:
             f_mean = open('data/'+self.folder_name+'/'+chooser+'-means-'+'.csv','w')
             f_median = open('data/'+self.folder_name+'/'+chooser+'-medians-'+'.csv','w')
             f_sterr = open('data/'+self.folder_name+'/'+chooser+'-sterr-'+'.csv','w')
 
-            writer_mean = csv.DictWriter(f_mean, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
-            writer_median = csv.DictWriter(f_median, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
-            writer_sterr = csv.DictWriter(f_sterr, fieldnames=['iteration']+self.measures+self.cum_measures+['time'])
+            writer_mean = csv.DictWriter(f_mean, fieldnames=['iteration']+self.measures+self.cum_measures+['time', 'time_query_chooser'])
+            writer_median = csv.DictWriter(f_median, fieldnames=['iteration']+self.measures+self.cum_measures+['time', 'time_query_chooser'])
+            writer_sterr = csv.DictWriter(f_sterr, fieldnames=['iteration']+self.measures+self.cum_measures+['time', 'time_query_chooser'])
 
             writer_mean.writeheader()
             writer_median.writeheader()
@@ -983,7 +986,7 @@ class Experiment(object):
                 csvdict_median['iteration'] = i
                 csvdict_sterr['iteration'] = i
 
-                for measure in self.measures + ['time']:
+                for measure in self.measures + ['time', 'time_query_chooser']:
                     entries = np.zeros(num_experiments)
                     for exp_num in range(num_experiments):
                         entry = self.results[chooser, measure, i, exp_num]
