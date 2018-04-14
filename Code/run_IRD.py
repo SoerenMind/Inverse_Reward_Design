@@ -141,7 +141,7 @@ if __name__=='__main__':
         # 'weighting': args.weighting,
         # 'viters': args.value_iters,
         # 'linfeat': args.linear_features,
-        # 'objective': args.objective,
+        'objective': args.objective,
         # 'w_dist_i': args.weights_dist_init,
         # 'w_dist_s': args.weights_dist_search,
         # 'optim_big': args.only_optim_biggest,

@@ -247,7 +247,7 @@ class Model(object):
             else:
                 self.objective = self.exp_post_ent
 
-        if 'query_entropy' == objective:
+        if 'query_neg_entropy' == objective:
             scaled_log_answer_probs = self.log_Z_q - 0.0001
             interm_tensor = scaled_log_answer_probs + tf.log(- scaled_log_answer_probs)
             self.log_query_entropy = tf.reduce_logsumexp(
@@ -255,12 +255,12 @@ class Model(object):
 
             self.query_entropy = tf.exp(self.log_query_entropy, name='query_entropy')
             self.name_to_op['log_query_entropy'] = self.log_query_entropy
-            self.name_to_op['query_entropy'] = self.query_entropy
+            self.name_to_op['query_neg_entropy'] = -self.query_entropy
 
             if self.args.log_objective:
-                self.objective = self.log_query_entropy
+                self.objective = -self.log_query_entropy
             else:
-                self.objective = self.query_entropy
+                self.objective = -self.query_entropy
 
         if 'total_variation' == objective:
 

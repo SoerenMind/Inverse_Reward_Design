@@ -118,7 +118,7 @@ def run_objectives():
     for mdp_type in mdp_types:
         # for log_objective in ['1' , '0']:
         for qsize in discr_query_sizes:
-            for objective in ['query_entropy','entropy']:
+            for objective in ['query_neg_entropy','entropy']:
                 run(chooser, qsize, mdp_type,
                     # discretization_size=discretization_size, discretization_size_human=discretization_size_human, , log_objective=log_objective
                     num_iter=num_iter, objective=objective)
