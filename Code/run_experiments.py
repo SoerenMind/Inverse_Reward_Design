@@ -4,10 +4,9 @@ from subprocess import call
 
 NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
-# choosers = ['greedy_discrete', 'random']
 discr_query_sizes = ['2','3','5','10']
-# choosers = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
-choosers = ['greedy_discrete', 'random', 'exhaustive']
+choosers_continuous = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
+choosers_discrete = ['greedy_discrete', 'random', 'exhaustive']
 mdp_types = ['gridworld','bandits']
 num_iter = {'gridworld': '20', 'bandits': '20'}
 num_subsamples_full = '100'; num_subsamples_not_full = '10000'
@@ -18,9 +17,9 @@ full_IRD_full_proxy_space = '0'
 exp_name = 'no_exp_name'
 
 
-def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', discretization_size_human='5',
-        viter='15', rsize=rsize, subsampling='1', num_iter='20', proxy_space_is_true_space='0',
-        subs_full=num_subsamples_full,full_IRD_subsample_belief='no'):
+def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
+        viter='15', rsize=rsize, subsampling='1', proxy_space_is_true_space='0',
+        subs_full=num_subsamples_full,full_IRD_subsample_belief='no', log_objective='1'):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
@@ -70,12 +69,13 @@ def run(chooser, qsize, mdp_type, objective='entropy', discretization_size='5', 
                '--well_spec', '1',
                '--linear_features', '1',
                '--objective', objective,
+               '--log_objective', log_objective,
                '-weights_dist_init', 'normal2',
                '-weights_dist_search', 'normal2',
                '--only_optim_biggest', '1',
                '--proxy_space_is_true_space', proxy_space_is_true_space,
                '--full_IRD_subsample_belief', full_IRD_subsample_belief,
-               '--exp_name', exp_name
+               '--exp_name', exp_name,
                ]
     print 'Running command', ' '.join(command)
     call(command)
@@ -87,7 +87,7 @@ def run_discrete():
 
         run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space)
 
-        for chooser in choosers:
+        for chooser in choosers_discrete:
             for qsize in discr_query_sizes:
                 run(chooser, qsize, mdp_type, num_iter=num_iter)
 
@@ -104,6 +104,25 @@ def run_full():
         # Test with smaller r_size if the turning point turns out >100.
         # Hypothesis: 'yes' gets monotonely better with larger sizes bc only top samples matter (but flattens out quite quickly)
 
+
+def run_objectives():
+
+    # Continuous
+    # qsize = '3'
+    # discretization_size = '3'
+    # discretization_size_human = '5'
+    # chooser = 'feature_entropy_search_then_optim'
+
+    # Discrete
+    chooser = 'greedy_discrete'
+    for mdp_type in mdp_types:
+        # for log_objective in ['1' , '0']:
+        for qsize in discr_query_sizes:
+            for objective in ['query_entropy','entropy']:
+                run(chooser, qsize, mdp_type,
+                    # discretization_size=discretization_size, discretization_size_human=discretization_size_human, , log_objective=log_objective
+                    num_iter=num_iter, objective=objective)
+
 # # Run with different rsize and subsampling values
 # def run_subsampling():
 #     for mdp_type in mdp_types:
@@ -114,7 +133,7 @@ def run_full():
 #
 #
 #             for objective in objectives:
-#                 for chooser in choosers:
+#                 for chooser in choosers_discrete:
 #                         for qsize in discr_query_sizes:
 #                             run(chooser, qsize, mdp_type, objective, rsize=rsize, subsampling=subsampling)
 #                 run('full', '2', mdp_type, objective, rsize=rsize, subsampling=subsampling, num_iter=num_iter)
@@ -129,12 +148,14 @@ def run_discrete_optimization():
 
 def run_continuous():
     for mdp_type in mdp_types:
-        for qsize, discretization_size, discretization_size_human in [('3', '3', '3'), ('2', '5', '5'), ('1', '9', '9')]:
-            for chooser in choosers:
+        for qsize, discretization_size, discretization_size_human in [('3', '3', '5'), ('2', '5', '9'), ('1', '9', '18')]:
+            for chooser in choosers_continuous:
                 run(chooser, qsize, mdp_type,
                     discretization_size=discretization_size,
                     discretization_size_human=discretization_size_human,
                     num_iter=num_iter)
 
 if __name__ == '__main__':
-    run_full()
+    run_objectives()
+    # run_discrete()
+    # run_continuous()

@@ -301,6 +301,7 @@ class Query_Chooser_Subclass(Query_Chooser):
             gradient_logging_outputs=[measure],
             true_reward_matrix=true_reward_matrix)
         query = curr_query + list(optimal_new_rewards)
+        # TODO(sorenmind): return true_entropy objective
         print('Objective for size {s}: '.format(s=len(query)) + str(objective[0][0]))
         return query, objective[0][0]
 
@@ -433,16 +434,6 @@ class Query_Chooser_Subclass(Query_Chooser):
 
         time_last_query_found = time.clock()
 
-        '''With small human queries'''
-        # model = self.get_model(query_size, measure, discrete=False)
-        # model.initialize(self.sess)
-        # objective, true_log_posterior, true_entropy, post_avg = model.compute(
-        #     desired_outputs, self.sess, mdp, None, log_prior,
-        #     feature_expectations_input=feature_exps,
-        #     true_reward=true_reward, true_reward_matrix=true_reward_matrix)
-        # print('Best full posterior objective found (small, continuous): ' + str(objective[0][0]))
-
-        '''With large human queries'''
         disc_size = self.args.discretization_size_human
         model = self.get_model(query_size, measure, discrete=False, discretization_size=disc_size, optimize=True)
         model.initialize(self.sess)
@@ -626,19 +617,19 @@ class Query_Chooser_Subclass(Query_Chooser):
             model = NoPlanningModel(
                 dim, gamma, query_size, discretization_size,
                 true_reward_space_size, num_unknown, beta, beta_planner,
-                objective, lr, discrete, optimize)
+                objective, lr, discrete, optimize, self.args)
         elif mdp.type == 'bandits':
             print 'Calling BanditsModel'
             model = BanditsModel(
                 dim, gamma, query_size, discretization_size,
                 true_reward_space_size, num_unknown, beta, beta_planner,
-                objective, lr, discrete, optimize)
+                objective, lr, discrete, optimize, self.args)
         elif mdp.type == 'gridworld':
             model = GridworldModel(
                 dim, gamma, query_size, discretization_size,
                 true_reward_space_size, num_unknown, beta, beta_planner,
                 objective, lr, discrete, optimize, mdp.height, mdp.width,
-                num_iters)
+                num_iters, self.args)
         else:
             raise ValueError('Unknown model type: ' + str(mdp.type))
 

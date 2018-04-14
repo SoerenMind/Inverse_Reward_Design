@@ -7,7 +7,7 @@ from gridworld import Direction
 class Model(object):
     def __init__(self, feature_dim, gamma, query_size, discretization_size,
                  true_reward_space_size, num_unknown, beta, beta_planner,
-                 objective, lr, discrete, optimize):
+                 objective, lr, discrete, optimize, args):
         self.initialized = False
         self.feature_dim = feature_dim
         self.gamma = gamma
@@ -18,6 +18,7 @@ class Model(object):
         self.lr = lr
         self.discrete = discrete
         self.optimize = optimize
+        self.args = args
         if discrete:
             self.K = query_size
             if optimize:
@@ -146,11 +147,11 @@ class Model(object):
         # self.prior = tf.placeholder(tf.float32, name="prior", shape=(true_reward_space_size))
         self.log_prior = tf.placeholder(tf.float32, name="log_prior", shape=(true_reward_space_size))
         log_Z_w = tf.reduce_logsumexp(log_likelihoods_new, axis=0, name='log_Z_w')
-        log_P_q_z = log_likelihoods_new - log_Z_w
+        log_P_q_z = log_likelihoods_new - log_Z_w   # broadcasting
         # self.log_Z_q, max_a, max_b = logdot(log_P_q_z, tf.log(self.prior))
         self.log_Z_q = tf.reduce_logsumexp(log_P_q_z + self.log_prior, axis=1, name='log_Z_q', keep_dims=True)
         # self.log_posterior = log_P_q_z + tf.log(self.prior) - self.log_Z_q
-        self.log_posterior = log_P_q_z + self.log_prior - self.log_Z_q
+        self.log_posterior = log_P_q_z + self.log_prior - self.log_Z_q  # 2x broadcasting
         self.posterior = tf.exp(self.log_posterior, name="posterior")
 
         self.post_sum_to_1 = tf.reduce_sum(tf.exp(self.log_posterior), axis=1, name='post_sum_to_1')
@@ -165,18 +166,18 @@ class Model(object):
             self.feature_expectations, tf.transpose(self.true_reward_tensor), axes=[-1, -2], name='avg_true_rewards')
         true_log_likelihoods = self.beta * self.avg_true_rewards
         log_true_Z_w = tf.reduce_logsumexp(true_log_likelihoods, axis=0, name='log_true_Z_w')
-        log_answer_probs = true_log_likelihoods - log_true_Z_w
+        self.log_true_answer_probs = true_log_likelihoods - log_true_Z_w
 
         self.name_to_op['true_reward_tensor'] = self.true_reward_tensor
         self.name_to_op['avg_true_rewards'] = self.avg_true_rewards
         self.name_to_op['true_log_likelihoods'] = true_log_likelihoods
-        self.name_to_op['log_answer_probs'] = log_answer_probs
+        self.name_to_op['true_log_answer_probs'] = self.log_true_answer_probs
         self.name_to_op['log_true_Z_w'] = log_true_Z_w
-        self.name_to_op['log_answer_probs'] = log_answer_probs
+        self.name_to_op['log_true_answer_probs'] = self.log_true_answer_probs
 
         # # Sample answer
-        log_answer_probs = tf.reshape(log_answer_probs, shape=[1,-1])
-        sample = tf.multinomial(log_answer_probs, num_samples=1)
+        self.log_true_answer_probs = tf.reshape(self.log_true_answer_probs, shape=[1, -1])
+        sample = tf.multinomial(self.log_true_answer_probs, num_samples=1)
         sample = sample[0][0]
         self.true_log_posterior = self.log_posterior[sample]
         self.true_posterior = self.posterior[sample]
@@ -184,11 +185,11 @@ class Model(object):
         self.name_to_op['sample'] = sample
         self.name_to_op['true_posterior'] = self.true_posterior
         self.name_to_op['true_log_posterior'] = self.true_log_posterior
-        self.name_to_op['probs'] = tf.exp(log_answer_probs)
+        self.name_to_op['probs'] = tf.exp(self.log_true_answer_probs)
 
         # Get true posterior entropy
-        scaled_log_posterior = self.true_log_posterior - 0.0001
-        interm_tensor = scaled_log_posterior + tf.log(- scaled_log_posterior)
+        scaled_log_true_posterior = self.true_log_posterior - 0.0001
+        interm_tensor = scaled_log_true_posterior + tf.log(- scaled_log_true_posterior)
         self.true_ent = tf.exp(tf.reduce_logsumexp(
             interm_tensor, axis=0, name="true_entropy", keep_dims=True))
         self.name_to_op['true_entropy'] = self.true_ent
@@ -196,7 +197,7 @@ class Model(object):
         # Get true posterior_avg
         ## Not in log space
         self.post_weighted_true_reward_matrix = tf.multiply(self.true_posterior, tf.transpose(self.true_reward_matrix))
-        self.post_avg = tf.reduce_sum(self.post_weighted_true_reward_matrix, axis=1, name='post_avg', keep_dims=False)
+        self.true_post_avg = tf.reduce_sum(self.post_weighted_true_reward_matrix, axis=1, name='post_avg', keep_dims=False)
 
         ## In log space (necessary?)
         # log_true_posterior_times_true_reward = self.true_log_posterior + tf.transpose(self.log_true_reward_matrix) # TODO: log true posteriors are log of negative
@@ -206,7 +207,7 @@ class Model(object):
 
 
         # Fill name to ops dict
-        self.name_to_op['post_avg'] = self.post_avg
+        self.name_to_op['post_avg'] = self.true_post_avg
         self.name_to_op['avg_reward_matrix'] = self.avg_reward_matrix
         self.name_to_op['true_reward_matrix'] = self.true_reward_matrix
         # self.name_to_op['prior'] = self.prior
@@ -233,15 +234,33 @@ class Model(object):
             scaled_log_posterior = self.log_posterior - 0.0001
             interm_tensor = scaled_log_posterior + tf.log(- scaled_log_posterior)
             self.log_post_ent_new = tf.reduce_logsumexp(
-                interm_tensor, axis=1, name="entropy_per_answer", keep_dims=True)
+                interm_tensor, axis=1, name="log_entropy_per_answer", keep_dims=True)
             self.post_ent_new = tf.exp(self.log_post_ent_new)
             self.name_to_op['entropy_per_answer'] = self.post_ent_new
             self.log_exp_post_ent = tf.reduce_logsumexp(
-                self.log_post_ent_new + self.log_Z_q, axis=0, keep_dims=True, name='entropy')
+                self.log_post_ent_new + self.log_Z_q, axis=0, keep_dims=True, name='log_entropy')
             self.exp_post_ent = tf.exp(self.log_exp_post_ent)
             self.name_to_op['entropy'] = self.exp_post_ent
 
-            self.objective = self.log_exp_post_ent
+            if self.args.log_objective:
+                self.objective = self.log_exp_post_ent
+            else:
+                self.objective = self.exp_post_ent
+
+        if 'query_entropy' == objective:
+            scaled_log_answer_probs = self.log_Z_q - 0.0001
+            interm_tensor = scaled_log_answer_probs + tf.log(- scaled_log_answer_probs)
+            self.log_query_entropy = tf.reduce_logsumexp(
+                interm_tensor, axis=-2, name='log_query_entropy', keep_dims=True)
+
+            self.query_entropy = tf.exp(self.log_query_entropy, name='query_entropy')
+            self.name_to_op['log_query_entropy'] = self.log_query_entropy
+            self.name_to_op['query_entropy'] = self.query_entropy
+
+            if self.args.log_objective:
+                self.objective = self.log_query_entropy
+            else:
+                self.objective = self.query_entropy
 
         if 'total_variation' == objective:
 
@@ -258,8 +277,10 @@ class Model(object):
             self.total_variation = tf.reshape(self.total_variation, shape=[1,1,-1])
             self.name_to_op['total_variation'] = self.total_variation
 
-
-            self.objective = self.total_variation
+            if self.args.log_objective:
+                self.objective = tf.log(self.total_variation)
+            else:
+                self.objective = self.total_variation
 
         # Set up optimizer
         if self.optimize:
@@ -397,7 +418,7 @@ class BanditsModel(Model):
 class GridworldModel(Model):
     def __init__(self, feature_dim, gamma, query_size, discretization_const,
                  true_reward_space_size, num_unknown, beta, beta_planner,
-                 objective, lr, discrete, optimize, height, width, num_iters):
+                 objective, lr, discrete, optimize, height, width, num_iters, args):
         self.height = height
         self.width = width
         self.num_iters = num_iters
@@ -405,7 +426,7 @@ class GridworldModel(Model):
         super(GridworldModel, self).__init__(
             feature_dim, gamma, query_size, discretization_const,
             true_reward_space_size, num_unknown, beta, beta_planner,
-            objective, lr, discrete, optimize)
+            objective, lr, discrete, optimize, args)
 
     def build_planner(self):
         height, width, dim = self.height, self.width, self.feature_dim

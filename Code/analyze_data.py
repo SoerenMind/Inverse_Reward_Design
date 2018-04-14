@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 # from seaborn import set, set_style
 import numpy as np
+import collections
 
 print('importing done')
 
@@ -287,12 +288,13 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
 
             params = experiment.params
             if args.exclude:
-                if params['choosers'] in args.exclude: continue
+                if any(str(params[key]) in args.exclude for key in params.keys()): continue
             means, sterrs = experiment.means_data, experiment.sterrs_data
             i_var_val = ', '.join([str(params[k]) for k in independent_vars])
             label = i_var_to_label(i_var_val) + (', '+ str(params['qsize'])) * args.compare_qsizes # name in legend
-            color = chooser_to_color(i_var_val, qsize=params['qsize'], compare_qsizes=args.compare_qsizes)
+            color = chooser_to_color(i_var_val, args, params)
             x_data = np.array(means[x_var]) + 1
+
             ax.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=color,
                          capsize=capsize, capthick=1, label=label)#,
                          # marker='o', markerfacecolor='white', markeredgecolor=chooser_to_color(chooser),
@@ -301,7 +303,8 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
             labels.append(label)
 
             ax.set_xlim([0,21])
-            ax.set_ylim(-0.15)
+            # ylim = ax.get_ylim()
+            # ax.set_ylim(ylim)  #-0.15)
 
             # Set ylabel
             ax_left = get_ax(axes, row, num_rows, num_columns, 0)
@@ -321,15 +324,19 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
         try: ax = axes[-1]
         except TypeError:
             ax = axes
+    # for ax in flatten(axes):
     plt.sca(ax)
     handles, labels = ax.get_legend_handles_labels()
-    hl = sorted(zip(handles, labels, range(len(labels))),    # Sorts legend by putting labels 0:k to place as specified
+    # try: legend_order = sorted([int(label) for label in labels])
+    legend_order = range(len(labels))
+    hl = sorted(zip(handles, labels, legend_order),    # Sorts legend by putting labels 0:k to place as specified
            key=lambda elem: elem[2])
     hl = [[handle, label] for handle, label, idx in hl]
     try:
         handles2, labels2 = zip(*hl)
     except ValueError:
-        raise ValueError('Possibly data only exists for one environment')
+        handles2, labels2 = [], []
+        print Warning('Warning: Possibly data only exists for one environment')
 
     # ax.legend(handles2, labels2, fontsize=10)
     plt.legend(handles2, labels2, fontsize=10)
@@ -353,9 +360,19 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
         ','.join(dependent_vars), x_var, ','.join(independent_vars), subtitle)
     if not os.path.exists(folder):
         os.mkdir(folder)
-    # plt.show()
-    plt.savefig(concat(folder, filename))
+    plt.show()
+    # plt.savefig(concat(folder, filename))
     # plt.savefig(concat(folder, 'bla.png'))
+    plt.close()
+
+
+def flatten(l):
+    for el in l:
+        if isinstance(el, collections.Iterable) and not isinstance(el, basestring):
+            for sub in flatten(el):
+                yield sub
+        else:
+            yield el
 
 
 '''TODO:
@@ -479,7 +496,7 @@ def var_to_label(varname):
         return 'Number of queries asked'
 
 
-def chooser_to_color(chooser, qsize=None, compare_qsizes=False):
+def chooser_to_color(chooser, args, params):
     greedy_color = 'darkorange' #'lightblue'
     exhaustive_color = 'orange' # 'peachpuff', 'crimson'
     random_color = 'darkgrey' # 'darkorange'
@@ -500,7 +517,8 @@ def chooser_to_color(chooser, qsize=None, compare_qsizes=False):
     both_color = optimized_color
 
     # Different colors per qsize if comparing qsizes
-    if compare_qsizes:
+    if args.compare_qsizes:
+        qsize = params['qsize']
         if chooser.startswith('greedy'):
             if qsize == 2:
                 return '#00CCFF'
@@ -517,6 +535,18 @@ def chooser_to_color(chooser, qsize=None, compare_qsizes=False):
                 return '#FF0000'
             if qsize == 3:
                 return '#CC0000'
+
+    # Shades of blue for subsample sizes
+    if 'num_subsamp' in args.independent_var:
+        subsamp = params['num_subsamp']
+        color_dict = {}
+        color_dict[2] = '#66FFFF'
+        color_dict[5] = '#00CCFF'
+        color_dict[10] = '#0066FF'
+        color_dict[50] = '#0033CC'
+        color_dict[100] = '#000099'
+        color_dict[10000] = '#000033'
+        return color_dict[subsamp]
 
     # chooser = chooser.split(",")
 
@@ -575,6 +605,8 @@ def i_var_to_label(i_var):
     if i_var == 'feature_random':
         return 'Unoptimized'
 
+    if ivar == '10000'
+        return 'full IRD (10000)'
     else:
         return i_var
 
