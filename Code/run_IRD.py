@@ -86,8 +86,6 @@ if __name__=='__main__':
     args = parser.parse_args()
     print args
     assert args.discretization_size % 2 == 1
-    print args.size_true_space
-    print args.size_proxy_space
 
     # Experiment description
     adapted_description = False
@@ -95,7 +93,6 @@ if __name__=='__main__':
 
     # Set parameters
     dummy_rewards = np.zeros(args.feature_dim)
-    # Set parameters
     choosers = args.c
     SEED = args.seed
     seed(SEED)
@@ -117,9 +114,6 @@ if __name__=='__main__':
     width = args.width
     num_iters_optim = args.num_iters_optim
     p_wall = 0.35 if args.height < 20 else 0.1
-    # choosers = ['greedy', 'greedy_exp_reward']
-    # choosers = ['no_query','greedy_entropy', 'greedy', 'greedy_exp_reward', 'random']
-    # choosers = ['greedy_entropy', 'random', 'no_query']
 
     # These will be in the folder name of the log
     exp_params = {
@@ -134,7 +128,7 @@ if __name__=='__main__':
         'beta': beta,
         'exp_name': args.exp_name,
         # 'num_states': num_states,
-        'dist_scale': dist_scale,
+        # 'dist_scale': dist_scale,asdf
         # 'n_q_max': num_queries_max,
         # 'num_iters_optim': num_iters_optim,
         # 'well_spec': args.well_spec,
@@ -160,9 +154,18 @@ if __name__=='__main__':
         true_rewards = [np.random.randint(-9, 10, size=[args.feature_dim]) for _ in range(num_experiments)]
     else:
         true_rewards = [choice(reward_space_true) for _ in range(num_experiments)]
+        if args.repeated_obj:
+            # Set values of proxy and goal
+            for i, reward in enumerate(true_rewards):
+                for j in range(args.feature_dim):
+                    if reward[j] > 7: reward[j] = np.random.randint(-9, 6)
+                reward[-1] = 9
+                reward[-2] = -2
+                true_rewards[i] = reward
+                reward_space_true[i,:] = reward
     prior_avg = -0.5 * np.ones(args.feature_dim) + 1e-4 * np.random.exponential(1,args.feature_dim) # post_avg for uniform prior + noise
 
-    # Set up env and agent for NStateMdp
+    'Set up env and agent for NStateMdp'
     if args.mdp_type == 'bandits':
 
         'Create train and test MDPs'
@@ -210,7 +213,7 @@ if __name__=='__main__':
             train_inferences.append(inference)
 
 
-    # Set up env and agent for gridworld
+    'Set up env and agent for gridworld'
     elif args.mdp_type == 'gridworld':
         'Create train and test MDPs'
         test_inferences = []
@@ -244,7 +247,7 @@ if __name__=='__main__':
 
 
 
-    'Experiment'
+    'Run experiment'
     def run_experiment(query_size, train_inferences, test_inferences, true_rewards, prior_avg):
         experiment = Experiment(true_rewards, query_size, num_queries_max,
                                 args, choosers, SEED, exp_params, train_inferences, test_inferences, prior_avg)

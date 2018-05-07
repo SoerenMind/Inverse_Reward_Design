@@ -97,12 +97,12 @@ def run_discrete():
 def run_reward_hacking():
     mdp_type = 'gridworld'
     repeated_obj = '1'
-    num_obj_if_repeated = '50'
+    num_obj_if_repeated = '100'
     qsize = '5'
-    height, width = '22', '22'
+    height, width = '52', '52'
     viter = height
-    beta = viter / 30.  # Keep ratio of 15:0.5
-    num_test_envs = '20'
+    beta = str(int(viter) / 30.)  # Keep ratio of 15:0.5. Make prop to num objects too?
+    num_test_envs = '40'
 
     for dist_scale in ['0.1', '0.3', '1']:
         run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space,

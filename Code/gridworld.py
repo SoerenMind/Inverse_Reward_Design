@@ -553,8 +553,8 @@ class GridworldMdp(Mdp):
                     dsets.union((x, y), (newx, newy))
 
         grid[height // 2][width // 2] = 'A'
-        for x, y in goals_wo_type:
-            grid[y][x] = random.randint(-9, 10)
+        # for x, y in goals_wo_type:
+        #     grid[y][x] = random.randint(-9, 10)
 
         # Print grid
         if print_grid:
