@@ -358,7 +358,7 @@ class GridworldMdp(Mdp):
     (typically negative in order to incentivize shorter paths).
     """
 
-    def __init__(self, grid, living_reward=-0.01, noise=0):
+    def __init__(self, grid, args, living_reward=-0.01, noise=0):
         """Initializes the MDP.
 
         grid: A sequence of sequences of spaces, representing a grid of a
@@ -380,6 +380,7 @@ class GridworldMdp(Mdp):
 
         self.walls = [[space == 'X' for space in row] for row in grid]
         self.type = 'gridworld'
+        self.args = args
         # self.populate_rewards_and_start_state(grid)
 
 
@@ -469,21 +470,63 @@ class GridworldMdp(Mdp):
         return walls, self.feature_matrix, self.start_state
 
     @staticmethod
-    def generate_random(height, width, pr_wall, num_goals, goals=None, living_reward=0, noise=0, print_grid = False):
+    def generate_random(args, height, width, pr_wall, feature_dim, goals=None, living_reward=0, noise=0, print_grid=False):
         """Generates a random instance of a Gridworld."""
 
-        def generate_start_and_goals():
+        # Does each goal\object type appear multiple times?
+        if args.repeated_obj:
+            num_goals = args.num_obj_if_repeated
+        else:
+            num_goals = feature_dim
+
+        def generate_goals(states):
+            goal_pos = np.random.choice(len(states), num_goals, replace=False)
+            # Place a 'proxy' goal/object which is in the same position as another goal everywher except once
+            if args.repeated_obj:
+                placed_proxy = False
+                placed_isolated_proxy = False
+                goals = []
+                for idx in goal_pos:
+                    objects = []
+                    x, y = states[idx]
+                    obj_type_1 = np.random.choice(feature_dim - 1)
+                    objects.append(obj_type_1)
+                    # For object number feature_dim-2, correlate it with object feature_dim with probability p_corr
+                    # feature_dim-2 is the proxy
+                    if obj_type_1 == feature_dim - 2:
+                        placed_proxy = True
+                        if placed_isolated_proxy:
+                            objects.append(feature_dim-1)
+                        else:
+                            placed_isolated_proxy = True
+                    # if obj_type_1 == feature_dim - 1 and placed_isolated_goal:
+                    goal = (x, y, objects)
+                    goals.append(goal)
+                if not placed_proxy:
+                    # Repeat if proxy not placed (low probability event)
+                    try:
+                        return generate_goals(states)
+                    except RuntimeError:
+                        raise ValueError('Number of goals lower than feature dim?')
+                return goals
+            else:
+                goals = [states[i] for i in goal_pos]
+                for j, goal in enumerate(goals):
+                    goal = (goal[0], goal[1], [j])
+                    goals[j] = goal
+                return goals
+
+        def generate_start_and_goals(goals):
             start_state = (width // 2, height // 2)
             states = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
             states.remove(start_state)
             if goals is None:
-                indices = np.random.choice(len(states), num_goals, replace=False)
-                return start_state, [states[i] for i in indices]
-            else:
-                return start_state, goals
+                goals = generate_goals(states)
+            return start_state, goals
 
-        (start_x, start_y), goals = generate_start_and_goals()
-        required_nonwalls = list(goals)
+        (start_x, start_y), goals = generate_start_and_goals(goals)
+        goals_wo_type = [(x, y) for x, y, _ in list(goals)]
+        required_nonwalls = list(goals_wo_type)
         required_nonwalls.append((start_x, start_y))
 
         directions = [
@@ -492,7 +535,7 @@ class GridworldMdp(Mdp):
         walls = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
         dsets = DisjointSets([])
         first_state = required_nonwalls[0]
-        for x, y in required_nonwalls:
+        for x, y, in required_nonwalls:
             grid[y][x] = ' '
             walls.remove((x, y))
             dsets.add_singleton((x, y))
@@ -510,7 +553,7 @@ class GridworldMdp(Mdp):
                     dsets.union((x, y), (newx, newy))
 
         grid[height // 2][width // 2] = 'A'
-        for x, y in goals:
+        for x, y in goals_wo_type:
             grid[y][x] = random.randint(-9, 10)
 
         # Print grid
@@ -521,66 +564,66 @@ class GridworldMdp(Mdp):
                     place = str(place)
                     row_new.append(place)
                 print str(row_new)
-        return grid
+        return grid, goals
 
-    @staticmethod
-    def generate_random_connected(height, width, pr_reward, living_reward=0, noise=0):
-        """Generates a random instance of a Gridworld.
-
-        Unlike with generate_random, it is guaranteed that the agent
-        can reach a reward. However, that reward might be negative.
-        """
-        directions = [
-            Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]
-        grid = [['X'] * width for _ in range(height)]
-        walls = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
-        random.shuffle(walls)
-        min_free_spots = len(walls) / 2
-        dsets = DisjointSets([])
-        while dsets.get_num_elements() < min_free_spots or not dsets.is_connected():
-            x, y = walls.pop()
-            grid[y][x] = ' '
-            dsets.add_singleton((x, y))
-            for direction in directions:
-                newx, newy = Direction.move_in_direction((x, y), direction)
-                if dsets.contains((newx, newy)):
-                    dsets.union((x, y), (newx, newy))
-
-        def set_random_position_to(token, grid=grid):
-            # this loops through *available* positions in the grid & chooses random one
-            spots = find_available_spots(grid)
-            place = spots[np.random.choice(len(spots))]
-            grid[place[0]][place[1]] = token
-
-        def find_available_spots(grid):
-            spots = []
-            rewards = []
-            for y in range(1, height-1):
-                for x in range(1, width-1):
-                    if grid[y][x] in ['X', ' ']:
-                        spots.append((y, x))
-                    elif type(grid[y][x])==int:
-                        rewards.append((y, x))
-            if len(spots)==0:
-                print('\a')
-                print("no available spots\noverwriting existing reward values")
-                return rewards
-            return spots
-
-        # Makes sure there is one reward
-        set_random_position_to(3)
-        # Sets random starting point for agent
-        set_random_position_to('A')
-        while random.random() < pr_reward:
-            reward = random.randint(-9, 10)
-            # Don't allow 0 rewards
-            while reward == 0:
-                reward = random.randint(-9, 10)
-            set_random_position_to(reward)
-        for row in grid:
-            print row
-        return grid
-        # return GridworldMdp(grid, living_reward, noise)
+    # @staticmethod
+    # def generate_random_connected(args, height, width, pr_reward, living_reward=0, noise=0):
+    #     """Generates a random instance of a Gridworld.
+    #
+    #     Unlike with generate_random, it is guaranteed that the agent
+    #     can reach a reward. However, that reward might be negative.
+    #     """
+    #     directions = [
+    #         Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]
+    #     grid = [['X'] * width for _ in range(height)]
+    #     walls = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
+    #     random.shuffle(walls)
+    #     min_free_spots = len(walls) / 2
+    #     dsets = DisjointSets([])
+    #     while dsets.get_num_elements() < min_free_spots or not dsets.is_connected():
+    #         x, y = walls.pop()
+    #         grid[y][x] = ' '
+    #         dsets.add_singleton((x, y))
+    #         for direction in directions:
+    #             newx, newy = Direction.move_in_direction((x, y), direction)
+    #             if dsets.contains((newx, newy)):
+    #                 dsets.union((x, y), (newx, newy))
+    #
+    #     def set_random_position_to(token, grid=grid):
+    #         # this loops through *available* positions in the grid & chooses random one
+    #         spots = find_available_spots(grid)
+    #         place = spots[np.random.choice(len(spots))]
+    #         grid[place[0]][place[1]] = token
+    #
+    #     def find_available_spots(grid):
+    #         spots = []
+    #         rewards = []
+    #         for y in range(1, height-1):
+    #             for x in range(1, width-1):
+    #                 if grid[y][x] in ['X', ' ']:
+    #                     spots.append((y, x))
+    #                 elif type(grid[y][x])==int:
+    #                     rewards.append((y, x))
+    #         if len(spots)==0:
+    #             print('\a')
+    #             print("no available spots\noverwriting existing reward values")
+    #             return rewards
+    #         return spots
+    #
+    #     # Makes sure there is one reward
+    #     set_random_position_to(3)
+    #     # Sets random starting point for agent
+    #     set_random_position_to('A')
+    #     while random.random() < pr_reward:
+    #         reward = random.randint(-9, 10)
+    #         # Don't allow 0 rewards
+    #         while reward == 0:
+    #             reward = random.randint(-9, 10)
+    #         set_random_position_to(reward)
+    #     for row in grid:
+    #         print row
+    #     return grid
+    #     # return GridworldMdp(grid, living_reward, noise)
 
     def get_start_state(self):
         """Returns the start state."""
@@ -707,8 +750,8 @@ class GridworldMdpWithFeatures(GridworldMdp):
     """
     Same as GridWorldMdp, but there is a feature map and the reward is a linear function of the features.
     """
-    def __init__(self, grid, living_reward=-0.01, noise=0):
-        super(GridworldMdpWithFeatures, self).__init__(grid, living_reward, noise)
+    def __init__(self, grid, args, living_reward=-0.01, noise=0):
+        super(GridworldMdpWithFeatures, self).__init__(grid, args, living_reward, noise)
         self.grid = grid
         # self.feature_weights = None
         self.populate_features()
@@ -730,12 +773,13 @@ class GridworldMdpWithFeatures(GridworldMdp):
 
 class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
     """Features are based on distance to places with reward."""
-    def __init__(self, grid, linear_features=True, dist_scale=0.5, living_reward=-0.01, noise=0, rewards=None):
+    def __init__(self, grid, goals, args, dist_scale=0.5, living_reward=-0.01, noise=0, rewards=None):
         self.dist_scale = dist_scale
+        self.goals = goals
         # self.feature_weights = None
-        self.linear_features = linear_features
+        self.linear_features = args.linear_features
         super(GridworldMdpWithDistanceFeatures, self).__init__(
-            grid, living_reward=-0.01, noise=0)
+            grid, args, living_reward=-0.01, noise=0)
 
     def populate_features(self):
         self.populate_features_and_start_state()
@@ -753,45 +797,35 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
         format.
         """
         # self.feature_weights = []
-        self.goals = []
         self.start_state = None
 
-        # Save goal positions and start state
+        # Save start state
         for y in range(len(self.grid)):
             for x in range(len(self.grid[0])):
-                if self.grid[y][x] not in ['X', ' ', 'A']:
-                    # self.feature_weights.append(float(self.grid[y][x]))
-                    self.goals.append((x,y))
-                elif self.grid[y][x] == 'A':
+                # if self.grid[y][x] not in ['X', ' ', 'A']:
+                #     # self.feature_weights.append(float(self.grid[y][x]))
+                #     self.goals.append((x,y))
+                if self.grid[y][x] == 'A':
                     self.start_state = (x, y)
 
-        # # Save self.rewards vector (replace this for IRD)
-        # self.rewards = np.zeros(len(self.goals))
-        # for n, goal in enumerate(self.goals):
-        #     weight = self.goal_weights[goal]
-        #     self.rewards[n] = weight
 
         height, width = len(self.grid), len(self.grid[0])
-        self.feature_matrix = np.zeros([height, width, len(self.goals)])
+        self.feature_matrix = np.zeros([height, width, self.args.feature_dim])
         # Save features for each state based on distance to goals
-        for y in range(height):
-            for x in range(width):
-                features = []
-                # reward = 0
-                for i,j in self.goals:
-                    # weight = self.goal_weights[(i, j)]
+        for y in range(1,height-1):
+            for x in range(1,width-1):
+                features = np.zeros(self.args.feature_dim)
+                for i,j,obj_nums in self.goals:
                     distance = np.linalg.norm(np.array((x,y)) - np.array((i,j)))
-                    if self.linear_features:
-                        features.append(-distance / 5.)
-                    else:
-                        nearness = np.exp(- self.dist_scale * distance)
-                        features.append(nearness)
-                    # reward += weight / (distance ** distance_exponent)
-                self.feature_matrix[y,x,:] = np.array(features)
+                    rbf_nearness = np.exp(- self.dist_scale * distance)
+                    feat_value = -distance / 5. if self.linear_features and not self.args.repeated_obj \
+                        else rbf_nearness
 
+                    'Featurization for different object types:'
+                    for obj_num in obj_nums:
+                        features[obj_num] += feat_value
 
-
-
+                self.feature_matrix[y,x,:] = features
 
 
 

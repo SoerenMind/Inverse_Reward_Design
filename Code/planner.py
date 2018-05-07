@@ -133,6 +133,7 @@ class Model(object):
             tf.float32, [true_reward_space_size, dim], name="true_reward_matrix")
         self.log_true_reward_matrix = tf.log(self.true_reward_matrix, name='log_true_reward_matrix')
 
+
         # TODO: Inefficient to recompute this matrix on every forward pass.
         # We can cache it and feed in true reward indeces instead of true_reward_matrix. The matrix multiplication has
         # size_proxy x size_true x feature_dim complexity. The other calculations in this map have a factor feature_dim
@@ -150,6 +151,7 @@ class Model(object):
         log_P_q_z = log_likelihoods_new - log_Z_w   # broadcasting
         # self.log_Z_q, max_a, max_b = logdot(log_P_q_z, tf.log(self.prior))
         self.log_Z_q = tf.reduce_logsumexp(log_P_q_z + self.log_prior, axis=1, name='log_Z_q', keep_dims=True)
+        # TODO: For BALD objective, just take entropy of Z_q - prior expected entropy of q
         # self.log_posterior = log_P_q_z + tf.log(self.prior) - self.log_Z_q
         self.log_posterior = log_P_q_z + self.log_prior - self.log_Z_q  # 2x broadcasting
         self.posterior = tf.exp(self.log_posterior, name="posterior")

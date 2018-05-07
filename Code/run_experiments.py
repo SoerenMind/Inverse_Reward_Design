@@ -2,7 +2,7 @@ from subprocess import call
 
 # Discrete experiments
 
-NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
+NUM_EXPERIMENTS = '20'  # Modify this to change the sample size
 
 discr_query_sizes = ['2','3','5','10']
 choosers_continuous = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
@@ -14,16 +14,17 @@ beta_both_mdps = '0.5'
 num_q_max = '10000'
 rsize = '1000000'
 full_IRD_full_proxy_space = '0'
-exp_name = 'no_exp_name'
+exp_name = 'test_dist_scale'
 
 
 def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
         viter='15', rsize=rsize, subsampling='1', proxy_space_is_true_space='0',
-        subs_full=num_subsamples_full,full_IRD_subsample_belief='no', log_objective='1'):
+        subs_full=num_subsamples_full, full_IRD_subsample_belief='no', log_objective='1',
+        repeated_obj='0', num_obj_if_repeated='50', dist_scale='0.2', linear_features='1', height='12', width='12',
+        num_test_envs='100',beta=beta_both_mdps):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
-        beta = beta_both_mdps
         beta_planner = '0.5'
         dim = '20'
         # TODO: Set the following to the right values
@@ -31,7 +32,6 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
         num_iters_optim = '10'
     else:
         # Values range from 50-100 when using 25 value iterations.
-        beta = beta_both_mdps
         beta_planner = '1'
         dim = '20'
         # TODO: Set the following to the right values
@@ -50,24 +50,24 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
                '--beta', beta,
                '--beta_planner', beta_planner,
                '--num_states', '100',  # Only applies for bandits
-               '--dist_scale', '0.5',
+               '--dist_scale', dist_scale,
                '--num_traject', '1',
                '--num_queries_max', num_q_max,
-               '--height', '12',  # Only applies for gridworld
-               '--width', '12',  # Only applies for gridworld
+               '--height', height,  # Only applies for gridworld
+               '--width', width,  # Only applies for gridworld
                '--lr', lr,  # Doesn't matter, only applies in continuous case
                '--num_iters_optim', num_iters_optim,
-               '--value_iters', viter,  # Consider decreasing viters to 10-15 to make the path more important as opposed to ending up at the right goal
+               '--value_iters', viter,
                '--mdp_type', mdp_type,
                '--feature_dim', dim,
                '--discretization_size', discretization_size,
                '--discretization_size_human', discretization_size_human,
-               '--num_test_envs', '100',
+               '--num_test_envs', num_test_envs,
                '--subsampling', subsampling,
                '--num_subsamples', subs_full if chooser == 'full' else num_subsamples_not_full,
                '--weighting', '1',
                '--well_spec', '1',
-               '--linear_features', '1',
+               '--linear_features', linear_features,
                '--objective', objective,
                '--log_objective', log_objective,
                '-weights_dist_init', 'normal2',
@@ -76,6 +76,8 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
                '--proxy_space_is_true_space', proxy_space_is_true_space,
                '--full_IRD_subsample_belief', full_IRD_subsample_belief,
                '--exp_name', exp_name,
+               '--repeated_obj', repeated_obj,
+               '--num_obj_if_repeated', num_obj_if_repeated
                ]
     print 'Running command', ' '.join(command)
     call(command)
@@ -90,6 +92,27 @@ def run_discrete():
         for chooser in choosers_discrete:
             for qsize in discr_query_sizes:
                 run(chooser, qsize, mdp_type, num_iter=num_iter)
+
+
+def run_reward_hacking():
+    mdp_type = 'gridworld'
+    repeated_obj = '1'
+    num_obj_if_repeated = '50'
+    qsize = '5'
+    height, width = '22', '22'
+    viter = height
+    beta = viter / 30.  # Keep ratio of 15:0.5
+    num_test_envs = '20'
+
+    for dist_scale in ['0.1', '0.3', '1']:
+        run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space,
+            repeated_obj=repeated_obj, num_obj_if_repeated=num_obj_if_repeated, dist_scale=dist_scale,
+            height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
+
+
+    for chooser in ['greedy_discrete', 'random']:
+        run(chooser, qsize, mdp_type, num_iter=num_iter)
+
 
 def run_full():
     for mdp_type in mdp_types:
@@ -156,6 +179,7 @@ def run_continuous():
                     num_iter=num_iter)
 
 if __name__ == '__main__':
-    run_objectives()
+    # run_objectives()
     # run_discrete()
+    run_reward_hacking()
     # run_continuous()
