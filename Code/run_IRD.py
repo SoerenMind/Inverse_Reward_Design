@@ -85,7 +85,7 @@ if __name__=='__main__':
 
     args = parser.parse_args()
     print args
-    assert args.discretization_size % 2 == 1
+    # assert args.discretization_size % 2 == 1
 
     # Experiment description
     adapted_description = False
@@ -213,7 +213,7 @@ if __name__=='__main__':
             train_inferences.append(inference)
 
 
-    'Set up env and agent for gridworld'
+    # Set up env and agent for gridworld
     elif args.mdp_type == 'gridworld':
         'Create train and test MDPs'
         test_inferences = []
