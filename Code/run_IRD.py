@@ -132,7 +132,7 @@ if __name__=='__main__':
         'beta': beta,
         'exp_name': args.exp_name,
         # 'num_states': num_states,
-        # 'dist_scale': dist_scale,asdf
+        'dist_scale': dist_scale,
         # 'n_q_max': num_queries_max,
         # 'num_iters_optim': num_iters_optim,
         # 'well_spec': args.well_spec,
