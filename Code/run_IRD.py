@@ -41,29 +41,21 @@ if __name__=='__main__':
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
     parser.add_argument('--exp_name',type=str,default='no_exp_name')
     parser.add_argument('--query_size',type=int,default=3)
-    parser.add_argument('--num_experiments',type=int,default=2) # 3-5
+    parser.add_argument('--num_experiments',type=int,default=1) # 3-5
     parser.add_argument('--num_iter',type=int,default=20)    # number of queries asked
     parser.add_argument('--gamma',type=float,default=1.) # otherwise 0.98. Values <1 might make test regret inaccurate.
     parser.add_argument('--size_true_space',type=int,default=1000000)
     parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--seed',type=int,default=1)
     parser.add_argument('--beta',type=float,default=0.2)
-    parser.add_argument('--beta_planner',type=float,default=0.5) # 1 for small version of results
     parser.add_argument('--num_states',type=int,default=100)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.2) # test briefly to get ent down
     parser.add_argument('--num_traject',type=int,default=1)
-    parser.add_argument('--num_queries_max',type=int,default=2000)
     parser.add_argument('--height',type=int,default=12)
     parser.add_argument('--width',type=int,default=12)
-    parser.add_argument('--lr',type=float,default=20)  # Learning rate
-    parser.add_argument('--num_iters_optim',type=int,default=10)
     parser.add_argument('--value_iters',type=int,default=15)    # max_reward / (1-gamma) or height+width
     parser.add_argument('--mdp_type',type=str,default='gridworld')
     parser.add_argument('--feature_dim',type=int,default=20)    # 10 if positions fixed, 100 otherwise
-    parser.add_argument('--repeated_obj',type=int,default=0)  # Creates gridworld with k object types, k features, and num_objects >= k objects
-    parser.add_argument('--num_obj_if_repeated',type=int,default=20)  # Usually feature_dim is # of objects except for correlated features experiment. Must be > feature_dim
-    parser.add_argument('--discretization_size',type=int,default=0) # for continuous query selection
-    parser.add_argument('--discretization_size_human',type=int,default=0)   # for continuous query actually posed
     parser.add_argument('--num_test_envs',type=int,default=100)    # 10 if positions fixed, 100 otherwise
     parser.add_argument('--well_spec',type=int,default=1)    # default is well-specified
     parser.add_argument('--subsampling',type=int,default=1)
@@ -73,11 +65,23 @@ if __name__=='__main__':
     parser.add_argument('--objective',type=str,default='entropy')
     parser.add_argument('--log_objective',type=int,default=1)
     parser.add_argument('--rational_test_planner',type=int,default=1)
+    # args for experiment with correlated features
+    parser.add_argument('--repeated_obj',type=int,default=0)  # Creates gridworld with k object types, k features, and num_objects >= k objects
+    parser.add_argument('--num_obj_if_repeated',type=int,default=50)  # Usually feature_dim is # of objects except for correlated features experiment. Must be > feature_dim
+    parser.add_argument('--decorrelate_test_feat',type=int,default=1)
+
+    # args for optimization
     parser.add_argument('-weights_dist_init',type=str,default='normal2')
     parser.add_argument('-weights_dist_search',type=str,default='normal2')
-    parser.add_argument('-square_probs',type=int,default=0)
+    parser.add_argument('--lr',type=float,default=20)  # Learning rate
     parser.add_argument('--only_optim_biggest',type=int,default=1)
-    # parser.add_argument('--full_IRD_w_true_space', type=int, default=0)
+    parser.add_argument('--num_iters_optim',type=int,default=10)
+    parser.add_argument('--beta_planner',type=float,default=0.5) # 1 for small version of results
+    parser.add_argument('--num_queries_max',type=int,default=2000)
+    parser.add_argument('--discretization_size',type=int,default=0) # for continuous query selection
+    parser.add_argument('--discretization_size_human',type=int,default=0)   # for continuous query actually posed
+
+    # args for testing full IRD
     parser.add_argument('--proxy_space_is_true_space', type=int, default=0)
     parser.add_argument('--full_IRD_subsample_belief', type=str, default='no')  # other options: yes, uniform
 
@@ -218,7 +222,8 @@ if __name__=='__main__':
         'Create train and test MDPs'
         test_inferences = []
         for i in range(args.num_test_envs):
-            test_grid, test_goals = GridworldMdp.generate_random(args,height,width,0.35,args.feature_dim,None,living_reward=-0.01, print_grid=False)
+            test_grid, test_goals = GridworldMdp.generate_random(args,height,width,0.35,args.feature_dim,None,
+                                        living_reward=-0.01, print_grid=False, decorrelate=args.decorrelate_test_feat)
             mdp = GridworldMdpWithDistanceFeatures(test_grid, test_goals, args, dist_scale, living_reward=-0.01, noise=0)
             env = GridworldEnvironment(mdp)
             agent = OptimalAgent(gamma, num_iters=args.value_iters)

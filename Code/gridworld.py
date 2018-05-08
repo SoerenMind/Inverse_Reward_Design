@@ -470,7 +470,7 @@ class GridworldMdp(Mdp):
         return walls, self.feature_matrix, self.start_state
 
     @staticmethod
-    def generate_random(args, height, width, pr_wall, feature_dim, goals=None, living_reward=0, noise=0, print_grid=False):
+    def generate_random(args, height, width, pr_wall, feature_dim, goals=None, living_reward=0, noise=0, print_grid=False, decorrelate=False):
         """Generates a random instance of a Gridworld."""
 
         # Does each goal\object type appear multiple times?
@@ -489,17 +489,20 @@ class GridworldMdp(Mdp):
                 for idx in goal_pos:
                     objects = []
                     x, y = states[idx]
-                    obj_type_1 = np.random.choice(feature_dim - 1)
-                    objects.append(obj_type_1)
-                    # For object number feature_dim-2, correlate it with object feature_dim with probability p_corr
-                    # feature_dim-2 is the proxy
-                    if obj_type_1 == feature_dim - 2:
+                    if not decorrelate:
+                        # For object number feature_dim-2, correlate it with object feature_dim with probability p_corr
+                        # feature_dim-2 is the proxy
+                        obj_type_1 = np.random.choice(feature_dim - 1)
+                        if obj_type_1 == feature_dim - 2:
+                            placed_proxy = True
+                            if placed_isolated_proxy:
+                                objects.append(feature_dim-1)
+                            else:
+                                placed_isolated_proxy = True
+                    else:
+                        obj_type_1 = np.random.choice(feature_dim)
                         placed_proxy = True
-                        if placed_isolated_proxy:
-                            objects.append(feature_dim-1)
-                        else:
-                            placed_isolated_proxy = True
-                    # if obj_type_1 == feature_dim - 1 and placed_isolated_goal:
+                    objects.append(obj_type_1)
                     goal = (x, y, objects)
                     goals.append(goal)
                 if not placed_proxy:
@@ -509,6 +512,7 @@ class GridworldMdp(Mdp):
                     except RuntimeError:
                         raise ValueError('Number of goals lower than feature dim?')
                 return goals
+            # Generate goals the normal way
             else:
                 goals = [states[i] for i in goal_pos]
                 for j, goal in enumerate(goals):

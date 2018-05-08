@@ -360,8 +360,8 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
         ','.join(dependent_vars), x_var, ','.join(independent_vars), subtitle)
     if not os.path.exists(folder):
         os.mkdir(folder)
-    plt.show()
-    # plt.savefig(concat(folder, filename))
+    # plt.show()
+    plt.savefig(concat(folder, filename))
     # plt.savefig(concat(folder, 'bla.png'))
     plt.close()
 
@@ -605,7 +605,7 @@ def i_var_to_label(i_var):
     if i_var == 'feature_random':
         return 'Unoptimized'
 
-    if ivar == '10000'
+    if ivar == '10000':
         return 'full IRD (10000)'
     else:
         return i_var

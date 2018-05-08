@@ -577,11 +577,8 @@ class Query_Chooser_Subclass(Query_Chooser):
         if weighting:
             unique_sample_idx, counts = np.unique(choices, return_counts=True)
 
-            if self.args.square_probs:
-                # This was a bug that leads to ~squared probabilities (which are then renormalized)
-                weighted_probs = probs[unique_sample_idx] * counts
-            else:
-                weighted_probs = np.ones(len(counts)) * counts
+
+            weighted_probs = np.ones(len(counts)) * counts
             weighted_probs = weighted_probs / weighted_probs.sum()
             return self.inference.true_reward_matrix[unique_sample_idx], np.log(weighted_probs)
         else:

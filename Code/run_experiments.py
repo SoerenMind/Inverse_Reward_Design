@@ -9,11 +9,11 @@ choosers_continuous = ['feature_random', 'feature_entropy_search_then_optim', 'f
 choosers_discrete = ['greedy_discrete', 'random', 'exhaustive']
 mdp_types = ['gridworld','bandits']
 num_iter = {'gridworld': '20', 'bandits': '20'}
-num_subsamples_full = '100'; num_subsamples_not_full = '10000'
+num_subsamples_full = '10000'; num_subsamples_not_full = '10000'
 beta_both_mdps = '0.5'
 num_q_max = '10000'
 rsize = '1000000'
-full_IRD_full_proxy_space = '0'
+proxy_space_is_true_space = '0'
 exp_name = 'test_dist_scale'
 
 
@@ -87,7 +87,7 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
 def run_discrete():
     for mdp_type in mdp_types:
 
-        run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space)
+        run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=proxy_space_is_true_space)
 
         for chooser in choosers_discrete:
             for qsize in discr_query_sizes:
@@ -100,18 +100,17 @@ def run_reward_hacking():
     num_obj_if_repeated = '100'
     qsize = '5'
     height, width = '52', '52'
-    viter = height
-    beta = str(int(viter) / 30.)  # Keep ratio of 15:0.5. Make prop to num objects too?
+    viter = int(height*1.5)
+    beta = str(7.5 / float(viter))  # Decrease beta for higher viter. Make prop to num objects too?
     num_test_envs = '40'
 
     for dist_scale in ['0.1', '0.3', '1']:
-        run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space,
+        run('full', '2', mdp_type, num_iter=num_iter,
             repeated_obj=repeated_obj, num_obj_if_repeated=num_obj_if_repeated, dist_scale=dist_scale,
             height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
 
-
-    for chooser in ['greedy_discrete', 'random']:
-        run(chooser, qsize, mdp_type, num_iter=num_iter)
+        for chooser in ['greedy_discrete', 'random']:
+            run(chooser, qsize, mdp_type, num_iter=num_iter)
 
 
 def run_full():
@@ -119,9 +118,9 @@ def run_full():
         for num_subsamples_full in ['1000', '500','100','50','10','5','2','10000']:
             for full_IRD_subsample_belief in ['yes','uniform','no']:
                 if full_IRD_subsample_belief == 'no':
-                    run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space,
+                    run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=proxy_space_is_true_space,
                         subs_full=num_subsamples_full,full_IRD_subsample_belief=full_IRD_subsample_belief,size_proxy_space=num_subsamples_full)
-                run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=full_IRD_full_proxy_space,
+                run('full', '2', mdp_type, num_iter=num_iter, proxy_space_is_true_space=proxy_space_is_true_space,
                     subs_full=num_subsamples_full,full_IRD_subsample_belief=full_IRD_subsample_belief)
         # Interesting question: How high can 'uniform' go before it gets worse? (could be pretty high)
         # Test with smaller r_size if the turning point turns out >100.
