@@ -728,7 +728,7 @@ class Experiment(object):
         self.query_chooser = Query_Chooser_Subclass(num_queries_max, args, t_0=self.t_0)
         self.results = {}
         # Add variance
-        self.measures = ['true_entropy','test_regret','norm post_avg-true','post_regret','perf_measure']
+        self.measures = ['true_entropy','test_regret','norm post_avg-true','post_regret','perf_measure','std_proxy','mean_proxy','std_goal','mean_goal']
         self.cum_measures = ['cum_test_regret', 'cum_post_regret']
         curr_time = str(datetime.datetime.now())[:-6]
         self.folder_name = curr_time + '-' + '-'.join([key+'='+str(val) for key, val in sorted(exp_params.items())])
@@ -795,10 +795,10 @@ class Experiment(object):
                 post_regret = self.compute_regret(post_avg, true_reward, inference) # TODO: Still plans with Python. May use wrong gamma, or trajectory length
                 norm_to_true = self.get_normalized_reward_diff(post_avg, true_reward)
                 test_regret = self.compute_regret(post_avg, true_reward)
+                std_proxy, mean_proxy, std_goal, mean_goal = self.get_posterior_variance(inference)
                 print('Test regret: '+str(test_regret)+' | Post regret: '+str(post_regret))
 
                 # Save results
-                # self.results[chooser, 'post_exp_regret', i, exp_num],\
                 self.results[chooser, 'true_entropy', i, exp_num], \
                 self.results[chooser,'perf_measure', i, exp_num], \
                 self.results[chooser, 'post_regret', i, exp_num], \
@@ -806,8 +806,35 @@ class Experiment(object):
                 self.results[chooser, 'norm post_avg-true', i, exp_num], \
                 self.results[chooser, 'query', i, exp_num], \
                 self.results[chooser, 'time', i, exp_num], \
-                self.results[chooser, 'time_query_chooser', i, exp_num] \
-                    = true_entropy, perf_measure, post_regret, test_regret, norm_to_true, query, duration_iter, duration_query_chooser
+                self.results[chooser, 'time_query_chooser', i, exp_num], \
+                self.results[chooser, 'std_proxy', i, exp_num], \
+                self.results[chooser, 'mean_proxy', i, exp_num], \
+                self.results[chooser, 'std_goal', i, exp_num], \
+                self.results[chooser, 'mean_goal', i, exp_num], \
+                    = true_entropy, perf_measure, post_regret, test_regret, norm_to_true, query, duration_iter, duration_query_chooser, \
+                        std_proxy, mean_proxy, std_goal, mean_goal
+
+
+    def get_posterior_variance(self, inference):
+        args = self.query_chooser.args
+        feature_dim = args.feature_dim
+        # query_matrix_sample, log_prior_sample = self.query_chooser.sample_true_reward_matrix()
+        log_probs = inference.log_prior
+        probs = np.exp(log_probs)
+        probs = probs / probs.sum()
+        choices = np.random.choice(args.size_true_space, p=probs, size=50000)
+        # unif_log_prior = np.log(np.ones(10000) / 10000)
+
+        posterior_samples = inference.true_reward_matrix[choices]
+        std = np.std(posterior_samples, 0)
+        means = np.mean(posterior_samples, 0)
+
+        unique_sample_idx, counts = np.unique(choices, return_counts=True)
+        print len(unique_sample_idx), counts, unique_sample_idx
+
+        proxy_idx = feature_dim-2
+        goal_idx = feature_dim-1
+        return std[proxy_idx], means[proxy_idx], std[goal_idx], means[goal_idx]
 
 
     def compute_regret(self, post_avg, true_reward, inference=None):

@@ -9,7 +9,7 @@ choosers_continuous = ['feature_random', 'feature_entropy_search_then_optim', 'f
 choosers_discrete = ['greedy_discrete', 'random', 'exhaustive']
 mdp_types = ['gridworld','bandits']
 num_iter = {'gridworld': '20', 'bandits': '20'}
-num_subsamples_full = '10000'; num_subsamples_not_full = '10000'
+num_subsamples_full = '5000'; num_subsamples_not_full = '5000'
 beta_both_mdps = '0.5'
 num_q_max = '10000'
 rsize = '1000000'
