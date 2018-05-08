@@ -2,7 +2,7 @@ from subprocess import call
 
 # Discrete experiments
 
-NUM_EXPERIMENTS = '20'  # Modify this to change the sample size
+NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 discr_query_sizes = ['2','3','5','10']
 choosers_continuous = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
@@ -98,7 +98,7 @@ def run_reward_hacking():
     mdp_type = 'gridworld'
     repeated_obj = '1'
     num_obj_if_repeated = '100'
-    qsize = '5'
+    qsizes = ['2','5']
     height, width = '52', '52'
     viter = int(height*1.5)
     beta = str(7.5 / float(viter))  # Decrease beta for higher viter. Make prop to num objects too?
@@ -110,7 +110,8 @@ def run_reward_hacking():
             height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
 
         for chooser in ['greedy_discrete', 'random']:
-            run(chooser, qsize, mdp_type, num_iter=num_iter)
+            for qsize in qsizes:
+                run(chooser, qsize, mdp_type, num_iter=num_iter)
 
 
 def run_full():

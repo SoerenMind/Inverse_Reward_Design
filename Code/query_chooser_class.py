@@ -816,6 +816,7 @@ class Experiment(object):
 
 
     def get_posterior_variance(self, inference):
+        """Gets posterior mean and std for last and 2nd last feature by sampling."""
         args = self.query_chooser.args
         feature_dim = args.feature_dim
         # query_matrix_sample, log_prior_sample = self.query_chooser.sample_true_reward_matrix()
