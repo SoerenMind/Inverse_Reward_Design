@@ -104,7 +104,7 @@ def run_reward_hacking():
     height, width = '52', '52'
     viter = str(int(int(height)*1.5))
     beta = str(7.5 / float(viter))  # Decrease beta for higher viter. Make prop to num objects too?
-    num_test_envs = '40'
+    num_test_envs = '25'
 
 
     for dist_scale in ['0.1', '0.3', '1']:
