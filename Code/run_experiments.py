@@ -113,7 +113,9 @@ def run_reward_hacking():
 
         for chooser in ['greedy_discrete', 'random']:
             for qsize in qsizes:
-                run(chooser, qsize, mdp_type, num_iter=num_iter)
+                run(chooser, qsize, mdp_type, num_iter=num_iter,
+                    repeated_obj=repeated_obj, num_obj_if_repeated=num_obj_if_repeated, dist_scale=dist_scale,
+                    height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
 
 
 def run_full():

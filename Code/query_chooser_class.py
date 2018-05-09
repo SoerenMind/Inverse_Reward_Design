@@ -831,7 +831,6 @@ class Experiment(object):
         means = np.mean(posterior_samples, 0)
 
         unique_sample_idx, counts = np.unique(choices, return_counts=True)
-        print len(unique_sample_idx), counts, unique_sample_idx
 
         proxy_idx = feature_dim-2
         goal_idx = feature_dim-1
