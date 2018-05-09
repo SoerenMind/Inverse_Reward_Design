@@ -15,13 +15,13 @@ num_q_max = '10000'
 rsize = '1000000'
 proxy_space_is_true_space = '0'
 exp_name = 'test_dist_scale'
-decorrelate_test_feat = '0'
 
 
 def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
         viter='15', rsize=rsize, subsampling='1', proxy_space_is_true_space='0',
         subs_full=num_subsamples_full, full_IRD_subsample_belief='no', log_objective='1',
-        repeated_obj='0', num_obj_if_repeated='50', dist_scale='0.2', linear_features='1', height='12', width='12',
+        repeated_obj='0', num_obj_if_repeated='50', decorrelate_test_feat = '1',
+        dist_scale='0.2', linear_features='1', height='12', width='12',
         num_test_envs='100',beta=beta_both_mdps):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
@@ -101,21 +101,24 @@ def run_reward_hacking():
     repeated_obj = '1'
     num_obj_if_repeated = '100'
     qsizes = ['2','5']
-    height, width = '102', '102'
+    height, width = '52', '52'
     viter = str(int(int(height)*1.5))
     beta = str(7.5 / float(viter))  # Decrease beta for higher viter. Make prop to num objects too?
     num_test_envs = '40'
 
-    for dist_scale in ['0.1', '0.3', '1']:
-        run('full', '2', mdp_type, num_iter=num_iter,
-            repeated_obj=repeated_obj, num_obj_if_repeated=num_obj_if_repeated, dist_scale=dist_scale,
-            height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
 
-        for chooser in ['greedy_discrete', 'random']:
-            for qsize in qsizes:
-                run(chooser, qsize, mdp_type, num_iter=num_iter,
-                    repeated_obj=repeated_obj, num_obj_if_repeated=num_obj_if_repeated, dist_scale=dist_scale,
-                    height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
+    for dist_scale in ['0.1', '0.3', '1']:
+        for decorrelate_test_feat in ['1','0']:
+
+            run('full', '2', mdp_type, num_iter=num_iter,
+                repeated_obj=repeated_obj, num_obj_if_repeated=num_obj_if_repeated, dist_scale=dist_scale,
+                height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
+
+            for chooser in ['greedy_discrete', 'random']:
+                for qsize in qsizes:
+                    run(chooser, qsize, mdp_type, num_iter=num_iter,
+                        repeated_obj=repeated_obj, num_obj_if_repeated=num_obj_if_repeated, dist_scale=dist_scale,
+                        height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
 
 
 def run_full():
