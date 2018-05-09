@@ -15,6 +15,7 @@ num_q_max = '10000'
 rsize = '1000000'
 proxy_space_is_true_space = '0'
 exp_name = 'test_dist_scale'
+decorrelate_test_feat = '0'
 
 
 def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
@@ -77,7 +78,8 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
                '--full_IRD_subsample_belief', full_IRD_subsample_belief,
                '--exp_name', exp_name,
                '--repeated_obj', repeated_obj,
-               '--num_obj_if_repeated', num_obj_if_repeated
+               '--num_obj_if_repeated', num_obj_if_repeated,
+               '--decorrelate_test_feat', decorrelate_test_feat
                ]
     print 'Running command', ' '.join(command)
     call(command)
@@ -99,8 +101,8 @@ def run_reward_hacking():
     repeated_obj = '1'
     num_obj_if_repeated = '100'
     qsizes = ['2','5']
-    height, width = '52', '52'
-    viter = int(height*1.5)
+    height, width = '102', '102'
+    viter = str(int(int(height)*1.5))
     beta = str(7.5 / float(viter))  # Decrease beta for higher viter. Make prop to num objects too?
     num_test_envs = '40'
 
