@@ -5,7 +5,7 @@ from subprocess import call
 NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 discr_query_sizes = ['2','3','5','10']
-choosers_continuous = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_init_none', 'feature_entropy_search', 'feature_entropy_random_init_none']
+choosers_continuous = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_random_init_none'] #'feature_entropy_init_none', 'feature_entropy_search']
 choosers_discrete = ['greedy_discrete', 'random', 'exhaustive']
 mdp_types = ['gridworld','bandits']
 num_iter = {'gridworld': '20', 'bandits': '20'}
