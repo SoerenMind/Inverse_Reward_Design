@@ -14,7 +14,7 @@ beta_both_mdps = '0.5'
 num_q_max = '10000'
 rsize = '1000000'
 proxy_space_is_true_space = '0'
-exp_name = 'test_dist_scale'
+exp_name = 'rerun_for_sterrs'
 
 
 def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
@@ -30,14 +30,14 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
         dim = '20'
         # TODO: Set the following to the right values
         lr = '20.'
-        num_iters_optim = '10'
+        num_iters_optim = '20'
     else:
         # Values range from 50-100 when using 25 value iterations.
         beta_planner = '1'
         dim = '20'
         # TODO: Set the following to the right values
         lr = '20'
-        num_iters_optim = '10'
+        num_iters_optim = '20'
 
     command = ['python', 'run_IRD.py',
                '-c', chooser,
@@ -187,6 +187,6 @@ def run_continuous():
 
 if __name__ == '__main__':
     # run_objectives()
-    # run_discrete()
-    run_reward_hacking()
-    # run_continuous()
+    run_continuous()
+    run_discrete()
+    # run_reward_hacking()
