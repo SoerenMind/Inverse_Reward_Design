@@ -965,6 +965,7 @@ class Experiment(object):
         else:
             Warning('Existing experiment stats overwritten')
 
+        # Make files that summarize experiments
         f_mean_all = open('data/'+self.folder_name+'/'+'all choosers'+'-means-'+'.csv','w')
         writer_mean_all_choosers = csv.DictWriter(f_mean_all, fieldnames=['iteration']+self.measures+self.cum_measures+['time', 'time_query_chooser'])
 
@@ -1001,7 +1002,7 @@ class Experiment(object):
                 csvdict_median['iteration'] = i
                 csvdict_sterr['iteration'] = i
 
-                for measure in self.measures + ['time', 'time_query_chooser']:
+                for measure in self.measures+['time', 'time_query_chooser']:
                     entries = np.zeros(num_experiments)
                     for exp_num in range(num_experiments):
                         entry = self.results[chooser, measure, i, exp_num]
@@ -1012,6 +1013,8 @@ class Experiment(object):
                             cum_post_regret[exp_num] += entry
                     csvdict_mean['cum_test_regret'] = cum_test_regret.mean()
                     csvdict_mean['cum_post_regret'] = cum_post_regret.mean()
+                    csvdict_sterr['cum_test_regret'] = np.std(cum_test_regret) / np.sqrt(len(entries))
+                    csvdict_sterr['cum_post_regret'] = np.std(cum_post_regret) / np.sqrt(len(entries))
                     csvdict_mean[measure] = np.mean(entries)
                     csvdict_median[measure] = np.median(entries)
                     csvdict_sterr[measure] = np.std(entries) / np.sqrt(len(entries))

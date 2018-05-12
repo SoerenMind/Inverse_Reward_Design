@@ -41,9 +41,9 @@ if __name__=='__main__':
     parser.add_argument('-c','--c', action='append', required=True) # c for choosers
     parser.add_argument('--exp_name',type=str,default='no_exp_name')
     parser.add_argument('--query_size',type=int,default=3)
-    parser.add_argument('--num_experiments',type=int,default=1) # 3-5
+    parser.add_argument('--num_experiments',type=int,default=2)
     parser.add_argument('--num_iter',type=int,default=20)    # number of queries asked
-    parser.add_argument('--gamma',type=float,default=1.) # otherwise 0.98. Values <1 might make test regret inaccurate.
+    parser.add_argument('--gamma',type=float,default=1.) # discount
     parser.add_argument('--size_true_space',type=int,default=1000000)
     parser.add_argument('--size_proxy_space',type=int,default=100)  # Sample subspace for exhaustive
     parser.add_argument('--seed',type=int,default=1)

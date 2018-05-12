@@ -288,17 +288,23 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
 
             params = experiment.params
             if args.exclude:
-                if any(str(params[key]) in args.exclude for key in params.keys()): continue
+                if any(str(params[key]) in args.exclude for key in params.keys()):
+                    continue
             means, sterrs = experiment.means_data, experiment.sterrs_data
             i_var_val = ', '.join([str(params[k]) for k in independent_vars])
+            if 'full' in i_var_val:
+                means, sterrs = constant_data_full_IRD(means, sterrs, y_var)
             label = i_var_to_label(i_var_val) + (', '+ str(params['qsize'])) * args.compare_qsizes # name in legend
             color = chooser_to_color(i_var_val, args, params)
             x_data = np.array(means[x_var]) + 1
 
-            ax.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=color,
+            try:
+                ax.errorbar(x_data, means[y_var], yerr=sterrs[y_var], color=color,
                          capsize=capsize, capthick=1, label=label)#,
                          # marker='o', markerfacecolor='white', markeredgecolor=chooser_to_color(chooser),
                          # markersize=4)
+            except:
+                pass
 
             labels.append(label)
 
@@ -375,35 +381,6 @@ def flatten(l):
             yield el
 
 
-'''TODO:
--Make 2nd set of plots
-
-    -Legend for qsizes
-    -Get data for continuous (or at least disc optim with same settings as last experiments)
--List types of graphs I want and make a general framework for creating them
-    -2nd set
-        -1-2 -i qsize+continuous+discrete optim
-            - TODO: Make choosers in [c, d, c+d]
-            - TODO: have qsizes seperately for discrete and continuous
-    -Compare continuous query sizes among themselves
-    -Compare continuous against random continuous for a given qsize
-    -Single graphs as usual (but with continuous +discrete optim included)
-'''
-
-"""
-Plot types
-    -4 choosers on bandits and gridworlds for entropy and test regret
-        -qsize=5
-        -add discrete optim?
-    -qsize=2,3,5,10,full,continuous
-        -2 or 3 graphs
-        -gridworlds + bandits
-        -test regret (+entropy? may be boring)
-    -continuous: 1,2,3,random baselines,post_avg baselines
-    -bar graph for time?
-        -qsize=2 or 3
-        -random vs greedy vs continuous
-"""
 
 
 
@@ -428,9 +405,9 @@ def get_ax(axes, row, num_rows, num_columns, col):
 
 def get_title(axnum):
     if axnum == 0:
-        return 'Bandits*'
+        return 'Shopping'
     elif axnum == 1:
-        return 'Gridworlds'
+        return 'Chilly World'
     else:
         return str(axnum)
 
@@ -482,7 +459,7 @@ def plot_sig_line(ax, x1, x2, y1, h, padding=0.3):
 
 def var_to_label(varname):
     if varname in ['true_entropy']:
-        return 'Entropy'
+        return 'Entropy $\mathcal{H}[w^*|\mathcal{D}]$'
     if varname in ['test_regret']:
         return 'Regret in test env'
     if varname in ['post_regret']:
@@ -494,11 +471,12 @@ def var_to_label(varname):
 
     if varname in ['iteration']:
         return 'Number of queries asked'
+    return varname
 
 
 def chooser_to_color(chooser, args, params):
     greedy_color = 'darkorange' #'lightblue'
-    exhaustive_color = 'orange' # 'peachpuff', 'crimson'
+    exhaustive_color = 'crimson' # 'peachpuff', 'crimson'
     random_color = 'darkgrey' # 'darkorange'
     full_color = 'lightgrey' # 'grey'
 
@@ -581,7 +559,7 @@ def i_var_to_label(i_var):
     if i_var in ['greedy_entropy_discrete_tf', 'greedy_discrete']:
         return 'Greedy'
     if i_var in ['exhaustive', 'exhaustive_entropy']:
-        return 'Exhaustive'
+        return 'Large search'
     if i_var == 'full':
         return 'Full IRD'
     if i_var == 'random':
@@ -605,10 +583,18 @@ def i_var_to_label(i_var):
     if i_var == 'feature_random':
         return 'Unoptimized'
 
-    if ivar == '10000':
+    if i_var == '10000':
         return 'full IRD (10000)'
     else:
         return i_var
+
+def constant_data_full_IRD(means, sterrs, y_var):
+    full_mean, full_std, num_iter = means[y_var][1], sterrs[y_var][1], len(means[y_var])
+    means[y_var] = [full_mean for _ in range(num_iter)]
+    sterrs[y_var] = [0 for _ in range(num_iter)]
+    means[y_var][10], sterrs[y_var][10] = full_mean, full_std
+    return means, sterrs
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
