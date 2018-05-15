@@ -5,7 +5,7 @@ from subprocess import call
 NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
 
 discr_query_sizes = ['2','3','5','10']
-choosers_continuous = ['feature_random', 'feature_entropy_search_then_optim', 'feature_entropy_random_init_none'] #'feature_entropy_init_none', 'feature_entropy_search']
+choosers_continuous = ['feature_entropy_search_then_optim', 'feature_random', 'feature_entropy_random_init_none'] #'feature_entropy_init_none', 'feature_entropy_search']
 choosers_discrete = ['greedy_discrete', 'random', 'exhaustive']
 mdp_types = ['gridworld','bandits']
 num_iter = {'gridworld': '20', 'bandits': '20'}
@@ -14,7 +14,7 @@ beta_both_mdps = '0.5'
 num_q_max = '10000'
 rsize = '1000000'
 proxy_space_is_true_space = '0'
-exp_name = 'rerun_for_sterrs'
+exp_name = '14May_reward_hacking'
 
 
 def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
@@ -55,8 +55,8 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
                '--num_traject', '1',
                '--num_queries_max', num_q_max,
                '--height', height,  # Only applies for gridworld
-               '--width', width,  # Only applies for gridworld
-               '--lr', lr,  # Doesn't matter, only applies in continuous case
+               '--width', width,    # Only applies for gridworld
+               '--lr', lr,
                '--num_iters_optim', num_iters_optim,
                '--value_iters', viter,
                '--mdp_type', mdp_type,
@@ -112,13 +112,13 @@ def run_reward_hacking():
 
             run('full', '2', mdp_type, num_iter=num_iter,
                 repeated_obj=repeated_obj, num_obj_if_repeated=num_obj_if_repeated, dist_scale=dist_scale,
-                height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
+                height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta, decorrelate_test_feat=decorrelate_test_feat)
 
             for chooser in ['greedy_discrete', 'random']:
                 for qsize in qsizes:
                     run(chooser, qsize, mdp_type, num_iter=num_iter,
                         repeated_obj=repeated_obj, num_obj_if_repeated=num_obj_if_repeated, dist_scale=dist_scale,
-                        height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta)
+                        height=height, width=width, num_test_envs=num_test_envs, viter=viter, beta=beta, decorrelate_test_feat=decorrelate_test_feat)
 
 
 def run_full():
@@ -187,6 +187,6 @@ def run_continuous():
 
 if __name__ == '__main__':
     # run_objectives()
-    run_continuous()
-    run_discrete()
-    # run_reward_hacking()
+    # run_continuous()
+    # run_discrete()
+    run_reward_hacking()

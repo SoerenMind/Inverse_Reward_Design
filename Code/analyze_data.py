@@ -249,16 +249,86 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
         if not args.only_extras:
             graphs_data[key].append(exp)
 
-    for key, exps in graphs_data.items():
-        # keys.append(key), graphs_list.append(exps)
-        graph(exps, x_var, dependent_vars, independent_vars, controls, key, folder, args)
+    if x_var != 'qsize':
+        for key, exps in graphs_data.items():
+            # keys.append(key), graphs_list.append(exps)
+            graph(exps, x_var, dependent_vars, independent_vars, controls, key, folder, args)
+    else:
+        for key, exps in graphs_data.items():
+            bar_graph_qsize(exps, x_var, dependent_vars, independent_vars, controls, key, folder, args)
+
+def bar_graph_qsize(exps, x_var, dependent_vars, independent_vars, controls, key, folder, args):
+    set_style()
+    num_columns = 2 if args.double_envs else 1
+    fig, axes = plt.subplots(1, num_columns, sharex=True)
+    sns.set_context(rc={'lines.markeredgewidth': 1.0})   # Thickness or error bars
+    # capsize = 0.    # length of horizontal line on error bars
+    [y_var] = dependent_vars
+    x_data = []
+
+    labels = []
+    cum_regrets = []
+
+    def exp_to_x_pos_and_color(params):
+        qsize = int(params['qsize'])
+
+        return [0.0, 1., 2.][qsize]
+
+    for experiment in exps:
+        col = 0 if experiment.params['mdp'] == 'bandits' else 1
+        ax = get_ax(axes, 0, 1, num_columns, col)
+        params = experiment.params
+        if args.exclude:
+            if any(str(params[key]) in args.exclude for key in params.keys()):
+                continue
+
+        means = experiment.means_data
+        num_iter = len(means[y_var])
+        cum_regrets.append(means[y_var][num_iter-1])
+
+        if params['choosers'] != 'greedy_discrete':
+            x_data.append(qsize)
+            ax.bar(x_data, cum_regrets, yerr=np.ones(len(x_data)), color=color, label=label)
+        else:
 
 
 
 
+        label = 'test'
+        labels.append(label)
+        color = 'orange'
 
 
+    try:
+        ax.bar(x_data, cum_regrets, yerr=np.ones(len(x_data)), color=color,label=label)
+    except:
+        pass
 
+    # ax.set_xlim([0, 21])
+    # # ylim = ax.get_ylim()
+    # # ax.set_ylim(ylim)  #-0.15)
+    #
+    # # Set ylabel
+    # ax_left = get_ax(axes, row, num_rows, num_columns, 0)
+    # ax_left.set_ylabel(var_to_label(y_var), fontsize=17)
+    #
+    # # Set title
+    # # title = 'Data for {0}'.format(', '.join(independent_vars))
+    # title = get_title(col)
+    # ax_top = get_ax(axes, 0, num_rows, num_columns, col)
+    # ax_top.set_title(title, fontsize=17, fontweight='normal')
+
+    # From Ellis:
+    # barwidth = 1.0 + shift
+    # plot_sig_line(ax3, 0.5 * barwidth, 1.5 * barwidth, 0.126, 0.005, padding=0.3)
+    # plot_sig_line(ax3, 2.25 + 0.5 * barwidth, 2.25 + 1.5 * barwidth, 0.1, 0.005, padding=0.3)
+    # plot_sig_line(ax3, 4.5 + 0.5 * barwidth, 4.5 + 1.5 * barwidth, 0.035, 0.005, padding=0.3)
+    # ax3.set_ylim([0, 0.15])
+    # ax3.set_xlim([-0.25, 6.75])
+    # plt.sca(ax3)
+    # plt.xticks([1.125 + shift, 3.375 + shift, 5.625 + shift],
+    #            ["nominal", "IRD-augmented", "risk-averse"],
+    #            fontsize=12)
 
 def graph(exps, x_var, dependent_vars, independent_vars, controls,
           other_vals, folder, args):
@@ -292,8 +362,8 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
                     continue
             means, sterrs = experiment.means_data, experiment.sterrs_data
             i_var_val = ', '.join([str(params[k]) for k in independent_vars])
-            if 'full' in i_var_val:
-                means, sterrs = constant_data_full_IRD(means, sterrs, y_var)
+            # if 'full' in i_var_val:
+            #     means, sterrs = constant_data_full_IRD(means, sterrs, y_var)
             label = i_var_to_label(i_var_val) + (', '+ str(params['qsize'])) * args.compare_qsizes # name in legend
             color = chooser_to_color(i_var_val, args, params)
             x_data = np.array(means[x_var]) + 1
@@ -314,13 +384,13 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
 
             # Set ylabel
             ax_left = get_ax(axes, row, num_rows, num_columns, 0)
-            ax_left.set_ylabel(var_to_label(y_var), fontsize=15)
+            ax_left.set_ylabel(var_to_label(y_var), fontsize=17)
 
             # Set title
             # title = 'Data for {0}'.format(', '.join(independent_vars))
             title = get_title(col)
             ax_top = get_ax(axes, 0, num_rows, num_columns, col)
-            ax_top.set_title(title, fontsize=16, fontweight='normal')
+            ax_top.set_title(title, fontsize=17, fontweight='normal')
 
 
     'Make legend'
@@ -334,7 +404,9 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
     plt.sca(ax)
     handles, labels = ax.get_legend_handles_labels()
     # try: legend_order = sorted([int(label) for label in labels])
-    legend_order = range(len(labels))
+    legend_order = [2,3,0,1]   # for outperform_IRD
+    # legend_order = range(len(labels))   # for discrete
+    # legend_order = [1,0,2]  # for continuous
     hl = sorted(zip(handles, labels, legend_order),    # Sorts legend by putting labels 0:k to place as specified
            key=lambda elem: elem[2])
     hl = [[handle, label] for handle, label, idx in hl]
@@ -345,18 +417,17 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
         print Warning('Warning: Possibly data only exists for one environment')
 
     # ax.legend(handles2, labels2, fontsize=10)
-    plt.legend(handles2, labels2, fontsize=10)
+    plt.legend(handles2, labels2, fontsize=13)
 
 
     'Change global layout'
     sns.despine(fig)    # Removes top and right graph edges
-    plt.suptitle('Number of queries asked', y=0.02, fontsize=16)
-    # fig.suptitle('Bandits', y=0.98, fontsize=18)
+    plt.suptitle('Number of queries asked', y=0.0, x=0.52, fontsize=17, verticalalignment='bottom')
+    fig.subplots_adjust(left=0.09, right=.96, top=0.92, bottom=0.12)
     # plt.tight_layout(w_pad=0.02, rect=[0, 0.03, 1, 0.95])  # w_pad adds horizontal space between graphs
     # plt.subplots_adjust(top=1, wspace=0.35)     # adds space at the top or bottom
     # plt.subplots_adjust(bottom=.2)
-    # fig.set_figwidth(15)     # Can be adjusted by resizing window
-    # fig.set_figheight(5)
+    fig.set_figwidth(7.5)  # Can be adjusted by resizing window
 
     'Save file'
     subtitle = ','.join(['{0}={1}'.format(k, v) for k, v in controls])
@@ -368,7 +439,6 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
         os.mkdir(folder)
     # plt.show()
     plt.savefig(concat(folder, filename))
-    # plt.savefig(concat(folder, 'bla.png'))
     plt.close()
 
 
@@ -461,7 +531,7 @@ def var_to_label(varname):
     if varname in ['true_entropy']:
         return 'Entropy $\mathcal{H}[w^*|\mathcal{D}]$'
     if varname in ['test_regret']:
-        return 'Regret in test env'
+        return 'Regret in test envs'
     if varname in ['post_regret']:
         return 'Regret in training environment'
     if varname in ['time']:
@@ -488,9 +558,9 @@ def chooser_to_color(chooser, args, params):
     # both_color = 'steelblue'
 
     # Colors to only distinguish optimized vs not optimized
-    optimized_color = 'orange'
+    optimized_color = 'lightblue'#0066FF' # blue
     feature_color = optimized_color
-    feature_color_random = 'lightblue'
+    feature_color_random = 'forestgreen'
     search_color = optimized_color
     both_color = optimized_color
 
@@ -520,10 +590,12 @@ def chooser_to_color(chooser, args, params):
         color_dict = {}
         color_dict[2] = '#66FFFF'
         color_dict[5] = '#00CCFF'
-        color_dict[10] = '#0066FF'
+        color_dict[10] = '#00CCFF'
+        # color_dict[10] = '#0066FF'
         color_dict[50] = '#0033CC'
         color_dict[100] = '#000099'
-        color_dict[10000] = '#000033'
+        color_dict[10000] = 'grey'
+        # color_dict[10000] = '#000033'
         return color_dict[subsamp]
 
     # chooser = chooser.split(",")
@@ -561,7 +633,7 @@ def i_var_to_label(i_var):
     if i_var in ['exhaustive', 'exhaustive_entropy']:
         return 'Large search'
     if i_var == 'full':
-        return 'Full IRD'
+        return 'IRD'
     if i_var == 'random':
         return 'Random'
     if i_var == 'joint_optimize':
@@ -575,16 +647,17 @@ def i_var_to_label(i_var):
     if i_var == 'feature_entropy_init_none':
         return 'Features and weights optimized (GD)'
     if i_var == 'feature_entropy_random_init_none':
-        return 'Only features optimized'
+        return 'Only feature optimized'
     if i_var == 'feature_entropy_search':
         return 'Features and weights optimized (search)'
     if i_var == 'feature_entropy_search_then_optim':
-        return 'Features and weights optimized'
+        return 'Weights optimized too'
     if i_var == 'feature_random':
         return 'Unoptimized'
 
     if i_var == '10000':
-        return 'full IRD (10000)'
+        # return 'Repeated full IRD (10000)'
+        return '10000 (repeated full IRD)'
     else:
         return i_var
 
