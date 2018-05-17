@@ -257,7 +257,7 @@ def graph_all(experiments, all_vars, x_var, dependent_vars, independent_vars,
         for key, exps in graphs_data.items():
             bar_graph_qsize(exps, x_var, dependent_vars, independent_vars, controls, key, folder, args)
 
-def bar_graph_qsize(exps, x_var, dependent_vars, independent_vars, controls, key, folder, args):
+def bar_graph_qsize(exps, x_var, dependent_vars, independent_vars, controls, other_vals, folder, args):
     set_style()
     num_columns = 2 if args.double_envs else 1
     fig, axes = plt.subplots(1, num_columns, sharex=True)
@@ -269,10 +269,22 @@ def bar_graph_qsize(exps, x_var, dependent_vars, independent_vars, controls, key
     labels = []
     cum_regrets = []
 
-    def exp_to_x_pos_and_color(params):
+    def params_to_x_pos_and_color_and_label(params):
         qsize = int(params['qsize'])
-
-        return [0.0, 1., 2.][qsize]
+        if params['choosers'] == 'feature_entropy_search_then_optim':
+            pass
+        if params['choosers'] == 'greedy_discrete':
+            x_pos = [None, None, 0.0, 1., None, 2., None, None, None, None, 3.][qsize]
+            color = 'orange'
+            label = 'Discrete queries'
+        elif params['choosers'] == 'feature_entropy_search_then_optim':
+            x_pos = [None, 5., 6., 7.][qsize]
+            x_pos +=  - 0.35
+            color = 'lightblue'
+            label = 'Feature queries'
+        else:
+            x_pos, color, label = None, None, None
+        return x_pos, color, label
 
     for experiment in exps:
         col = 0 if experiment.params['mdp'] == 'bandits' else 1
@@ -284,51 +296,83 @@ def bar_graph_qsize(exps, x_var, dependent_vars, independent_vars, controls, key
 
         means = experiment.means_data
         num_iter = len(means[y_var])
-        cum_regrets.append(means[y_var][num_iter-1])
+        cum_regret = means[y_var][num_iter-1]
 
-        if params['choosers'] != 'greedy_discrete':
-            x_data.append(qsize)
-            ax.bar(x_data, cum_regrets, yerr=np.ones(len(x_data)), color=color, label=label)
-        else:
-
-
+        x_pos, color, label = params_to_x_pos_and_color_and_label(params)
+        if x_pos is not None:
+            ax.bar([x_pos], [cum_regret], yerr=[1], color=color, label=label)
+            labels.append(label)
 
 
-        label = 'test'
-        labels.append(label)
-        color = 'orange'
+        # shift = -0.175
+        # plt.xticks([0.0 + shift + 0.5*barwidth, 1.125 + shift + barwidth, 1.125 + shift + 2*barwidth, 1.125 + shift + 3*barwidth,
+        #             1.125 + shift + 5*barwidth, 1.125 + shift + 6*barwidth, 1.125 + shift + 7*barwidth],
+        #            [2,3,5,10,1,2,3],fontsize=12)
+    shift = -0.1
+    barwidth = 1.0 + shift
+    plt.xticks(
+        [0.0 + shift + 0.5 * barwidth, 1. + shift + 0.5 * barwidth, 2. + shift + 0.5 * barwidth,
+         3. + shift + 0.5 * barwidth,
+         5. + shift + 0.5 * barwidth - 0.3, 6. + shift + 0.5 * barwidth - 0.3, 7. + shift + 0.5 * barwidth - 0.3],
+        [2, 3, 5, 10, 1, 2, 3], fontsize=12)
+
+    ax.set_xlim([-0.25, 7.7])
+    ax_left = get_ax(axes, 1, 1, num_columns, 0)
+    ax_left.set_ylabel(var_to_label(y_var), fontsize=17)
+    # Set title
+    title = get_title(col)
+    ax_top = get_ax(axes, 0, 1, num_columns, col)
+    ax_top.set_title(title, fontsize=17, fontweight='normal')
 
 
+    'Make legend'
     try:
-        ax.bar(x_data, cum_regrets, yerr=np.ones(len(x_data)), color=color,label=label)
-    except:
-        pass
+        ax = axes[-1][-1]
+    except TypeError:
+        try: ax = axes[-1]
+        except TypeError:
+            ax = axes
+    # for ax in flatten(axes):
+    plt.sca(ax)
+    handles, labels = ax.get_legend_handles_labels()
+    # try: legend_order = sorted([int(label) for label in labels])
+    legend_order = [2,3,0,1]   # for outperform_IRD
+    # legend_order = range(len(labels))   # for discrete
+    # legend_order = [1,0,2]  # for continuous
+    hl = sorted(zip(handles, labels, legend_order),    # Sorts legend by putting labels 0:k to place as specified
+           key=lambda elem: elem[2])
+    hl = [[handle, label] for handle, label, idx in hl]
+    try:
+        handles2, labels2 = zip(*hl)
+    except ValueError:
+        handles2, labels2 = [], []
+        print Warning('Warning: Possibly data only exists for one environment')
 
-    # ax.set_xlim([0, 21])
-    # # ylim = ax.get_ylim()
-    # # ax.set_ylim(ylim)  #-0.15)
-    #
-    # # Set ylabel
-    # ax_left = get_ax(axes, row, num_rows, num_columns, 0)
-    # ax_left.set_ylabel(var_to_label(y_var), fontsize=17)
-    #
-    # # Set title
-    # # title = 'Data for {0}'.format(', '.join(independent_vars))
-    # title = get_title(col)
-    # ax_top = get_ax(axes, 0, num_rows, num_columns, col)
-    # ax_top.set_title(title, fontsize=17, fontweight='normal')
+    # ax.legend(handles2, labels2, fontsize=10)
+    plt.legend(handles2, labels2, fontsize=13)
 
-    # From Ellis:
-    # barwidth = 1.0 + shift
-    # plot_sig_line(ax3, 0.5 * barwidth, 1.5 * barwidth, 0.126, 0.005, padding=0.3)
-    # plot_sig_line(ax3, 2.25 + 0.5 * barwidth, 2.25 + 1.5 * barwidth, 0.1, 0.005, padding=0.3)
-    # plot_sig_line(ax3, 4.5 + 0.5 * barwidth, 4.5 + 1.5 * barwidth, 0.035, 0.005, padding=0.3)
-    # ax3.set_ylim([0, 0.15])
-    # ax3.set_xlim([-0.25, 6.75])
-    # plt.sca(ax3)
-    # plt.xticks([1.125 + shift, 3.375 + shift, 5.625 + shift],
-    #            ["nominal", "IRD-augmented", "risk-averse"],
-    #            fontsize=12)
+
+    'Change global layout'
+    sns.despine(fig)    # Removes top and right graph edges
+    plt.suptitle('Number of queries asked', y=0.0, x=0.52, fontsize=17, verticalalignment='bottom')
+    fig.subplots_adjust(left=0.09, right=.96, top=0.92, bottom=0.12)
+    # plt.tight_layout(w_pad=0.02, rect=[0, 0.03, 1, 0.95])  # w_pad adds horizontal space between graphs
+    # plt.subplots_adjust(top=1, wspace=0.35)     # adds space at the top or bottom
+    # plt.subplots_adjust(bottom=.2)
+    fig.set_figwidth(7.5)  # Can be adjusted by resizing window
+
+    'Save file'
+    subtitle = ','.join(['{0}={1}'.format(k, v) for k, v in controls])
+    subtitle = '{0},{1}'.format(subtitle, other_vals).strip(',')
+    folder = concat('graph', folder)
+    filename = '{0}-vs-{1}-for-{2}-with-{3}.png'.format(
+        ','.join(dependent_vars), x_var, ','.join(independent_vars), subtitle)
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+    # plt.show()
+    plt.savefig(concat(folder, filename))
+    plt.close()
+
 
 def graph(exps, x_var, dependent_vars, independent_vars, controls,
           other_vals, folder, args):
@@ -534,6 +578,8 @@ def var_to_label(varname):
         return 'Regret in test envs'
     if varname in ['post_regret']:
         return 'Regret in training environment'
+    if varname in ['cum_test_regret']:
+        return 'Cumulative test regret'
     if varname in ['time']:
         return 'Seconds per iteration'
     if varname in ['norm post_avg-true']:

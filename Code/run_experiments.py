@@ -187,6 +187,6 @@ def run_continuous():
 
 if __name__ == '__main__':
     # run_objectives()
-    # run_continuous()
-    # run_discrete()
     run_reward_hacking()
+    run_continuous()
+    run_discrete()
