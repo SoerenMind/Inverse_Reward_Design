@@ -52,7 +52,6 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
                '--beta_planner', beta_planner,
                '--num_states', '100',  # Only applies for bandits
                '--dist_scale', dist_scale,
-               '--num_traject', '1',
                '--num_queries_max', num_q_max,
                '--height', height,  # Only applies for gridworld
                '--width', width,    # Only applies for gridworld

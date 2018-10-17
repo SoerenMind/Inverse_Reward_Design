@@ -1,5 +1,4 @@
 import numpy as np
-from agent_runner import run_agent
 from utils import Distribution
 from scipy.misc import logsumexp
 from planner import GridworldModel, BanditsModel
@@ -10,9 +9,8 @@ class Inference:
 
 
 class InferenceDiscrete(Inference):
-    def __init__(self, agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None):
+    def __init__(self, mdp, env, beta, reward_space_true, reward_space_proxy, prior=None):
         """
-        :param agent: Agent object or subclass
         :param env: Environment object or subclass
         :param beta: Rationality constant for proxy reward selection
         :param reward_space_proxy: List of proxy reward functions (which should be 1-dim np arrays)
@@ -20,16 +18,12 @@ class InferenceDiscrete(Inference):
         :param num_traject: Number of trajectories the agent samples in planning (default 1)
         :param prior: A dictionary from tuple(reward) to probability for reward in reward_space_true. None=uniform.
         """
-        # Or input env_type+s_terminal+etc
-        # self.env = env
-        self.agent = agent
         self.mdp = mdp
         self.env = env
         self.beta = beta
         self.reward_space_proxy = reward_space_proxy
         self.reward_space_true = reward_space_true
         self.true_reward_matrix = self.reward_space_true
-        self.num_traject = num_traject
         self.cache = {
             'prior_avg': None,
             'evidence': {},
@@ -226,28 +220,6 @@ class InferenceDiscrete(Inference):
             reward = np.dot(feature_expectations, true_reward)
             self.avg_reward_dict[tuple(proxy), tuple(true_reward)] = reward
         return reward
-
-    # @profile
-    def get_feature_expectations(self, proxy):
-        """Given a proxy reward, calculates feature_expectations and returns them. Also stores them in a dictionary
-        and reuses the result if it has previously been calculated.
-        """
-        proxy_tuple = tuple(proxy)
-        if proxy_tuple in self.feature_expectations_dict:
-            return self.feature_expectations_dict[tuple(proxy)]
-
-        self.mdp.change_reward(proxy)
-        # self.mdp.set_feature_weights(proxy)
-        iters = self.agent.set_mdp(self.mdp)  # Does value iteration
-        try: viters = self.agent.num_iters
-        except:
-            viters = 20
-        feature_expectations = self.agent.get_feature_expectations(viters)
-        self.feature_expectations_dict[tuple(proxy)] = feature_expectations
-        num_plannings_done = len(self.feature_expectations_dict.items())
-        if num_plannings_done % 25 == 0:
-            print('Done planning for {num} proxies'.format(num=num_plannings_done))
-        return feature_expectations
 
     # # @profile
     def get_prob_proxy_choice(self, proxy, reward_space_proxy):

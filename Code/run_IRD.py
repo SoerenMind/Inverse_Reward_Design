@@ -9,7 +9,6 @@ import numpy as np
 from inference_class import InferenceDiscrete
 from gridworld import GridworldEnvironment, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
-from agents import ImmediateRewardAgent, OptimalAgent
 from query_chooser_class import Experiment
 from random import choice, seed
 import copy
@@ -47,7 +46,6 @@ if __name__=='__main__':
     parser.add_argument('--beta',type=float,default=0.2)
     parser.add_argument('--num_states',type=int,default=100)  # 10 options if env changes over time, 100 otherwise
     parser.add_argument('--dist_scale',type=float,default=0.2) # test briefly to get ent down
-    parser.add_argument('--num_traject',type=int,default=1)
     parser.add_argument('--height',type=int,default=12)
     parser.add_argument('--width',type=int,default=12)
     parser.add_argument('--value_iters',type=int,default=15)    # max_reward / (1-gamma) or height+width
@@ -104,7 +102,6 @@ if __name__=='__main__':
     size_reward_space_true = args.size_true_space
     size_reward_space_proxy = args.size_proxy_space
     num_queries_max = args.num_queries_max
-    num_traject = args.num_traject
     num_experiments = args.num_experiments
     num_iter_per_experiment = args.num_iter #; print('num iter = {i}'.format(i=num_iter_per_experiment))
     # Params for Gridworld
@@ -187,9 +184,8 @@ if __name__=='__main__':
         for i in range(args.num_test_envs):
             mdp = test_mdps[i]
             env = GridworldEnvironment(mdp)
-            agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=1, prior=None)
+                mdp, env, beta, reward_space_true, reward_space_proxy=[], prior=None)
 
             test_inferences.append(inference)
 
@@ -197,11 +193,10 @@ if __name__=='__main__':
         for i in range(num_experiments):
             mdp = train_mdps[i]
             env = GridworldEnvironment(mdp)
-            agent = ImmediateRewardAgent()  # Not Boltzmann unlike train agent
             reward_space_proxy = reward_space_true if args.proxy_space_is_true_space \
                 else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy, num_traject=1, prior=None)
+                mdp, env, beta, reward_space_true, reward_space_proxy, prior=None)
 
             train_inferences.append(inference)
 
@@ -215,9 +210,8 @@ if __name__=='__main__':
                                         living_reward=-0.01, print_grid=False, decorrelate=args.decorrelate_test_feat)
             mdp = GridworldMdpWithDistanceFeatures(test_grid, test_goals, args, dist_scale, living_reward=-0.01, noise=0)
             env = GridworldEnvironment(mdp)
-            agent = OptimalAgent(gamma, num_iters=args.value_iters)
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy=[], num_traject=num_traject, prior=None)
+                mdp, env, beta, reward_space_true, reward_space_proxy=[], prior=None)
 
             test_inferences.append(inference)
 
@@ -227,11 +221,10 @@ if __name__=='__main__':
             grid, goals = GridworldMdp.generate_random(args,height,width,0.35,args.feature_dim,None,living_reward=-0.01, print_grid=False)
             mdp = GridworldMdpWithDistanceFeatures(grid, goals, args, dist_scale, living_reward=-0.01, noise=0)
             env = GridworldEnvironment(mdp)
-            agent = OptimalAgent(gamma, num_iters=args.value_iters)
             reward_space_proxy = reward_space_true if args.proxy_space_is_true_space \
                 else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
             inference = InferenceDiscrete(
-                agent, mdp, env, beta, reward_space_true, reward_space_proxy,num_traject=num_traject, prior=None)
+                mdp, env, beta, reward_space_true, reward_space_proxy, prior=None)
 
             train_inferences.append(inference)
 

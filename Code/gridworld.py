@@ -35,27 +35,6 @@ class Mdp(object):
         """Returns feature vector for state"""
         return self.features[state]
 
-    def get_feature_expectations_from_trajectories(self, trajectories):
-        '''
-        Modify run_agent to do learning and then produce trajectories. Call this in run_agent after learning is done and trajectories can be made.
-        Problem: Trajectories should maybe be generated one by one not all at once.
-
-        Reward:
-            - Either mdp.get_avg_reward(trajectories)
-            - Or    mdp.get_avg_reward( (get_feature_expectations(trajectories)))
-            - Latter goes trajectories ==> feature exp ==> self.rewards[feature_exp] (which has to be remade)
-            - Need a linear function features => reward (and a function state => features => reward which saves time with a dictionary)
-
-        Option: make agent.run_agent ?
-        '''
-        # Decompose trajectories into list of all visited feature vectors
-        # TODO: Deleted the first state here!
-        state_feature_list = [[self.get_features(tup[0]) * tup[4] for tup in trajectory[1:]] for trajectory in trajectories]
-        state_feature_list = list(itertools.chain(*state_feature_list))     # flatten list of lists
-        feature_sum = np.array(state_feature_list).sum(axis=0)
-        # feature_expectations = np.true_divide(feature_sum, len(state_feature_list))
-        return np.array(feature_sum)
-
     def get_reward(self, state, action):
         """Get reward for state, action transition.
 
