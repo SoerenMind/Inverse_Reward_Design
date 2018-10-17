@@ -5,7 +5,6 @@ import numpy as np
 import time
 from gridworld import NStateMdp, GridworldEnvironment, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
-from inference_class import InferenceDiscrete
 import csv
 import os
 import datetime

@@ -6,7 +6,7 @@ start = time.clock()
 import datetime
 print 'time: '+str(datetime.datetime.now())
 import numpy as np
-from inference_class import InferenceDiscrete
+from inference_class import Inference
 from gridworld import GridworldEnvironment, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
 from query_chooser_class import Experiment
@@ -184,8 +184,8 @@ if __name__=='__main__':
         for i in range(args.num_test_envs):
             mdp = test_mdps[i]
             env = GridworldEnvironment(mdp)
-            inference = InferenceDiscrete(
-                mdp, env, beta, reward_space_true, reward_space_proxy=[], prior=None)
+            inference = Inference(
+                mdp, env, beta, reward_space_true, reward_space_proxy=[])
 
             test_inferences.append(inference)
 
@@ -195,8 +195,8 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             reward_space_proxy = reward_space_true if args.proxy_space_is_true_space \
                 else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
-            inference = InferenceDiscrete(
-                mdp, env, beta, reward_space_true, reward_space_proxy, prior=None)
+            inference = Inference(
+                mdp, env, beta, reward_space_true, reward_space_proxy)
 
             train_inferences.append(inference)
 
@@ -210,8 +210,8 @@ if __name__=='__main__':
                                         living_reward=-0.01, print_grid=False, decorrelate=args.decorrelate_test_feat)
             mdp = GridworldMdpWithDistanceFeatures(test_grid, test_goals, args, dist_scale, living_reward=-0.01, noise=0)
             env = GridworldEnvironment(mdp)
-            inference = InferenceDiscrete(
-                mdp, env, beta, reward_space_true, reward_space_proxy=[], prior=None)
+            inference = Inference(
+                mdp, env, beta, reward_space_true, reward_space_proxy=[])
 
             test_inferences.append(inference)
 
@@ -223,8 +223,8 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             reward_space_proxy = reward_space_true if args.proxy_space_is_true_space \
                 else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim])
-            inference = InferenceDiscrete(
-                mdp, env, beta, reward_space_true, reward_space_proxy, prior=None)
+            inference = Inference(
+                mdp, env, beta, reward_space_true, reward_space_proxy)
 
             train_inferences.append(inference)
 
