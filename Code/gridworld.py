@@ -3,10 +3,7 @@ from disjoint_sets import DisjointSets
 import numpy as np
 import random
 import itertools
-import random
-from scipy.stats import invwishart, multivariate_normal
-from random import normalvariate
-from scipy.stats import itemfreq
+from scipy.stats import invwishart, multivariate_normal, itemfreq
 from copy import deepcopy
 
 
@@ -115,23 +112,6 @@ class NStateMdp(Mdp):
         self.start_state = start_state
         self.rewards = np.array(rewards)
 
-    # def populate_rewards_and_start_state(self, rewards):
-    #     """
-    #     :param rewards: list or array of rewards. rewards[i] is the reward for state i.
-    #
-    #     Defines self.rewards, a *dictionary from features to reward*.
-    #     """
-    #     self.rewards = {}
-    #     assert len(rewards) == self.num_states
-    #     for i in range(self.num_states):
-    #         features = self.get_features(i)#np.zeros(self.num_states)
-    #         features[i] = 1
-    #         self.rewards[tuple(features)] = rewards[i]
-    #     # for i, x in enumerate(rewards):
-    #     #     features = self.get_features(i)#np.zeros(self.num_states)
-    #     #     features[i] = 1
-    #     #     self.rewards[i] = x
-
     def get_states(self):
         all_states = range(self.num_states)
         # return all_states + [self.terminal_state]
@@ -156,8 +136,6 @@ class NStateMdp(Mdp):
         """Get reward for state, action transition."""
         features = self.get_features(state)
         return self.get_reward_from_features(features)
-        # features = tuple(self.get_features(state))
-        # return self.rewards[features]
 
     def change_reward(self, rewards):
         '''Sets new reward function (for reward design).'''
@@ -168,10 +146,8 @@ class NStateMdp(Mdp):
 
     # @profile
     def get_reward_from_features(self, features):
-        """Returns dot product of features with reward weights. Uses self.rewards unless extra argument is given."""
-        reward = np.dot(features, self.rewards)  # Minimize lines in this function by returning this directly.
-        return reward
-
+        """Returns dot product of features with reward weights."""
+        return np.dot(features, self.rewards)
 
     def get_state_list(self, trajectories):
         """Returns list of states in 'trajectories'."""
@@ -570,65 +546,6 @@ class GridworldMdp(Mdp):
                 print str(row_new)
         return grid, goals
 
-    # @staticmethod
-    # def generate_random_connected(args, height, width, pr_reward, living_reward=0, noise=0):
-    #     """Generates a random instance of a Gridworld.
-    #
-    #     Unlike with generate_random, it is guaranteed that the agent
-    #     can reach a reward. However, that reward might be negative.
-    #     """
-    #     directions = [
-    #         Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]
-    #     grid = [['X'] * width for _ in range(height)]
-    #     walls = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
-    #     random.shuffle(walls)
-    #     min_free_spots = len(walls) / 2
-    #     dsets = DisjointSets([])
-    #     while dsets.get_num_elements() < min_free_spots or not dsets.is_connected():
-    #         x, y = walls.pop()
-    #         grid[y][x] = ' '
-    #         dsets.add_singleton((x, y))
-    #         for direction in directions:
-    #             newx, newy = Direction.move_in_direction((x, y), direction)
-    #             if dsets.contains((newx, newy)):
-    #                 dsets.union((x, y), (newx, newy))
-    #
-    #     def set_random_position_to(token, grid=grid):
-    #         # this loops through *available* positions in the grid & chooses random one
-    #         spots = find_available_spots(grid)
-    #         place = spots[np.random.choice(len(spots))]
-    #         grid[place[0]][place[1]] = token
-    #
-    #     def find_available_spots(grid):
-    #         spots = []
-    #         rewards = []
-    #         for y in range(1, height-1):
-    #             for x in range(1, width-1):
-    #                 if grid[y][x] in ['X', ' ']:
-    #                     spots.append((y, x))
-    #                 elif type(grid[y][x])==int:
-    #                     rewards.append((y, x))
-    #         if len(spots)==0:
-    #             print('\a')
-    #             print("no available spots\noverwriting existing reward values")
-    #             return rewards
-    #         return spots
-    #
-    #     # Makes sure there is one reward
-    #     set_random_position_to(3)
-    #     # Sets random starting point for agent
-    #     set_random_position_to('A')
-    #     while random.random() < pr_reward:
-    #         reward = random.randint(-9, 10)
-    #         # Don't allow 0 rewards
-    #         while reward == 0:
-    #             reward = random.randint(-9, 10)
-    #         set_random_position_to(reward)
-    #     for row in grid:
-    #         print row
-    #     return grid
-    #     # return GridworldMdp(grid, living_reward, noise)
-
     def get_start_state(self):
         """Returns the start state."""
         return self.start_state
@@ -757,11 +674,7 @@ class GridworldMdpWithFeatures(GridworldMdp):
     def __init__(self, grid, args, living_reward=-0.01, noise=0):
         super(GridworldMdpWithFeatures, self).__init__(grid, args, living_reward, noise)
         self.grid = grid
-        # self.feature_weights = None
         self.populate_features()
-
-    # def set_feature_weights(self, weights):
-    #     self.feature_weights = weights
 
     def get_features(self,state):
         """Returns feature vector for state"""
@@ -833,16 +746,6 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
 
 
 
-
-
-
-
-
-
-
-########################################################
-# TODO(rohinmshah): This is a generic MDP environment, it isn't specific to
-# Gridworlds. Put it in its own file and rename the gridworld field to mdp.
 class GridworldEnvironment(object):
     """An environment containing a single agent that can take actions.
 
@@ -888,16 +791,6 @@ class GridworldEnvironment(object):
     def is_done(self):
         """Returns True if the episode is over and the agent cannot act."""
         return self.gridworld.is_terminal(self.get_current_state())
-
-
-
-
-
-
-
-
-
-
 
 
 

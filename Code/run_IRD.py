@@ -7,16 +7,13 @@ import datetime
 print 'time: '+str(datetime.datetime.now())
 import numpy as np
 from inference_class import InferenceDiscrete
-from gridworld import GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
+from gridworld import GridworldEnvironment, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
-from agents import ImmediateRewardAgent, DirectionalAgent, OptimalAgent
-from query_chooser_class import Query_Chooser_Subclass, Experiment
-# from interface_discrete import Interface
+from agents import ImmediateRewardAgent, OptimalAgent
+from query_chooser_class import Experiment
 from random import choice, seed
-# from scipy.special import comb
 import copy
 from utils import Distribution
-# from scipy.misc import logsumexp
 import sys
 import argparse
 import tensorflow as tf
@@ -78,8 +75,8 @@ if __name__=='__main__':
     parser.add_argument('--num_iters_optim',type=int,default=10)
     parser.add_argument('--beta_planner',type=float,default=0.5) # 1 for small version of results
     parser.add_argument('--num_queries_max',type=int,default=2000)
-    parser.add_argument('--discretization_size',type=int,default=0) # for continuous query selection
-    parser.add_argument('--discretization_size_human',type=int,default=0)   # for continuous query actually posed
+    parser.add_argument('--discretization_size',type=int,default=5) # for continuous query selection
+    parser.add_argument('--discretization_size_human',type=int,default=5)   # for continuous query actually posed
 
     # args for testing full IRD
     parser.add_argument('--proxy_space_is_true_space', type=int, default=0)
@@ -175,20 +172,12 @@ if __name__=='__main__':
         'Create train and test MDPs'
         test_mdps = []
         for i in range(args.num_test_envs):
-            # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim),
-            #                                       start_state=0, preterminal_states=[],
-            #                                       feature_dim=args.feature_dim, num_states_reachable=num_states,
-            #                                       SEED=SEED)
             mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
                                             feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED+i*50+100)
             test_mdps.append(mdp)
 
         train_mdps = []
         for i in range(num_experiments):
-            # mdp = NStateMdpRandomGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim),
-            #                                       start_state=0, preterminal_states=[],
-            #                                       feature_dim=args.feature_dim, num_states_reachable=num_states,
-            #                                       SEED=SEED)
             mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
                                             feature_dim=args.feature_dim, num_states_reachable=num_states, SEED=SEED+i*50)
             train_mdps.append(mdp)
@@ -262,9 +251,3 @@ if __name__=='__main__':
         print('__________________________Finished experiment__________________________')
 
     run_experiment(query_size, train_inferences, test_inferences, true_rewards, prior_avg)
-
-
-    'Create interface'
-    # omega = [choice(reward_space_true) for _ in range(4)] # replace with chosen omega
-    # interface = Interface(omega, agent, env, num_states=num_states)
-    # interface.plot()

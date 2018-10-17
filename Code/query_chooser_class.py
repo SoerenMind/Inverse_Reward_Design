@@ -4,9 +4,9 @@ from random import choice, sample, seed
 import numpy as np
 import time
 # for test environment
-from gridworld import NStateMdp, GridworldEnvironment, Direction, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
+from gridworld import NStateMdp, GridworldEnvironment, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
-from agents import ImmediateRewardAgent, DirectionalAgent, OptimalAgent
+from agents import ImmediateRewardAgent, OptimalAgent
 from inference_class import InferenceDiscrete
 import csv
 import os
@@ -32,17 +32,7 @@ def time_function(function, input):
 
 
 class Query_Chooser(object):
-    def __init__(self):
-        pass
-
-
-
-class Query_Chooser_Subclass(Query_Chooser):
-    def __init__(self, num_queries_max, args, prior=None, cost_of_asking=0, t_0 = None):
-        super(Query_Chooser_Subclass, self).__init__()
-        # self.inference = inference
-        # self.reward_space_proxy = reward_space_proxy
-        # self.prior = prior
+    def __init__(self, num_queries_max, args, cost_of_asking=0, t_0 = None):
         self.cost_of_asking = cost_of_asking
         self.num_queries_max = num_queries_max
         self.args = args    # all args
@@ -58,43 +48,24 @@ class Query_Chooser_Subclass(Query_Chooser):
         """Computes feature expectations for each proxy using TF and stores them in
         inference.feature_expectations_matrix."""
         if reward_space is None:
-            proxy_list = [list(reward) for reward in self.inference.reward_space_proxy]
-            print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-            model = self.get_model(len(proxy_list), 'entropy', cache=False)
-            model.initialize(self.sess)
+            reward_space = self.inference.reward_space_proxy
 
-            desired_outputs = ['feature_exps']
-            mdp = self.inference.mdp
-            print('Computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-            [feature_exp_matrix] = model.compute(
-                desired_outputs, self.sess, mdp, proxy_list, self.inference.log_prior)
-            self.inference.feature_exp_matrix = feature_exp_matrix
-        else:
-            true_reward_list = [list(reward) for reward in reward_space]
-            print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+        proxy_list = [list(reward) for reward in reward_space]
+        print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+        # TODO: This will build a separate model for every reward space size after eliminating duplicates
+        model = self.get_model(len(proxy_list), 'entropy', cache=(reward_space is not None))
+        model.initialize(self.sess)
 
-            # TODO: This will build a separate model for every reward space size after eliminating duplicates
-            model = self.get_model(len(true_reward_list), 'entropy')
-            model.initialize(self.sess)
-
-            desired_outputs = ['feature_exps']
-            mdp = self.inference.mdp
-            print('Computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
-            [feature_exp_matrix] = model.compute(
-                desired_outputs, self.sess, mdp, true_reward_list)
-            return feature_exp_matrix
-
-        # Cache for true rewards:
-        # if self.args.full_IRD_w_true_space:
-        #     true_reward_list = [list(reward) for reward in self.inference.reward_space_true]
-        #     print('building graph. Total experiment time: {t}'.format(t=time.clock() - self.t_0))
-        #     model = self.get_model(len(true_reward_list), 'entropy', cache=False)
-        #     model.initialize(self.sess)
-        #     [feature_exp_matrix_true] = model.compute(
-        #         desired_outputs, self.sess, mdp, true_reward_list, self.inference.log_prior)
-        #     self.inference.feature_exp_matrix_true = feature_exp_matrix_true
+        desired_outputs = ['feature_exps']
+        mdp = self.inference.mdp
+        print('Computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
+        [feature_exp_matrix] = model.compute(
+            desired_outputs, self.sess, mdp, proxy_list)
         print('Done computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
+        if reward_space is None:
+            self.inference.feature_exp_matrix = feature_exp_matrix
+        return feature_exp_matrix
 
 
     # @profile
@@ -636,85 +607,6 @@ class Query_Chooser_Subclass(Query_Chooser):
         return model
 
 
-    # def find_random_query(self, query_size):
-    #     query = [choice(self.inference.reward_space_proxy) for _ in range(query_size)]
-    #     # exp_regret = self.get_exp_regret_from_query([])
-    #     return query, None, None
-    #
-    # # @profile
-    # def get_exp_exp_post_regret(self, query, total_reward=False):
-    #     """Returns the expected regret after getting query answered. This measure should be minimized over queries.
-    #     The calculation is done by calculating the probability of each answer and then the regret conditioned on it."""
-    #
-    #     if len(query) == 0:
-    #         return self.get_exp_regret_from_prior()
-    #
-    #     posterior, post_averages, probs_proxy_choice, _ = self.inference.calc_posterior(query)
-    #     avg_reward_matrix = self.inference.get_avg_reward_for_post_averages(post_averages)
-    #     if total_reward:    # Optimizes total reward instead of regret
-    #         regrets = -avg_reward_matrix
-    #     else:
-    #         optimal_rewards = self.inference.true_reward_avg_reward_vec
-    #         regrets = optimal_rewards.reshape(1,-1) - avg_reward_matrix
-    #
-    #     exp_regrets = np.dot(regrets * posterior, np.ones(posterior.shape[1]))  # Make sure there's no broadcasting
-    #     exp_exp_regret = np.dot(probs_proxy_choice, exp_regrets)
-    #
-    #     return exp_exp_regret
-    #
-    # def get_conditional_entropy(self, query):
-    #     posteriors, conditional_entropy, probs_proxy_choice, _ = self.inference.calc_posterior(query, get_entropy=True)
-    #     return conditional_entropy
-    #
-    # # @profile
-    # def get_exp_regret_from_prior(self):
-    #     """Returns the expected regret from the prior."""
-    #     # inference has to have cached the posterior for the right proxy & query here.
-    #     exp_regret = 0
-    #     prior_avg = sum([self.inference.get_prior(true_reward) * true_reward
-    #                      for true_reward in self.inference.reward_space_true])
-    #     for true_reward in self.inference.reward_space_true:
-    #         p_true_reward = self.inference.get_prior(true_reward)
-    #         optimal_reward = self.inference.get_avg_reward(true_reward,true_reward)
-    #         prior_reward = self.inference.get_avg_reward(prior_avg, true_reward)
-    #         regret = optimal_reward - prior_reward
-    #         exp_regret += regret * p_true_reward
-    #     return exp_regret
-    #
-    # # @profile
-    # def get_regret(self, proxy, true_reward):
-    #     """Gets difference of reward under true_reward-function for optimizing for true_reward vs proxy."""
-    #     optimal_reward = self.inference.get_avg_reward(true_reward, true_reward)
-    #     proxy_reward = self.inference.get_avg_reward(proxy, true_reward)
-    #     regret = optimal_reward - proxy_reward
-    #     return regret
-    #
-    # # @profile
-    # def get_exp_regret_from_query(self, query):
-    #     """Calculates the actual regret from a query by looping through (and weighting) true rewards."""
-    #     if len(query) == 0:
-    #         prior_avg = np.array(sum([self.inference.get_prior(true_reward) * true_reward
-    #                                   for true_reward in self.inference.reward_space_true]))
-    #         regret_vec = np.array([self.get_regret(prior_avg, true_reward) for true_reward in self.inference.reward_space_true])
-    #         exp_regret = np.dot(regret_vec, self.inference.prior)
-    #         return exp_regret
-    #     else:
-    #         raise NotImplementedError
-    #
-    # # @profile
-    # def get_regret_from_query_and_true_reward(self, query, true_reward):
-    #     """Calculates the regret given the current prior. Only implemented for query lenget zero."""
-    #     if len(query) == 0:
-    #         prior_avg = self.inference.get_prior_avg()
-    #         regret = self.get_regret(prior_avg, true_reward)
-    #         return regret
-    #     else:
-    #         raise NotImplementedError
-
-
-
-
-
 
 class Experiment(object):
     """"""
@@ -725,7 +617,7 @@ class Experiment(object):
         self.choosers = choosers
         self.seed = SEED
         self.t_0 = time.clock()
-        self.query_chooser = Query_Chooser_Subclass(num_queries_max, args, t_0=self.t_0)
+        self.query_chooser = Query_Chooser(num_queries_max, args, t_0=self.t_0)
         self.results = {}
         # Add variance
         self.measures = ['true_entropy','test_regret','norm post_avg-true','post_regret','perf_measure','std_proxy','mean_proxy','std_goal','mean_goal']
@@ -883,48 +775,6 @@ class Experiment(object):
         norm_true = norm_true / np.linalg.norm(norm_true, ord=2)
 
         return np.linalg.norm(norm_post_avg - norm_true)
-
-
-# # @profile
-    # def test_post_avg(self, post_avg, true_reward):
-    #     # dist_scale = 0.5
-    #     # gamma = 0.8
-    #     # goals = [(1, 1), (2, 6), (3, 3), (3, 4), (4, 5), (6, 4), (6, 6)]
-    #     goals = [(1, 5), (1, 2), (3, 6), (2, 3), (6, 1), (3, 5), (4, 2)]
-    #     num_traject = 1
-    #     # beta = 2.
-    #     reps = 4
-    #     post_reward_avg = 0
-    #     post_regret_avg = 0
-    #
-    #
-    #     # print true_reward
-    #     # print post_avg
-    #     # print true_reward - post_avg
-    #
-    #     # TODO: Randomize goal positions for repetitions
-    #     # TODO: Why not pass on full posterior?
-    #
-    #     for _ in range(reps):
-    #         # Set environment and agent
-    #         grid = GridworldMdp.generate_random(8, 8, 0.1, len(goals), goals, living_reward=-0.01)
-    #         mdp = GridworldMdpWithDistanceFeatures(grid, dist_scale, living_reward=-0.01, noise=0, rewards=post_avg)
-    #         agent = OptimalAgent(gamma, num_iters=50)
-    #
-    #         # Set up inference
-    #         env = GridworldEnvironment(mdp)
-    #         inference = Inference(
-    #             agent, mdp, env, beta, self.inference.reward_space_true,
-    #             self.inference.reward_space_proxy, num_traject=num_traject,
-    #             prior=None)
-    #
-    #         post_reward = inference.get_avg_reward(post_avg, true_reward)
-    #         optimal_reward = inference.get_avg_reward(true_reward, true_reward)
-    #         regret = optimal_reward - post_reward
-    #         post_reward_avg += 1/float(reps) * post_reward
-    #         post_regret_avg += 1/float(reps) * regret
-    #
-    #     return post_regret_avg
 
 
     def write_experiment_results_to_csv(self, exp_num, num_iter):

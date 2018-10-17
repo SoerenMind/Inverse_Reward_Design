@@ -2,7 +2,6 @@ import numpy as np
 from agent_runner import run_agent
 from utils import Distribution
 from scipy.misc import logsumexp
-from gradient_descent_test import get_likelihoods_from_feature_expectations
 from planner import GridworldModel, BanditsModel
 
 
@@ -159,21 +158,6 @@ class InferenceDiscrete(Inference):
 
         return avg_reward_matrix
 
-    def cache_lhoods(self):
-        # TODO: Idea: Change reward_space_proxy in later iterations based on the posterior.
-        N = len(self.reward_space_proxy)
-        feature_dim = len(self.reward_space_true[0])
-        K = len(self.reward_space_true)
-
-
-        # self.avg_reward_matrix = np.matmul(self.feature_exp_matrix, self.true_reward_matrix.T)
-        # self.log_lhood_numerator_matrix = self.beta * self.avg_reward_matrix
-        # self.lhood_numerator_matrix = np.exp(self.log_lhood_numerator_matrix)
-
-
-
-
-
     # @profile
     def calc_posterior(self, query, get_entropy=False, true_reward=None):
         """Returns a K x N array of posteriors and K x M array of posterior averages, where
@@ -228,18 +212,6 @@ class InferenceDiscrete(Inference):
 
         return posteriors, post_averages, evidence, true_posterior
 
-        # Calculate log posterior
-        # log_prior = np.log(self.prior)
-        # log_evidence = ?
-        # log_probs + log_prior - log_evidence
-
-    # def get_Z_constant(self, true_reward):
-    #     Z_normalization = 0
-    #     for proxy in self.reward_space_proxy:
-    #         Z_normalization += self.get_likelihood(true_reward, self.proxy_reward_space, np.array(proxy)) \
-    #                            * self.get_prior(proxy)
-    #     return Z_normalization
-
     # # @profile
     def get_avg_reward(self, proxy, true_reward):
         """Calculates average true reward over num_runs trajectories when the agent optimizes the proxy reward."""
@@ -270,9 +242,6 @@ class InferenceDiscrete(Inference):
             except:
                 viters = 20
             trajectories = [run_agent(self.agent, self.env, viters) for _ in range(self.num_traject)]
-            # trajectory = [trajectories[0][t][0] for t in range(20)]
-            # print trajectory
-            # print(run_agent(self.agent, self.env, episode_length=10))
             for traject in trajectories:
                 for t, tup in enumerate(traject):
                     traject[t] = tuple(list(tup)+[self.agent.gamma**t])
@@ -339,27 +308,3 @@ class InferenceDiscrete(Inference):
         self.reward_index_proxy = {}
         for i, proxy in enumerate(self.reward_space_proxy):
             self.reward_index_proxy[tuple(proxy)] = i
-
-
-# def test_inference(inference, rfunc_proxy_given, reward_space):
-#     '''Tests if posterior adds up to 1 by calculating it for every possible true reward function.'''
-#     cum_post = 0
-#     # for true_reward in itertools.product([0,1],repeat=num_states):
-#     for true_reward in reward_space:
-#         post = inference.get_posterior(true_reward, inference.reward_space_proxy, rfunc_proxy_given)
-#         cum_post += post
-#     return cum_post
-
-
-
-#
-#
-# if __name__=='__main__':
-#     rewards = [0, 1, 2, 3, 4]
-#     mdp = NStateMdp(num_states=5, rewards=rewards, start_state=0, preterminal_states=[3])
-#     env = GridworldEnvironment(mdp)
-#     # default_action = 1
-#     # agent = DirectionalAgent(default_action)
-#     agent = ImmediateRewardAgent()
-#     agent.set_mdp(mdp)
-#     print(run_agent(agent, env, episode_length=float(6)))
