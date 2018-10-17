@@ -12,7 +12,7 @@ class Agent(object):
     def set_mdp(self, mdp):
         """Sets the MDP that the agent will be playing."""
         self.mdp = mdp
-    # @profile
+
     def get_action(self, state):
         """Returns the action that the agent takes in the given state.
 
@@ -52,3 +52,21 @@ class Agent(object):
         """Updates the agent based on the results of the last action."""
         self.reward += self.current_discount * reward
         self.current_discount *= self.gamma
+
+    def get_feature_expectations(self, horizon):
+        """Returns the expected feature counts this agent would obtain.
+
+        horizon: The number of actions the agent takes."""
+        def feature_backup(future_features):
+            features = {}
+            for s in self.mdp.get_states():
+                features[s] = self.mdp.get_features(s)
+                for a, p_a in self.get_action_distribution(s).get_dict().items():
+                    for s2, p_s2 in self.mdp.get_transition_states_and_probs(s, a):
+                        features[s] = features[s] + p_a * p_s2 * self.gamma * future_features[s2]
+            return features
+
+        features = {s : self.mdp.get_features(s) for s in self.mdp.get_states()}
+        for _ in range(horizon):
+            features = feature_backup(features)
+        return features[self.mdp.get_start_state()]

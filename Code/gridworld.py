@@ -3,8 +3,7 @@ from disjoint_sets import DisjointSets
 import numpy as np
 import random
 import itertools
-from scipy.stats import invwishart, multivariate_normal, itemfreq
-from copy import deepcopy
+from scipy.stats import invwishart, multivariate_normal
 
 
 class Mdp(object):

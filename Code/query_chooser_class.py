@@ -3,7 +3,6 @@ from scipy.special import comb
 from random import choice, sample, seed
 import numpy as np
 import time
-# for test environment
 from gridworld import NStateMdp, GridworldEnvironment, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
     NStateMdpRandomGaussianFeatures, GridworldMdpWithDistanceFeatures, GridworldMdp
 from agents import ImmediateRewardAgent, OptimalAgent
@@ -47,13 +46,14 @@ class Query_Chooser(object):
     def cache_feature_expectations(self, reward_space=None):
         """Computes feature expectations for each proxy using TF and stores them in
         inference.feature_expectations_matrix."""
-        if reward_space is None:
+        use_proxy_space = (reward_space is None)
+        if use_proxy_space:
             reward_space = self.inference.reward_space_proxy
 
         proxy_list = [list(reward) for reward in reward_space]
         print('building graph. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
         # TODO: This will build a separate model for every reward space size after eliminating duplicates
-        model = self.get_model(len(proxy_list), 'entropy', cache=(reward_space is not None))
+        model = self.get_model(len(proxy_list), 'entropy', cache=(not use_proxy_space))
         model.initialize(self.sess)
 
         desired_outputs = ['feature_exps']
@@ -63,7 +63,7 @@ class Query_Chooser(object):
             desired_outputs, self.sess, mdp, proxy_list)
         print('Done computing model outputs. Total experiment time: {t}'.format(t=time.clock()-self.t_0))
 
-        if reward_space is None:
+        if use_proxy_space:
             self.inference.feature_exp_matrix = feature_exp_matrix
         return feature_exp_matrix
 

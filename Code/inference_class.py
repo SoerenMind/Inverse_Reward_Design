@@ -232,25 +232,21 @@ class InferenceDiscrete(Inference):
         """Given a proxy reward, calculates feature_expectations and returns them. Also stores them in a dictionary
         and reuses the result if it has previously been calculated.
         """
-        try:
-            feature_expectations = self.feature_expectations_dict[tuple(proxy)]
+        proxy_tuple = tuple(proxy)
+        if proxy_tuple in self.feature_expectations_dict:
+            return self.feature_expectations_dict[tuple(proxy)]
+
+        self.mdp.change_reward(proxy)
+        # self.mdp.set_feature_weights(proxy)
+        iters = self.agent.set_mdp(self.mdp)  # Does value iteration
+        try: viters = self.agent.num_iters
         except:
-            self.mdp.change_reward(proxy)
-            # self.mdp.set_feature_weights(proxy)
-            iters = self.agent.set_mdp(self.mdp)  # Does value iteration
-            try: viters = self.agent.num_iters
-            except:
-                viters = 20
-            trajectories = [run_agent(self.agent, self.env, viters) for _ in range(self.num_traject)]
-            for traject in trajectories:
-                for t, tup in enumerate(traject):
-                    traject[t] = tuple(list(tup)+[self.agent.gamma**t])
-            feature_expectations = self.mdp.get_feature_expectations_from_trajectories(trajectories)
-            # feature_expectations = np.true_divide(np.ones(shape=proxy.shape), len(proxy))
-            self.feature_expectations_dict[tuple(proxy)] = feature_expectations
-            num_plannings_done = len(self.feature_expectations_dict.items())
-            if num_plannings_done % 25 == 0:
-                print('Done planning for {num} proxies'.format(num=num_plannings_done))
+            viters = 20
+        feature_expectations = self.agent.get_feature_expectations(viters)
+        self.feature_expectations_dict[tuple(proxy)] = feature_expectations
+        num_plannings_done = len(self.feature_expectations_dict.items())
+        if num_plannings_done % 25 == 0:
+            print('Done planning for {num} proxies'.format(num=num_plannings_done))
         return feature_expectations
 
     # # @profile
