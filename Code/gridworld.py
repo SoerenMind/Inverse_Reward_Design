@@ -2,7 +2,7 @@ from collections import defaultdict
 from disjoint_sets import DisjointSets
 import numpy as np
 import random
-import itertools
+import itertools 
 from scipy.stats import invwishart, multivariate_normal
 
 
