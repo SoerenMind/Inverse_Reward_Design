@@ -2,7 +2,7 @@ from collections import defaultdict
 from disjoint_sets import DisjointSets
 import numpy as np
 import random
-import itertools 
+import itertools
 from scipy.stats import invwishart, multivariate_normal
 
 
@@ -521,7 +521,7 @@ class GridworldMdp(Mdp):
                 for place in row:
                     place = str(place)
                     row_new.append(place)
-                print str(row_new)
+                print(str(row_new))
         return grid, goals
 
     def get_start_state(self):

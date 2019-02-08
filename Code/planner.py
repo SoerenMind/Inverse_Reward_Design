@@ -28,9 +28,9 @@ class Model(object):
             num_posneg_vals = (discretization_size // 2)
             const = 9 // num_posneg_vals
             f_range = range(-num_posneg_vals * const, 10, const)
-            print 'Using', f_range, 'to discretize the feature'
+            print('Using', f_range, 'to discretize the feature')
             if len(f_range) != discretization_size:
-                print 'discretization size is off by ' + str(len(f_range) - discretization_size)
+                print('discretization size is off by ' + str(len(f_range) - discretization_size))
             # proxy_space = np.random.randint(-4,3,size=[30 * query_size, query_size])
             self.proxy_reward_space = list(product(f_range, repeat=query_size))
             self.K = len(self.proxy_reward_space)
@@ -352,7 +352,7 @@ class Model(object):
             for step in range(gradient_steps):
                 results = sess.run(ops + other_ops, feed_dict=fd)
                 if ops and step % 1 == 0:
-                    print 'Gradient step {0}: {1}'.format(step, results[:-1])
+                    print('Gradient step {0}: {1}'.format(step, results[:-1]))
 
         return sess.run([get_op(name) for name in outputs], feed_dict=fd)
 

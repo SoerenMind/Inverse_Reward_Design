@@ -4,7 +4,7 @@ print('importing')
 
 start = time.clock()
 import datetime
-print 'time: '+str(datetime.datetime.now())
+print('time: '+str(datetime.datetime.now()))
 import numpy as np
 from inference_class import Inference
 from gridworld import GridworldEnvironment, NStateMdpHardcodedFeatures, NStateMdpGaussianFeatures,\
@@ -18,7 +18,7 @@ import argparse
 import tensorflow as tf
 
 
-print 'Time to import: {deltat}'.format(deltat=time.clock() - start)
+print('Time to import: {deltat}'.format(deltat=time.clock() - start))
 
 
 
@@ -83,12 +83,12 @@ if __name__=='__main__':
 
 
     args = parser.parse_args()
-    print args
+    #print(args)
     # assert args.discretization_size % 2 == 1
 
     # Experiment description
     adapted_description = False
-    # print "Adapted description: ", adapted_description
+    # #print("Adapted description: ", adapted_description)
 
     # Set parameters
     dummy_rewards = np.zeros(args.feature_dim)

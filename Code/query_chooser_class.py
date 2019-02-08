@@ -17,7 +17,7 @@ def random_combination(iterable, r):
     """Random selection from itertools.combinations(iterable, r)"""
     pool = tuple(iterable)
     n = len(pool)
-    indices = sorted(sample(xrange(n), r))
+    indices = sorted(sample(range(n), r))
     return tuple(pool[i] for i in indices)
 
 def time_function(function, input):
@@ -393,7 +393,7 @@ class Query_Chooser(object):
             else:
                 best_query, best_weights, feature_exps = self.find_next_feature(
                     best_query, best_weights, measure, query_size)
-            print 'Query length increased to {s}'.format(s=len(best_query))
+            print('Query length increased to {s}'.format(s=len(best_query)))
 
         print('query found')
 
@@ -467,7 +467,7 @@ class Query_Chooser(object):
         num_posneg_vals = (self.args.discretization_size // 2)
         const = 9 // num_posneg_vals
         f_range = range(-num_posneg_vals * const, 10, const)
-        # print 'Using', f_range, 'to discretize the feature'
+        # print('Using', f_range, 'to discretize the feature')
         assert len(f_range) == self.args.discretization_size
         # other_weights = np.random.randint(-9,10,size=length)
         other_weights = np.random.choice(f_range, size=length)
@@ -585,7 +585,7 @@ class Query_Chooser(object):
                 true_reward_space_size, num_unknown, beta, beta_planner,
                 objective, lr, discrete, optimize, self.args)
         elif mdp.type == 'bandits':
-            print 'Calling BanditsModel'
+            print('Calling BanditsModel')
             model = BanditsModel(
                 dim, gamma, query_size, discretization_size,
                 true_reward_space_size, num_unknown, beta, beta_planner,
@@ -601,7 +601,7 @@ class Query_Chooser(object):
 
         if cache:
             self.model_cache[key] = model
-            print 'Model built and cached!'
+            print('Model built and cached!')
         return model
 
 
@@ -642,7 +642,7 @@ class Experiment(object):
 
     # @profile
     def run_experiment(self, num_iter, exp_num, num_experiments):
-        print "======================================================Experiment {n}/{N}===============================================================".format(n=exp_num + 1, N=num_experiments)
+        print("======================================================Experiment {n}/{N}===============================================================".format(n=exp_num + 1, N=num_experiments))
         # Initialize variables
 
         # Set run parameters
@@ -657,12 +657,12 @@ class Experiment(object):
 
         # Run experiment for each query chooser
         for chooser in self.choosers:
-            print "===========================Experiment {n}/{N} for {chooser}===========================".format(chooser=chooser,n=exp_num+1,N=num_experiments)
+            print("===========================Experiment {n}/{N} for {chooser}===========================".format(chooser=chooser,n=exp_num+1,N=num_experiments))
             inference.reset_prior()
 
             for i in range(-1,num_iter):
                 iter_start_time = time.clock()
-                print "==========Iteration: {i}/{m} ({c}). Total time: {t}==========".format(i=i+1,m=num_iter,c=chooser,t=iter_start_time-self.t_0)
+                print("==========Iteration: {i}/{m} ({c}). Total time: {t}==========".format(i=i+1,m=num_iter,c=chooser,t=iter_start_time-self.t_0))
                 if i > -1:
                     query, perf_measure, true_log_posterior, true_entropy, post_avg, time_last_query_found \
                         = self.query_chooser.find_query(self.query_size, chooser, true_reward)
@@ -762,8 +762,8 @@ class Experiment(object):
                 if len(inferences) == 1:
                     text = ' (post_regret)'
                 else: text = ' (test_regret)'
-                print 'Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-                print 'regret: ' + str(regret) + text
+                print('Negative regret !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                print('regret: ' + str(regret) + text)
         return regrets.mean()
 
     def get_normalized_reward_diff(self, post_avg, true_reward):
@@ -778,6 +778,8 @@ class Experiment(object):
     def write_experiment_results_to_csv(self, exp_num, num_iter):
         """Writes a CSV for every chooser for every experiment. The CSV's columns are 'iteration' and all measures in
         self.measures."""
+        if not os.path.exists('data/'):
+            os.mkdir('data/')
         if not os.path.exists('data/'+self.folder_name):
             os.mkdir('data/'+self.folder_name)
         else:
