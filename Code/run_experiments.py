@@ -21,7 +21,7 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
         viter='15', rsize=rsize, subsampling='1', proxy_space_is_true_space='0',
         subs_full=num_subsamples_full, full_IRD_subsample_belief='no', log_objective='1',
         repeated_obj='0', num_obj_if_repeated='50', decorrelate_test_feat = '1',
-        dist_scale='0.2', linear_features='1', height='12', width='12',
+        dist_scale='0.2', euclid_features='1', height='12', width='12',
         num_test_envs='100',beta=beta_both_mdps):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
@@ -67,7 +67,7 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
                '--num_subsamples', subs_full if chooser == 'full' else num_subsamples_not_full,
                '--weighting', '1',
                '--well_spec', '1',
-               '--linear_features', linear_features,
+               '--euclid_features', euclid_features,
                '--objective', objective,
                '--log_objective', log_objective,
                '-weights_dist_init', 'normal2',

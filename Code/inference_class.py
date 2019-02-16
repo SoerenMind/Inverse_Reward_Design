@@ -38,7 +38,7 @@ class Inference(object):
         self.prior = np.exp(self.log_prior)
 
     def make_reward_to_index_dict(self):
-        """Creates dictionary from proxy reward tuples to their index in proxy space. If index_true_space, it does the
+        """Creates dictionary from proxy rewards (1D arrays) to their index in proxy space. If index_true_space, it does the
         same for the true reward space."""
         self.reward_index_proxy = {}
         for i, proxy in enumerate(self.reward_space_proxy):

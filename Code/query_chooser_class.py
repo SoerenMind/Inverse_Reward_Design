@@ -259,7 +259,7 @@ class Query_Chooser(object):
         true_reward_matrix, log_prior = self.get_true_reward_space()
         desired_outputs = [measure, 'weights_to_train']
         mdp = self.inference.mdp
-        dim, steps = self.args.feature_dim, self.args.num_iters_optim
+        dim, steps = self.args.feature_dim_proxy, self.args.num_iters_optim
         model = self.get_model(
             len(curr_query) + num_to_add, measure, num_unknown=num_to_add, optimize=True)
         model.initialize(self.sess)
@@ -279,7 +279,7 @@ class Query_Chooser(object):
     def find_next_feature(self, curr_query, curr_weights, measure, max_query_size):
         mdp = self.inference.mdp
         desired_outputs = [measure, 'weights_to_train', 'feature_exps']
-        features = [i for i in range(self.args.feature_dim) if i not in curr_query]
+        features = [i for i in range(self.args.feature_dim_proxy) if i not in curr_query]
 
         best_objective, best_objective_plus_cost, best_objective_disc = float("inf"), float("inf"), float("inf")
         best_query, best_optimal_weights, best_feature_exps = None, None, None
@@ -297,7 +297,7 @@ class Query_Chooser(object):
             if not self.search:
 
                 # Set weight inits
-                num_fixed = self.args.feature_dim - len(query)
+                num_fixed = self.args.feature_dim_proxy - len(query)
                 if not self.init_none:
                     if curr_weights is not None:
                         weights = list(curr_weights[:i]) + list(curr_weights[i+1:])
@@ -420,7 +420,7 @@ class Query_Chooser(object):
         """Same as self.find_next_feature, except the added feature is not optimized, i.e. random."""
         mdp = self.inference.mdp
         desired_outputs = [measure, 'weights_to_train', 'feature_exps']
-        features = [i for i in range(self.args.feature_dim) if i not in curr_query]
+        features = [i for i in range(self.args.feature_dim_proxy) if i not in curr_query]
         model = self.get_model(
             len(curr_query) + 1, measure, discrete=False, optimize=True)
         true_reward_matrix, log_prior = self.get_true_reward_space()
@@ -428,7 +428,7 @@ class Query_Chooser(object):
         query = curr_query + [choice(features)]
 
         # Initialize with random weights
-        num_fixed = self.args.feature_dim - len(query)
+        num_fixed = self.args.feature_dim_proxy - len(query)
         weights = self.sample_weights('init', num_fixed)
 
         objective, weights, feature_exps = model.compute(
@@ -441,10 +441,11 @@ class Query_Chooser(object):
 
 
     def random_search(self, desired_outputs, query, num_search, model, log_prior, mdp, true_reward_matrix):
-        """Returns the objective, weights, and feature expectations that minimized the objective in a random search."""
+        """Returns the objective, weights, and feature expectations that minimized the objective in a random search over
+        fixed weights."""
         best_objective_disc = float("inf")
         for _ in range(num_search):
-            num_fixed = self.args.feature_dim - len(query)
+            num_fixed = self.args.feature_dim_proxy - len(query)
 
             # Sample weights
             other_weights = self.sample_weights('search', num_fixed)
@@ -557,13 +558,14 @@ class Query_Chooser(object):
 
     def get_model(self, query_size, objective, num_unknown=None,
                   discrete=True, optimize=False, no_planning=False, cache=True, rational_planner=False,
-                  discretization_size=None):
+                  discretization_size=None, dim=None):
         mdp = self.inference.mdp
         height, width = None, None
         # TODO: Replace mdp.type with self.args.mdp_type
         if mdp.type == 'gridworld':
             height, width = mdp.height, mdp.width
-        dim, gamma, lr = self.args.feature_dim, self.args.gamma, self.args.lr
+        gamma, lr = self.args.gamma, self.args.lr
+        dim = self.args.feature_dim_proxy_incl_zeros if dim == None else dim
         beta, beta_planner = self.args.beta, self.args.beta_planner
         if rational_planner:
             beta_planner = 'inf'
@@ -682,11 +684,11 @@ class Experiment(object):
                 duration_iter = iter_end_time - iter_start_time
                 duration_query_chooser = time_last_query_found - iter_start_time
                 # post_exp_regret = self.query_chooser.get_exp_regret_from_query(query=[])
-                post_regret = self.compute_regret(post_avg, true_reward, inference) # TODO: Still plans with Python. May use wrong gamma, or trajectory length
+                post_regret = self.compute_regret(post_avg, true_reward, inference)
                 norm_to_true = self.get_normalized_reward_diff(post_avg, true_reward)
                 test_regret = self.compute_regret(post_avg, true_reward)
                 std_proxy, mean_proxy, std_goal, mean_goal = self.get_posterior_variance(inference)
-                print('Test regret: '+str(test_regret)+' | Post regret: '+str(post_regret))
+                print('Test regret: '+str(test_regret)+' | Train regret: '+str(post_regret))
 
                 # Save results
                 self.results[chooser, 'true_entropy', i, exp_num], \
@@ -708,7 +710,7 @@ class Experiment(object):
     def get_posterior_variance(self, inference):
         """Gets posterior mean and std for last and 2nd last feature by sampling."""
         args = self.query_chooser.args
-        feature_dim = args.feature_dim
+        feature_dim = args.feature_dim_true
         # query_matrix_sample, log_prior_sample = self.query_chooser.sample_true_reward_matrix()
         log_probs = inference.log_prior
         probs = np.exp(log_probs)
@@ -738,16 +740,18 @@ class Experiment(object):
         else:
             inferences = [inference]
 
-        regrets = np.empty(len(self.test_inferences))
+        regrets = np.empty(len(inferences))
+        feature_dim_true = self.query_chooser.args.feature_dim_true
         for i, inference in enumerate(inferences):
             # New method using TF:
             test_mdp = inference.mdp
             planning_model = self.query_chooser.get_model(1, 'entropy',
-                rational_planner=self.query_chooser.args.rational_test_planner)
+                rational_planner=self.query_chooser.args.rational_test_planner, dim=feature_dim_true)
 
-            [post_avg_feature_exps] = planning_model.compute(['feature_exps'], self.query_chooser.sess, test_mdp, [list(post_avg)])
-            [true_reward_feature_exps] = planning_model.compute(['feature_exps'], self.query_chooser.sess, test_mdp, [list(true_reward)])
-
+            [post_avg_feature_exps] = planning_model.compute(['feature_exps'], self.query_chooser.sess, test_mdp,
+                                                             [list(post_avg)])
+            [true_reward_feature_exps] = planning_model.compute(['feature_exps'], self.query_chooser.sess, test_mdp,
+                                                                [list(true_reward)])
             optimal_reward = np.dot(true_reward_feature_exps, true_reward)
             test_reward = np.dot(post_avg_feature_exps, true_reward)
             regret = optimal_reward - test_reward

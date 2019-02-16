@@ -5,11 +5,12 @@ from itertools import product
 from gridworld import Direction
 
 class Model(object):
-    def __init__(self, feature_dim, gamma, query_size, discretization_size,
+    def __init__(self, feature_dim_planner, gamma, query_size, discretization_size,
                  true_reward_space_size, num_unknown, beta, beta_planner,
                  objective, lr, discrete, optimize, args):
         self.initialized = False
-        self.feature_dim = feature_dim
+        self.feature_dim_planner = feature_dim_planner
+        self.feature_dim_true = args.feature_dim_true
         self.gamma = gamma
         self.query_size = query_size
         self.true_reward_space_size = true_reward_space_size
@@ -60,7 +61,7 @@ class Model(object):
 
     def build_discrete_weights_for_optimization(self):
         K, N = self.K, self.num_unknown
-        dim = self.feature_dim
+        dim = self.feature_dim_planner
         self.weights_to_train = tf.Variable(
             tf.zeros([N, dim]), name="weights_to_train")
         self.weight_inputs = tf.placeholder(
@@ -80,10 +81,10 @@ class Model(object):
 
     def build_discrete_weights(self):
         self.weights = tf.placeholder(
-            tf.float32, shape=[self.K, self.feature_dim], name="weights")
+            tf.float32, shape=[self.K, self.feature_dim_planner], name="weights")
 
     def build_continuous_weights(self):
-        query_size, dim, K = self.query_size, self.feature_dim, self.K
+        query_size, dim, K = self.query_size, self.feature_dim_planner, self.K
         num_fixed = dim - query_size
         self.query_weights= tf.constant(
             self.proxy_reward_space, dtype=tf.float32, name="query_weights")
@@ -128,7 +129,7 @@ class Model(object):
         """
         # Get log likelihoods for true reward matrix
         true_reward_space_size = self.true_reward_space_size
-        dim = self.feature_dim
+        dim = self.feature_dim_true
         self.true_reward_matrix = tf.placeholder(
             tf.float32, [true_reward_space_size, dim], name="true_reward_matrix")
         self.log_true_reward_matrix = tf.log(self.true_reward_matrix, name='log_true_reward_matrix')
@@ -267,7 +268,7 @@ class Model(object):
         if 'total_variation' == objective:
 
             self.post_averages, self.post_var = tf.nn.weighted_moments(
-                self.true_reward_matrix, [1, 1], tf.stack([self.posterior] * self.feature_dim, axis=2),
+                self.true_reward_matrix, [1, 1], tf.stack([self.posterior] * self.feature_dim_true, axis=2),
                 name="moments", keep_dims=False)
             self.name_to_op['post_var'] = self.post_var
 
@@ -361,7 +362,7 @@ class Model(object):
         raise NotImplemented('Should be implemented in subclass')
 
     def get_permutation_from_query(self, query):
-        dim = self.feature_dim
+        dim = self.feature_dim_planner
         # Running example: query = [1, 3], and we want indexes that will permute
         # weights [10, 11, 12, 13, 14, 15] to [12, 10, 13, 11, 14, 15].
         # Compute the feature numbers for unordered_weights.
@@ -383,7 +384,7 @@ class BanditsModel(Model):
 
     def build_planner(self):
         self.features = tf.placeholder(
-            tf.float32, name="features", shape=[None, self.feature_dim])
+            tf.float32, name="features", shape=[None, self.feature_dim_planner])
         self.name_to_op['features'] = self.features
 
         # Calculate state probabilities
@@ -407,18 +408,19 @@ class BanditsModel(Model):
         """Changes: remove [0] from best state; remove reshape; stack probs on axis 2 (was 1); stack features on axis 1 (was 2); sum features on axis 1 (was 0); remove transpose."""
 
         # Calculate feature expectations
-        probs_stack = tf.stack([self.state_probs] * self.feature_dim, axis=2)
+        probs_stack = tf.stack([self.state_probs] * self.feature_dim_planner, axis=2)
         features_stack = tf.multiply(tf.stack([self.features] * self.K, axis=0), probs_stack, name='multi')
         self.feature_expectations = tf.reduce_sum(features_stack, axis=1, keep_dims=False, name="feature_exps")
         self.name_to_op['feature_exps'] = self.feature_expectations
 
 
     def update_feed_dict_with_mdp(self, mdp, fd):
-        fd[self.features] = mdp.convert_to_numpy_input()
+        use_features_true = (self.args.feature_dim_proxy != self.feature_dim_true)
+        fd[self.features] = mdp.convert_to_numpy_input(use_features_true)
 
 
 class GridworldModel(Model):
-    def __init__(self, feature_dim, gamma, query_size, discretization_const,
+    def __init__(self, feature_dim_planner, gamma, query_size, discretization_const,
                  true_reward_space_size, num_unknown, beta, beta_planner,
                  objective, lr, discrete, optimize, height, width, num_iters, args):
         self.height = height
@@ -426,12 +428,12 @@ class GridworldModel(Model):
         self.num_iters = num_iters
         self.num_actions = 4
         super(GridworldModel, self).__init__(
-            feature_dim, gamma, query_size, discretization_const,
+            feature_dim_planner, gamma, query_size, discretization_const,
             true_reward_space_size, num_unknown, beta, beta_planner,
             objective, lr, discrete, optimize, args)
 
     def build_planner(self):
-        height, width, dim = self.height, self.width, self.feature_dim
+        height, width, dim = self.height, self.width, self.feature_dim_planner
         num_actions, K = self.num_actions, self.K
 
         self.image = tf.placeholder(
@@ -483,7 +485,7 @@ class GridworldModel(Model):
         self.name_to_op['q_values'] = q_values
 
     def bellman_update(self, fes, features):
-        height, width, dim = self.height, self.width, self.feature_dim + 1
+        height, width, dim = self.height, self.width, self.feature_dim_planner + 1
         gamma, K = self.gamma, self.K
         extra_row = tf.zeros((K, 1, width, dim))
         extra_col = tf.zeros((K, height, 1, dim))
@@ -499,7 +501,8 @@ class GridworldModel(Model):
         return tf.stack([north_fes, south_fes, east_fes, west_fes], axis=-1)
 
     def update_feed_dict_with_mdp(self, mdp, fd):
-        image, features, start_state = mdp.convert_to_numpy_input()
+        use_features_true = (self.args.feature_dim_proxy != self.feature_dim_true)
+        image, features, start_state = mdp.convert_to_numpy_input(use_features_true)
         x, y = start_state
         fd[self.image] = image
         fd[self.features] = features
@@ -514,7 +517,7 @@ class NoPlanningModel(Model):
 
     def build_planner(self):
         self.feature_expectations = tf.placeholder(
-            tf.float32, shape=[self.K, self.feature_dim], name='feature_exps')
+            tf.float32, shape=[self.K, self.feature_dim_planner], name='feature_exps')
         self.name_to_op['feature_exps'] = self.feature_expectations
 
     def update_feed_dict_with_mdp(self, mdp, fd):
