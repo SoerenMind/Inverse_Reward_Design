@@ -2,19 +2,19 @@ from subprocess import call
 
 # Discrete experiments
 
-NUM_EXPERIMENTS = '100'  # Modify this to change the sample size
+NUM_EXPERIMENTS = '20'  # Modify this to change the sample size
 
-discr_query_sizes = ['2','3','5','10']
+discr_query_sizes = ['2', '5']
 choosers_continuous = ['feature_entropy_search_then_optim', 'feature_random', 'feature_entropy_random_init_none'] #'feature_entropy_init_none', 'feature_entropy_search']
-choosers_discrete = ['greedy_discrete', 'random', 'exhaustive']
+choosers_discrete = ['greedy_discrete', 'random']
 mdp_types = ['gridworld','bandits']
 num_iter = {'gridworld': '20', 'bandits': '20'}
 num_subsamples_full = '5000'; num_subsamples_not_full = '5000'
 beta_both_mdps = '0.5'
 num_q_max = '10000'
-rsize = '1000000'
+rsize = '100000'
 proxy_space_is_true_space = '0'
-exp_name = '14May_reward_hacking'
+exp_name = '15Feb_initial_nonlinear'
 
 
 def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
@@ -22,7 +22,8 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
         subs_full=num_subsamples_full, full_IRD_subsample_belief='no', log_objective='1',
         repeated_obj='0', num_obj_if_repeated='50', decorrelate_test_feat = '1',
         dist_scale='0.2', euclid_features='1', height='12', width='12',
-        num_test_envs='100',beta=beta_both_mdps):
+        num_test_envs='100',beta=beta_both_mdps,
+        test_misspec_linear_space='0'):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
         # the worst Q-value e^10 times less likely than the best one
@@ -59,8 +60,11 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
                '--num_iters_optim', num_iters_optim,
                '--value_iters', viter,
                '--mdp_type', mdp_type,
-               '--feature_dim', dim,
+               '--feature_dim_proxy', dim,
+               # '--feature_dim_true', dim_true,
+               # '--fill_proxy_w_zeros', fill_zeros,
                '--discretization_size', discretization_size,
+               '--test_misspec_linear_space', test_misspec_linear_space,
                '--discretization_size_human', discretization_size_human,
                '--num_test_envs', num_test_envs,
                '--subsampling', subsampling,
@@ -80,8 +84,16 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
                '--num_obj_if_repeated', num_obj_if_repeated,
                '--decorrelate_test_feat', decorrelate_test_feat
                ]
-    print 'Running command', ' '.join(command)
+    print('Running command', ' '.join(command))
     call(command)
+
+def run_nonlinear():
+    for mdp_type in mdp_types:
+        for chooser in choosers_discrete:
+            for qsize in discr_query_sizes:
+                for test_misspec_linear_space in ['0', '1']:
+                    run(chooser, qsize, mdp_type, num_iter=num_iter, test_misspec_linear_space=test_misspec_linear_space)
+
 
 
 # Run as usual
@@ -186,6 +198,7 @@ def run_continuous():
 
 if __name__ == '__main__':
     # run_objectives()
-    run_reward_hacking()
-    run_continuous()
-    run_discrete()
+    run_nonlinear()
+    # run_reward_hacking()
+    # run_continuous()
+    # run_discrete()
