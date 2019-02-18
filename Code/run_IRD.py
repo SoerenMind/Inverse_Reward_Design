@@ -127,6 +127,7 @@ if __name__=='__main__':
         'qsize': query_size,
         'mdp': args.mdp_type,
         'dim': args.feature_dim_proxy,
+        'misspec_linear': args.test_misspec_linear_space,
         'dsize': args.discretization_size,
         'size_true': size_reward_space_true,
         'size_proxy': size_reward_space_proxy,

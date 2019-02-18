@@ -1,4 +1,4 @@
-
+# Makes graphs out of saved experiment data
 print('importing')
 import argparse
 import csv
@@ -184,7 +184,7 @@ def load_data(folder):
         raise ValueError('No suitable experiments in folder')
     experiments, control_var_vals = simplify_keys(experiments)
     fix_special_cases(experiments)
-    changing_vars = [var for var, val in experiments.keys()[0]]
+    changing_vars = [var for var, val in list(experiments.keys())[0]]
     return experiments, changing_vars, control_var_vals
 
 
@@ -346,7 +346,7 @@ def bar_graph_qsize(exps, x_var, dependent_vars, independent_vars, controls, oth
         handles2, labels2 = zip(*hl)
     except ValueError:
         handles2, labels2 = [], []
-        print Warning('Warning: Possibly data only exists for one environment')
+        print(Warning('Warning: Possibly data only exists for one environment'))
 
     # ax.legend(handles2, labels2, fontsize=10)
     plt.legend(handles2, labels2, fontsize=13)
@@ -458,7 +458,7 @@ def graph(exps, x_var, dependent_vars, independent_vars, controls,
         handles2, labels2 = zip(*hl)
     except ValueError:
         handles2, labels2 = [], []
-        print Warning('Warning: Possibly data only exists for one environment')
+        print(Warning('Warning: Possibly data only exists for one environment'))
 
     # ax.legend(handles2, labels2, fontsize=10)
     plt.legend(handles2, labels2, fontsize=13)
