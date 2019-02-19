@@ -2,19 +2,19 @@ from subprocess import call
 
 # Discrete experiments
 
-NUM_EXPERIMENTS = '20'  # Modify this to change the sample size
+NUM_EXPERIMENTS = '50'  # Modify this to change the sample size
 
-discr_query_sizes = ['2', '5']
+discr_query_sizes = ['5', '2']
 choosers_continuous = ['feature_entropy_search_then_optim', 'feature_random', 'feature_entropy_random_init_none'] #'feature_entropy_init_none', 'feature_entropy_search']
-choosers_discrete = ['greedy_discrete', 'random']
+choosers_discrete = ['greedy_discrete']
 mdp_types = ['gridworld','bandits']
 num_iter = {'gridworld': '20', 'bandits': '20'}
 num_subsamples_full = '5000'; num_subsamples_not_full = '5000'
 beta_both_mdps = '0.5'
 num_q_max = '10000'
-rsize = '100000'
+rsize = '1000000'
 proxy_space_is_true_space = '0'
-exp_name = '15Feb_initial_nonlinear'
+exp_name = '18Feb_nonlinear'
 
 
 def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
@@ -22,7 +22,7 @@ def run(chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_
         subs_full=num_subsamples_full, full_IRD_subsample_belief='no', log_objective='1',
         repeated_obj='0', num_obj_if_repeated='50', decorrelate_test_feat = '1',
         dist_scale='0.2', euclid_features='1', height='12', width='12',
-        num_test_envs='100',beta=beta_both_mdps,
+        num_test_envs='30',beta=beta_both_mdps,
         test_misspec_linear_space='0'):
     if mdp_type == 'bandits':
         # Values range from -5 to 5 approximately, so setting beta to 1 makes
