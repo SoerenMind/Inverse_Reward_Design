@@ -118,7 +118,7 @@ if __name__=='__main__':
     args.nonlinear_planner = args.nonlinear_true_space or args.nonlinear_proxy_space
     # Even if both spaces are linear, if we're using a nonlinear true reward (i.e. the true reward space is misspecified), we'll need nonlinear features
     args.nonlinear_features = args.nonlinear_planner or args.test_misspec_linear_space
-    nonlinear_feature_dim = (args.feature_dim + 1) ** 2
+    nonlinear_feature_dim = ((args.feature_dim + 1) * (args.feature_dim + 2)) // 2 - 1
     args.feature_dim_planner = nonlinear_feature_dim if args.nonlinear_planner else args.feature_dim
     args.feature_dim_true = nonlinear_feature_dim if args.nonlinear_true_space else args.feature_dim
     args.feature_dim_proxy = nonlinear_feature_dim if args.nonlinear_proxy_space else args.feature_dim

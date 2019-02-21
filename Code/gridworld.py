@@ -844,13 +844,19 @@ class Direction(object):
 
 def populate_nonlin_features(feature_matrix):
     """Given a feature map, computes all its polynomials up to degree 2 and stores them in a matrix."""
-    states_shape, feature_dim = feature_matrix.shape[:-1], feature_matrix.shape[-1]
+    states_shape, dim = feature_matrix.shape[:-1], feature_matrix.shape[-1]
     num_states = reduce(mul, states_shape, 1)
-    quadratic_dim = (feature_dim + 1) ** 2
-    feature_matrix = np.reshape(feature_matrix, [num_states, feature_dim])
+    quadratic_dim = ((dim + 1) * (dim + 2)) // 2 - 1
+    upper_triangle_indices = np.triu_indices(dim + 1)
+
+    feature_matrix = np.reshape(feature_matrix, [num_states, dim])
     feature_matrix_nonlin = np.zeros([num_states, quadratic_dim])
     for state in range(num_states):
         features = np.concatenate([[1],feature_matrix[state,:]])
-        quadratic_features = np.reshape(np.outer(features,features),[-1])
-        feature_matrix_nonlin[state,:] = quadratic_features
+        # Compute all quadratic features
+        quadratic_features = np.outer(features,features)
+        # Keep only the upper triangle and flatten, in order to drop duplicates
+        quadratic_features = quadratic_features[upper_triangle_indices]
+        # Drop the first (constant) feature
+        feature_matrix_nonlin[state,:] = quadratic_features[1:]
     return np.reshape(feature_matrix_nonlin, list(states_shape) + [quadratic_dim])
