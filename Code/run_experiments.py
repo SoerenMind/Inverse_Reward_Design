@@ -6,7 +6,7 @@ NUM_EXPERIMENTS = '50'  # Modify this to change the sample size
 
 discr_query_sizes = ['5', '2']
 choosers_continuous = ['feature_entropy_search_then_optim', 'feature_random', 'feature_entropy_random_init_none'] #'feature_entropy_init_none', 'feature_entropy_search']
-choosers_discrete = ['greedy_discrete']
+choosers_discrete = ['greedy_discrete','random']
 mdp_types = ['gridworld','bandits']
 num_iter = {'gridworld': '20', 'bandits': '20'}
 num_subsamples_full = '5000'; num_subsamples_not_full = '5000'
@@ -20,7 +20,7 @@ exp_name = '21Feb_nonlinear_continuous'
 def run(seed, chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
         viter='15', rsize=rsize, subsampling='1', proxy_space_is_true_space='0',
         subs_full=num_subsamples_full, full_IRD_subsample_belief='no', log_objective='1',
-        repeated_obj='0', num_obj_if_repeated='50', decorrelate_test_feat = '1',
+        repeated_obj='0', num_obj_if_repeated='50', decorrelate_test_feat='1',
         dist_scale='0.2', euclid_features='1', height='12', width='12',
         num_test_envs='30',beta=beta_both_mdps,
         nonlinear_true_space='0', nonlinear_proxy_space='0', test_misspec_linear_space='0'):
@@ -91,9 +91,10 @@ def run(seed, chooser, qsize, mdp_type, num_iter, objective='entropy', discretiz
 def run_nonlinear_discrete():
     seed = 1111
     for mdp_type in mdp_types:
-        for chooser in choosers_discrete:
-            for qsize in discr_query_sizes:
-                for test_misspec_linear_space in ['0', '1']:
+        for test_misspec_linear_space in ['0', '1']:
+            seed = run(seed, 'full', '2', mdp_type, num_iter=num_iter, test_misspec_linear_space=test_misspec_linear_space)
+            for chooser in choosers_discrete:
+                for qsize in discr_query_sizes:
                     seed = run(seed, chooser, qsize, mdp_type, num_iter=num_iter, test_misspec_linear_space=test_misspec_linear_space, nonlinear_true_space='1')
 
 
