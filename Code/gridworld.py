@@ -661,7 +661,7 @@ class GridworldMdpWithFeatures(GridworldMdp):
         self.grid = grid
         self.feature_dim = args.feature_dim
         self.populate_features()
-        if args.nonlinear_true_space or args.nonlinear_proxy_space:
+        if args.nonlinear:
             self.feature_matrix_nonlin = populate_nonlin_features(self.feature_matrix)
 
     def get_features(self,state):

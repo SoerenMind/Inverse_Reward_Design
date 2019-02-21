@@ -10,6 +10,7 @@ class Model(object):
                  objective, lr, discrete, optimize, args):
         self.initialized = False
         self.feature_dim_planner = feature_dim_planner
+        self.feature_dim_proxy = args.feature_dim_proxy
         self.gamma = gamma
         self.query_size = query_size
         self.true_reward_space_size = true_reward_space_size
@@ -84,7 +85,13 @@ class Model(object):
 
     def build_continuous_weights(self):
         query_size, dim, K = self.query_size, self.feature_dim_planner, self.K
-        num_fixed = dim - query_size
+        # num_fixed is the number of fixed weights that we will optimize
+        num_fixed = self.feature_dim_proxy - query_size
+        # num_zeros is the number of weights set to zero (to pad out the proxy
+        # reward so that it is compatible with true rewards that have nonlinear
+        # features).
+        num_zeros = dim - self.feature_dim_proxy
+
         self.query_weights= tf.constant(
             self.proxy_reward_space, dtype=tf.float32, name="query_weights")
 
@@ -109,11 +116,16 @@ class Model(object):
         repeated_weights = tf.stack([self.fixed_weights] * K, axis=0)
         unordered_weights = tf.concat(
             [self.query_weights, repeated_weights], axis=1)
+
         # Then permute using gather to get the desired result.
         # The permutation can be computed from the query [1, 3] using
         # get_permutation_from_query.
-        self.permutation = tf.placeholder(tf.int32, shape=[dim])
+        self.permutation = tf.placeholder(tf.int32, shape=[self.feature_dim_proxy])
         self.weights = tf.gather(unordered_weights, self.permutation, axis=-1)
+        # Finally, tack on extra zeros if necessary
+        if num_zeros != 0:
+            zeros = tf.zeros([K, num_zeros], dtype=tf.float32)
+            self.weights = tf.concat([self.weights, zeros], axis=-1)
 
         self.name_to_op['weights'] = self.weights
         self.name_to_op['query_weights'] = self.query_weights
@@ -361,7 +373,7 @@ class Model(object):
         raise NotImplemented('Should be implemented in subclass')
 
     def get_permutation_from_query(self, query):
-        dim = self.feature_dim_planner
+        dim = self.feature_dim_proxy
         # Running example: query = [1, 3], and we want indexes that will permute
         # weights [10, 11, 12, 13, 14, 15] to [12, 10, 13, 11, 14, 15].
         # Compute the feature numbers for unordered_weights.
@@ -414,7 +426,7 @@ class BanditsModel(Model):
 
 
     def update_feed_dict_with_mdp(self, mdp, fd):
-        use_nonlinear_features = (self.args.nonlinear_true_space or self.args.nonlinear_proxy_space)
+        use_nonlinear_features = self.feature_dim_planner != self.args.feature_dim
         fd[self.features] = mdp.convert_to_numpy_input(use_nonlinear_features)
 
 
@@ -500,7 +512,7 @@ class GridworldModel(Model):
         return tf.stack([north_fes, south_fes, east_fes, west_fes], axis=-1)
 
     def update_feed_dict_with_mdp(self, mdp, fd):
-        use_nonlinear_features = (self.args.nonlinear_true_space or self.args.nonlinear_proxy_space)
+        use_nonlinear_features = self.feature_dim_planner != self.args.feature_dim
         image, features, start_state = mdp.convert_to_numpy_input(use_nonlinear_features)
         x, y = start_state
         fd[self.image] = image

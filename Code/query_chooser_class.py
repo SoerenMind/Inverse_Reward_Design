@@ -733,6 +733,11 @@ class Experiment(object):
         """Computes mean regret from optimizing post_avg across some cached test environments.
         If inference is given, the regret is computed only in inference.mdp (the training environment)."""
 
+        # If the posterior is computed on linear rewards but the true reward
+        # is nonlinear, we need to extend the posterior average with zeros
+        feature_dim_true_reward = len(true_reward)
+        post_avg = list(post_avg) + [0] * (len(true_reward) - self.query_chooser.args.feature_dim_true)
+
         # Compute regret over test mdps
         if inference is None:
             inferences = self.test_inferences
@@ -741,15 +746,15 @@ class Experiment(object):
             inferences = [inference]
 
         regrets = np.empty(len(inferences))
-        feature_dim_true = self.query_chooser.args.feature_dim_true
         for i, inference in enumerate(inferences):
             # New method using TF:
             test_mdp = inference.mdp
-            planning_model = self.query_chooser.get_model(1, 'entropy',
-                rational_planner=self.query_chooser.args.rational_test_planner, dim=feature_dim_true)
+            planning_model = self.query_chooser.get_model(
+                1, 'entropy', rational_planner=self.query_chooser.args.rational_test_planner,
+                dim=len(true_reward))
 
             [post_avg_feature_exps] = planning_model.compute(['feature_exps'], self.query_chooser.sess, test_mdp,
-                                                             [list(post_avg)])
+                                                             [post_avg])
             [true_reward_feature_exps] = planning_model.compute(['feature_exps'], self.query_chooser.sess, test_mdp,
                                                                 [list(true_reward)])
             optimal_reward = np.dot(true_reward_feature_exps, true_reward)
@@ -771,6 +776,9 @@ class Experiment(object):
         return regrets.mean()
 
     def get_normalized_reward_diff(self, post_avg, true_reward):
+        # If the posterior is computed on linear rewards but the true reward
+        # is nonlinear, we need to extend the posterior average with zeros
+        post_avg = np.array(list(post_avg) + [0] * (len(true_reward) - self.query_chooser.args.feature_dim_true))
         norm_post_avg = (post_avg - post_avg.mean())
         norm_post_avg = norm_post_avg / np.linalg.norm(norm_post_avg, ord=2)
         norm_true = (true_reward - true_reward.mean())

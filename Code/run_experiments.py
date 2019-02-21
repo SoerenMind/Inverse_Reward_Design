@@ -14,7 +14,7 @@ beta_both_mdps = '0.5'
 num_q_max = '10000'
 rsize = '1000000'
 proxy_space_is_true_space = '0'
-exp_name = '18Feb_nonlinear'
+exp_name = '21Feb_nonlinear_continuous'
 
 
 def run(seed, chooser, qsize, mdp_type, num_iter, objective='entropy', discretization_size='5', discretization_size_human='5',
@@ -88,7 +88,7 @@ def run(seed, chooser, qsize, mdp_type, num_iter, objective='entropy', discretiz
     call(command)
     return seed + 1
 
-def run_nonlinear():
+def run_nonlinear_discrete():
     seed = 1111
     for mdp_type in mdp_types:
         for chooser in choosers_discrete:
@@ -205,9 +205,20 @@ def run_continuous():
                     discretization_size_human=discretization_size_human,
                     num_iter=num_iter)
 
+def run_nonlinear_continuous():
+    seed = 9999
+    for test_misspec_linear_space, nonlin_true, nonlin_proxy in [('0', '1', '0'), ('1', '0', '0'), ('0', '1', '1')]:
+        for mdp_type in mdp_types:
+            for qsize, discretization_size, discretization_size_human in [('3', '3', '5'), ('2', '5', '9'), ('1', '9', '18')]:
+                seed = run(seed, 'feature_entropy_search_then_optim', qsize,
+                           mdp_type, num_iter=num_iter,
+                           test_misspec_linear_space=test_misspec_linear_space,
+                           nonlinear_true_space=nonlin_true,
+                           nonlinear_proxy_space=nonlin_proxy)
+
 if __name__ == '__main__':
     # run_objectives()
-    run_nonlinear()
+    run_nonlinear_continuous()
     # run_reward_hacking()
     # run_continuous()
     # run_discrete()

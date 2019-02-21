@@ -114,13 +114,11 @@ if __name__=='__main__':
     width = args.width
     num_iters_optim = args.num_iters_optim
     p_wall = 0.35 if args.height < 20 else 0.1
-    # If either space is nonlinear, then planning has to be done with nonlinear features
-    args.nonlinear_planner = args.nonlinear_true_space or args.nonlinear_proxy_space
-    # Even if both spaces are linear, if we're using a nonlinear true reward (i.e. the true reward space is misspecified), we'll need nonlinear features
-    args.nonlinear_features = args.nonlinear_planner or args.test_misspec_linear_space
+    # If anything is nonlinear, then planning has to be done with nonlinear features
+    args.nonlinear = args.nonlinear_true_space or args.nonlinear_proxy_space or args.test_misspec_linear_space
     nonlinear_feature_dim = ((args.feature_dim + 1) * (args.feature_dim + 2)) // 2 - 1
-    args.feature_dim_planner = nonlinear_feature_dim if args.nonlinear_planner else args.feature_dim
-    args.feature_dim_true = nonlinear_feature_dim if args.nonlinear_true_space else args.feature_dim
+    args.feature_dim_planner = nonlinear_feature_dim if args.nonlinear else args.feature_dim
+    args.feature_dim_true = nonlinear_feature_dim if args.nonlinear_true_space or args.test_misspec_linear_space else args.feature_dim
     args.feature_dim_proxy = nonlinear_feature_dim if args.nonlinear_proxy_space else args.feature_dim
     if args.test_misspec_linear_space:
         assert not args.nonlinear_true_space
@@ -162,12 +160,15 @@ if __name__=='__main__':
     }
 
     'Sample true rewards and reward spaces'
-    reward_space_true = np.array(np.random.randint(-9, 10, size=[size_reward_space_true, args.feature_dim_true]), dtype=np.int16)
     if args.test_misspec_linear_space:
+        reward_space_true = np.array(np.random.randint(-9, 10, size=[size_reward_space_true, args.feature_dim]), dtype=np.int16)
+        reward_space_true = np.concatenate([reward_space_true, np.zeros((size_reward_space_true, nonlinear_feature_dim - args.feature_dim))], axis=-1)
         true_rewards = [np.random.randint(-9, 10, size=[nonlinear_feature_dim]) for _ in range(num_experiments)]
     elif not args.well_spec:
+        reward_space_true = np.array(np.random.randint(-9, 10, size=[size_reward_space_true, args.feature_dim_true]), dtype=np.int16)
         true_rewards = [np.random.randint(-9, 10, size=[args.feature_dim_true]) for _ in range(num_experiments)]
     else:
+        reward_space_true = np.array(np.random.randint(-9, 10, size=[size_reward_space_true, args.feature_dim_true]), dtype=np.int16)
         true_rewards = [choice(reward_space_true) for _ in range(num_experiments)]
         if args.repeated_obj:
             # Set values of proxy and goal
@@ -215,7 +216,7 @@ if __name__=='__main__':
                 else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim_proxy])
 
             # give weight zero to nonlinear features if necessary
-            if args.nonlinear_true_space and not args.nonlinear_proxy_space:
+            if args.nonlinear and not args.nonlinear_proxy_space:
                 reward_space_proxy = np.concatenate([reward_space_proxy, np.zeros((size_reward_space_proxy, args.feature_dim_true - args.feature_dim_proxy))], axis=-1)
 
             inference = Inference(
@@ -247,7 +248,7 @@ if __name__=='__main__':
                 else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim_proxy])
 
             # give weight zero to nonlinear features if necessary
-            if args.nonlinear_true_space and not args.nonlinear_proxy_space:
+            if args.nonlinear and not args.nonlinear_proxy_space:
                 reward_space_proxy = np.concatenate([reward_space_proxy, np.zeros((size_reward_space_proxy, args.feature_dim_true - args.feature_dim_proxy))], axis=-1)
 
             inference = Inference(
