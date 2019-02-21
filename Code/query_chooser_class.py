@@ -259,7 +259,7 @@ class Query_Chooser(object):
         true_reward_matrix, log_prior = self.get_true_reward_space()
         desired_outputs = [measure, 'weights_to_train']
         mdp = self.inference.mdp
-        dim, steps = self.args.feature_dim_proxy, self.args.num_iters_optim
+        dim, steps = self.args.feature_dim_planner, self.args.num_iters_optim
         model = self.get_model(
             len(curr_query) + num_to_add, measure, num_unknown=num_to_add, optimize=True)
         model.initialize(self.sess)
@@ -565,7 +565,7 @@ class Query_Chooser(object):
         if mdp.type == 'gridworld':
             height, width = mdp.height, mdp.width
         gamma, lr = self.args.gamma, self.args.lr
-        dim = self.args.feature_dim_proxy_incl_zeros if dim == None else dim
+        dim = self.args.feature_dim_planner if dim == None else dim
         beta, beta_planner = self.args.beta, self.args.beta_planner
         if rational_planner:
             beta_planner = 'inf'

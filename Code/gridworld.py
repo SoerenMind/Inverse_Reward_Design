@@ -1,5 +1,7 @@
 from collections import defaultdict
 from disjoint_sets import DisjointSets
+from functools import reduce
+from operator import mul
 import numpy as np
 import random
 import itertools
@@ -195,14 +197,13 @@ class NStateMdpGaussianFeatures(NStateMdp):
     -num_states_reachable: Integer k <= N which we may change between training and test MDP.
     -SEED
     """
-    def __init__(self, num_states, rewards, start_state, preterminal_states, feature_dim, feature_dim_true, num_states_reachable, SEED=1):
+    def __init__(self, num_states, rewards, start_state, preterminal_states, feature_dim, num_states_reachable, SEED=1):
         self.SEED = SEED
         super(NStateMdpGaussianFeatures, self).__init__(num_states, rewards, start_state, preterminal_states)
         self.feature_dim = feature_dim
-        self.feature_dim_true = feature_dim_true
         self.num_states_reachable = num_states_reachable
         self.populate_features()
-        self.populate_nonlin_features()
+        self.feature_matrix_nonlin = populate_nonlin_features(self.feature_matrix)
         self.type = 'bandits'
         # self.populate_reward
 
@@ -219,14 +220,6 @@ class NStateMdpGaussianFeatures(NStateMdp):
             features = multivariate_normal.rvs(mean=mean,cov=cov,size=1)
             self.features[state] = features
             self.feature_matrix[state,:] = np.array(features)
-
-    def populate_nonlin_features(self):
-        """Given a feature map, computes all its polynomials up to degree 2 and stores them in a matrix."""
-        self.feature_matrix_nonlin = np.zeros([self.num_states, self.feature_dim_true])
-        for state in self.get_states():
-            features = np.concatenate([[1],self.feature_matrix[state,:]])
-            quadratic_features = np.reshape(np.outer(features,features),[-1])
-            self.feature_matrix_nonlin[state,:] = quadratic_features
 
     def get_features(self, state):
         return self.features[state]
@@ -245,9 +238,9 @@ class NStateMdpGaussianFeatures(NStateMdp):
         """
         self.feature_dim = feature_dict.copy()
 
-    def convert_to_numpy_input(self, use_features_true=False):
+    def convert_to_numpy_input(self, use_nonlinear_features=False):
         """Encodes this MDP in a format well-suited for deep models. Gives a matrix from states to features."""
-        if use_features_true:
+        if use_nonlinear_features:
            return self.feature_matrix_nonlin
         else:
             return self.feature_matrix
@@ -666,9 +659,10 @@ class GridworldMdpWithFeatures(GridworldMdp):
     def __init__(self, grid, args, living_reward=-0.01, noise=0):
         super(GridworldMdpWithFeatures, self).__init__(grid, args, living_reward, noise)
         self.grid = grid
+        self.feature_dim = args.feature_dim
         self.populate_features()
-        if args.feature_dim_true != args.feature_dim_proxy:
-            self.populate_nonlin_features()
+        if args.nonlinear_true_space or args.nonlinear_proxy_space:
+            self.feature_matrix_nonlin = populate_nonlin_features(self.feature_matrix)
 
     def get_features(self,state):
         """Returns feature vector for state"""
@@ -676,9 +670,6 @@ class GridworldMdpWithFeatures(GridworldMdp):
         return self.feature_matrix[y,x,:]
 
     def populate_features(self):
-        raise NotImplementedError
-
-    def populate_nonlin_features(self):
         raise NotImplementedError
 
     def get_reward(self, state, action):
@@ -692,7 +683,6 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
         self.goals = goals
         # self.feature_weights = None
         self.euclid_features = args.euclid_features
-        self.feature_dim_true = args.feature_dim_true
         super(GridworldMdpWithDistanceFeatures, self).__init__(
             grid, args, living_reward=-0.01, noise=0)
 
@@ -725,11 +715,11 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
 
 
         height, width = len(self.grid), len(self.grid[0])
-        self.feature_matrix = np.zeros([height, width, self.args.feature_dim_proxy])
+        self.feature_matrix = np.zeros([height, width, self.feature_dim])
         # Save features for each state based on distance to goals
         for y in range(1,height-1):
             for x in range(1,width-1):
-                features = np.zeros(self.args.feature_dim_proxy)
+                features = np.zeros(self.feature_dim)
                 for i,j,obj_nums in self.goals:
                     distance = np.linalg.norm(np.array((x,y)) - np.array((i,j)))
                     rbf_nearness = np.exp(- self.dist_scale * distance)
@@ -742,16 +732,7 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
 
                 self.feature_matrix[y,x,:] = features
 
-    def populate_nonlin_features(self):
-        """Given a feature map, computes all its polynomials up to degree 2 and stores them in a feature array."""
-        self.feature_matrix_nonlin = np.zeros([self.height, self.width, self.feature_dim_true])
-        for y in range(1,self.height-1):
-            for x in range(1,self.width-1):
-                features = np.concatenate([[1],self.feature_matrix[y,x,:]])
-                quadratic_features = np.reshape(np.outer(features,features),[-1])
-                self.feature_matrix_nonlin[y,x,:] = quadratic_features
-
-    def convert_to_numpy_input(self, use_features_true=False):
+    def convert_to_numpy_input(self, use_nonlinear_features=False):
         """Encodes this MDP in a format well-suited for deep models.
 
         Returns three things -- a grid of indicators for whether or not a wall
@@ -759,7 +740,7 @@ class GridworldMdpWithDistanceFeatures(GridworldMdpWithFeatures):
         the format x, y).
         -use_features_true: the returned feature matrix contains high nonlinear features too.
         """
-        feature_matrix_returned = self.feature_matrix_nonlin if use_features_true else self.feature_matrix
+        feature_matrix_returned = self.feature_matrix_nonlin if use_nonlinear_features else self.feature_matrix
         walls = np.array(self.walls, dtype=int)
         return walls, feature_matrix_returned, self.start_state
 
@@ -859,3 +840,17 @@ class Direction(object):
     @staticmethod
     def get_direction_from_number(number):
         return Direction.INDEX_TO_DIRECTION[number]
+
+
+def populate_nonlin_features(feature_matrix):
+    """Given a feature map, computes all its polynomials up to degree 2 and stores them in a matrix."""
+    states_shape, feature_dim = feature_matrix.shape[:-1], feature_matrix.shape[-1]
+    num_states = reduce(mul, states_shape, 1)
+    quadratic_dim = (feature_dim + 1) ** 2
+    feature_matrix = np.reshape(feature_matrix, [num_states, feature_dim])
+    feature_matrix_nonlin = np.zeros([num_states, quadratic_dim])
+    for state in range(num_states):
+        features = np.concatenate([[1],feature_matrix[state,:]])
+        quadratic_features = np.reshape(np.outer(features,features),[-1])
+        feature_matrix_nonlin[state,:] = quadratic_features
+    return np.reshape(feature_matrix_nonlin, list(states_shape) + [quadratic_dim])

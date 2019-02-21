@@ -50,10 +50,10 @@ if __name__=='__main__':
     parser.add_argument('--width',type=int,default=12)
     parser.add_argument('--value_iters',type=int,default=15)    # max_reward / (1-gamma) or height+width
     parser.add_argument('--mdp_type',type=str,default='gridworld')
-    parser.add_argument('--feature_dim_proxy',type=int,default=20)    # 10 if positions fixed, 100 otherwise
-    parser.add_argument('--feature_dim_true',type=int,default=(20+1)**2)  # if 0, only linear used
-    parser.add_argument('--fill_proxy_w_zeros',type=int,default=1)  # if 1, matches # of proxy features to true features by adding zeros; not implemented for 0.
-    parser.add_argument('--test_misspec_linear_space',type=int,default=0)   # if 1, the true reward space is linear functions
+    parser.add_argument('--feature_dim',type=int,default=20)
+    parser.add_argument('--nonlinear_true_space',type=int,default=1)   # if 1, the true reward space is nonlinear functions
+    parser.add_argument('--nonlinear_proxy_space',type=int,default=0)   # if 1, the proxy reward space is nonlinear functions
+    parser.add_argument('--test_misspec_linear_space',type=int,default=0)   # if 1, the true reward is nonlinear even though the true reward space is linear
     parser.add_argument('--num_test_envs',type=int,default=20)    # 10 if positions fixed, 100 otherwise. Can be reduced though because it's expensive.
     parser.add_argument('--well_spec',type=int,default=1)    # default is well-specified
     parser.add_argument('--subsampling',type=int,default=1)
@@ -94,7 +94,6 @@ if __name__=='__main__':
     # #print("Adapted description: ", adapted_description)
 
     # Set parameters
-    dummy_rewards = np.zeros(args.feature_dim_proxy)
     choosers = args.c
     SEED = args.seed
     seed(SEED)
@@ -115,18 +114,23 @@ if __name__=='__main__':
     width = args.width
     num_iters_optim = args.num_iters_optim
     p_wall = 0.35 if args.height < 20 else 0.1
-    if args.feature_dim_true == 0:
-        args.feature_dim_true = args.feature_dim_proxy
-    if args.fill_proxy_w_zeros:
-        args.feature_dim_proxy_incl_zeros = args.feature_dim_true
-    else: args.feature_dim_proxy_incl_zeros = args.feature_dim_proxy
+    # If either space is nonlinear, then planning has to be done with nonlinear features
+    args.nonlinear_planner = args.nonlinear_true_space or args.nonlinear_proxy_space
+    # Even if both spaces are linear, if we're using a nonlinear true reward (i.e. the true reward space is misspecified), we'll need nonlinear features
+    args.nonlinear_features = args.nonlinear_planner or args.test_misspec_linear_space
+    nonlinear_feature_dim = (args.feature_dim + 1) ** 2
+    args.feature_dim_planner = nonlinear_feature_dim if args.nonlinear_planner else args.feature_dim
+    args.feature_dim_true = nonlinear_feature_dim if args.nonlinear_true_space else args.feature_dim
+    args.feature_dim_proxy = nonlinear_feature_dim if args.nonlinear_proxy_space else args.feature_dim
+    if args.test_misspec_linear_space:
+        assert not args.nonlinear_true_space
 
     # These will be in the folder name of the log
     exp_params = {
         # 'rational_test_planner': args.rational_test_planner,
         'qsize': query_size,
         'mdp': args.mdp_type,
-        'dim': args.feature_dim_proxy,
+        'dim': args.feature_dim,
         'misspec_linear': args.test_misspec_linear_space,
         'dsize': args.discretization_size,
         'size_true': size_reward_space_true,
@@ -144,7 +148,8 @@ if __name__=='__main__':
         # 'weighting': args.weighting,
         # 'viters': args.value_iters,
         # 'euclfeat': args.euclid_features,
-        'nonlinfeat': args.feature_dim_true,
+        'nonlin_true': args.nonlinear_true_space,
+        'nonlin_proxy': args.nonlinear_proxy_space,
         'objective': args.objective,
         # 'w_dist_i': args.weights_dist_init,
         # 'w_dist_s': args.weights_dist_search,
@@ -159,10 +164,8 @@ if __name__=='__main__':
     'Sample true rewards and reward spaces'
     reward_space_true = np.array(np.random.randint(-9, 10, size=[size_reward_space_true, args.feature_dim_true]), dtype=np.int16)
     if args.test_misspec_linear_space:
-        reward_space_true_wo_zeros = np.random.randint(-9, 10, size=[size_reward_space_true, args.feature_dim_proxy])
-        reward_space_true = np.array(np.concatenate([reward_space_true_wo_zeros, np.zeros([args.size_true_space, args.feature_dim_true-args.feature_dim_proxy])],axis=1), dtype=np.int16)
-        true_rewards = [np.random.randint(-9, 10, size=[args.feature_dim_true]) for _ in range(num_experiments)]
-    if args.test_misspec_linear_space or not args.well_spec:
+        true_rewards = [np.random.randint(-9, 10, size=[nonlinear_feature_dim]) for _ in range(num_experiments)]
+    elif not args.well_spec:
         true_rewards = [np.random.randint(-9, 10, size=[args.feature_dim_true]) for _ in range(num_experiments)]
     else:
         true_rewards = [choice(reward_space_true) for _ in range(num_experiments)]
@@ -183,16 +186,16 @@ if __name__=='__main__':
         'Create train and test MDPs'
         test_mdps = []
         for i in range(args.num_test_envs):
-            mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim_proxy), start_state=0, preterminal_states=[],
-                                            feature_dim=args.feature_dim_proxy, feature_dim_true=args.feature_dim_true,
-                                            num_states_reachable=num_states, SEED=SEED+i*50+100)
+            mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
+                                            feature_dim=args.feature_dim,
+                                            num_states_reachable=num_states, SEED=SEED+i*50)
             test_mdps.append(mdp)
 
         train_mdps = []
         for i in range(num_experiments):
-            mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim_proxy), start_state=0, preterminal_states=[],
-                                            feature_dim=args.feature_dim_proxy, feature_dim_true=args.feature_dim_true,
-                                            num_states_reachable=num_states, SEED=SEED+i*50+100)
+            mdp = NStateMdpGaussianFeatures(num_states=num_states, rewards=np.zeros(args.feature_dim), start_state=0, preterminal_states=[],
+                                            feature_dim=args.feature_dim,
+                                            num_states_reachable=num_states, SEED=SEED+i*50+1)
             train_mdps.append(mdp)
 
         'Create train and test inferences'
@@ -202,7 +205,6 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             inference = Inference(
                 mdp, env, beta, reward_space_true, reward_space_proxy=[])
-
             test_inferences.append(inference)
 
         train_inferences = []
@@ -211,11 +213,13 @@ if __name__=='__main__':
             env = GridworldEnvironment(mdp)
             reward_space_proxy = reward_space_true if args.proxy_space_is_true_space \
                 else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim_proxy])
-            reward_space_proxy = [np.concatenate([proxy, np.zeros(args.feature_dim_true - args.feature_dim_proxy)])
-                                  for proxy in reward_space_proxy]  # give weight zero to nonlinear features
+
+            # give weight zero to nonlinear features if necessary
+            if args.nonlinear_true_space and not args.nonlinear_proxy_space:
+                reward_space_proxy = np.concatenate([reward_space_proxy, np.zeros((size_reward_space_proxy, args.feature_dim_true - args.feature_dim_proxy))], axis=-1)
+
             inference = Inference(
                 mdp, env, beta, reward_space_true, reward_space_proxy)
-
             train_inferences.append(inference)
 
 
@@ -224,7 +228,7 @@ if __name__=='__main__':
         'Create train and test MDPs'
         test_inferences = []
         for i in range(args.num_test_envs):
-            test_grid, test_goals = GridworldMdp.generate_random(args,height,width,0.25,args.feature_dim_proxy,None,
+            test_grid, test_goals = GridworldMdp.generate_random(args,height,width,0.25,args.feature_dim,None,
                                         living_reward=-0.01, print_grid=False, decorrelate=args.decorrelate_test_feat)
             mdp = GridworldMdpWithDistanceFeatures(test_grid, test_goals, args, dist_scale, living_reward=-0.01, noise=0)
             env = GridworldEnvironment(mdp)
@@ -236,16 +240,18 @@ if __name__=='__main__':
 
         train_inferences = []
         for j in range(num_experiments):
-            grid, goals = GridworldMdp.generate_random(args,height,width,0.25,args.feature_dim_proxy,None,living_reward=-0.01, print_grid=False)
+            grid, goals = GridworldMdp.generate_random(args,height,width,0.25,args.feature_dim,None,living_reward=-0.01, print_grid=False)
             mdp = GridworldMdpWithDistanceFeatures(grid, goals, args, dist_scale, living_reward=-0.01, noise=0)
             env = GridworldEnvironment(mdp)
             reward_space_proxy = reward_space_true if args.proxy_space_is_true_space \
                 else np.random.randint(-9, 10, size=[size_reward_space_proxy, args.feature_dim_proxy])
-            reward_space_proxy = [np.concatenate([proxy, np.zeros(args.feature_dim_true - args.feature_dim_proxy)])
-                                  for proxy in reward_space_proxy]  # give weight zero to nonlinear features
+
+            # give weight zero to nonlinear features if necessary
+            if args.nonlinear_true_space and not args.nonlinear_proxy_space:
+                reward_space_proxy = np.concatenate([reward_space_proxy, np.zeros((size_reward_space_proxy, args.feature_dim_true - args.feature_dim_proxy))], axis=-1)
+
             inference = Inference(
                 mdp, env, beta, reward_space_true, reward_space_proxy)
-
             train_inferences.append(inference)
 
 
