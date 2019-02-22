@@ -61,8 +61,8 @@ if __name__=='__main__':
     parser.add_argument('--weighting',type=int,default=1)
     parser.add_argument('--euclid_features',type=int,default=1) # if 0, gridworld features are RBF (not euclidean) distances to object
     parser.add_argument('--objective',type=str,default='entropy')
-    parser.add_argument('--log_objective',type=int,default=1)
-    parser.add_argument('--rational_test_planner',type=int,default=1)
+    parser.add_argument('--log_objective',type=int,default=1)   # optimize log of objective
+    parser.add_argument('--rational_test_planner',type=int,default=1)   # if 0, uses soft planner
     # args for experiment with correlated features
     parser.add_argument('--repeated_obj',type=int,default=0)  # Creates gridworld with k object types, k features, and num_objects >= k objects
     parser.add_argument('--num_obj_if_repeated',type=int,default=50)  # Usually feature_dim_proxy is # of objects except for correlated features experiment. Must be > feature_dim_proxy
@@ -132,7 +132,7 @@ if __name__=='__main__':
         'size_true': size_reward_space_true,
         'size_proxy': size_reward_space_proxy,
         'seed': SEED,
-        'beta': beta,
+        # 'beta': beta,
         'exp_name': args.exp_name,
         # 'num_states': num_states,
         'dist_scale': dist_scale,
@@ -145,13 +145,13 @@ if __name__=='__main__':
         # 'viters': args.value_iters,
         # 'euclfeat': args.euclid_features,
         'nonlinfeat': args.feature_dim_true,
-        'objective': args.objective,
+        # 'objective': args.objective,
         # 'w_dist_i': args.weights_dist_init,
         # 'w_dist_s': args.weights_dist_search,
         # 'optim_big': args.only_optim_biggest,
         # 'rational_test': args.rational_test_planner
-        'proxy_is_true': args.proxy_space_is_true_space,
-        'full_IRD_subs': args.full_IRD_subsample_belief,
+        # 'proxy_is_true': args.proxy_space_is_true_space,
+        # 'full_IRD_subs': args.full_IRD_subsample_belief,
         # 'corr_feat': args.repeated_obj,
         # 'num_obj_if_corr': args.num_obj_if_repeated
     }
