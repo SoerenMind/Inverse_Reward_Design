@@ -146,7 +146,7 @@ if __name__=='__main__':
         # 'weighting': args.weighting,
         # 'viters': args.value_iters,
         # 'euclfeat': args.euclid_features,
-        'nonlinfeat': args.feature_dim_true,
+        # 'nonlinfeat': args.feature_dim_true,
         # 'objective': args.objective,
         'nonlin_true': args.nonlinear_true_space,
         'nonlin_proxy': args.nonlinear_proxy_space,
