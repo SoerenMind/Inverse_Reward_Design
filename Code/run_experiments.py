@@ -84,6 +84,7 @@ def run(seed, chooser, qsize, mdp_type, num_iter, objective='entropy', discretiz
                '--num_obj_if_repeated', num_obj_if_repeated,
                '--decorrelate_test_feat', decorrelate_test_feat
                ]
+    command = [str(x) for x in command]
     print('Running command', ' '.join(command))
     call(command)
     return seed + 1
@@ -91,11 +92,11 @@ def run(seed, chooser, qsize, mdp_type, num_iter, objective='entropy', discretiz
 def run_nonlinear_discrete():
     seed = 1111
     for mdp_type in mdp_types:
-        for test_misspec_linear_space in ['0', '1']:
-            seed = run(seed, 'full', '2', mdp_type, num_iter=num_iter, test_misspec_linear_space=test_misspec_linear_space)
+        for test_misspec_linear_space, nonlinear_true_space in [['1','0'], ['0','1']]:
+            seed = run(seed, 'full', '2', mdp_type, num_iter=num_iter, test_misspec_linear_space=test_misspec_linear_space, nonlinear_true_space=nonlinear_true_space)
             for chooser in choosers_discrete:
                 for qsize in discr_query_sizes:
-                    seed = run(seed, chooser, qsize, mdp_type, num_iter=num_iter, test_misspec_linear_space=test_misspec_linear_space, nonlinear_true_space='1')
+                    seed = run(seed, chooser, qsize, mdp_type, num_iter=num_iter, test_misspec_linear_space=test_misspec_linear_space, nonlinear_true_space=nonlinear_true_space)
 
 
 
@@ -219,7 +220,8 @@ def run_nonlinear_continuous():
 
 if __name__ == '__main__':
     # run_objectives()
-    run_nonlinear_continuous()
+    # run_nonlinear_continuous()
+    run_nonlinear_discrete()
     # run_reward_hacking()
     # run_continuous()
     # run_discrete()

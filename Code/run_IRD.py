@@ -54,7 +54,7 @@ if __name__=='__main__':
     parser.add_argument('--nonlinear_true_space',type=int,default=1)   # if 1, the true reward space is nonlinear functions
     parser.add_argument('--nonlinear_proxy_space',type=int,default=0)   # if 1, the proxy reward space is nonlinear functions
     parser.add_argument('--test_misspec_linear_space',type=int,default=0)   # if 1, the true reward is nonlinear even though the true reward space is linear
-    parser.add_argument('--num_test_envs',type=int,default=20)    # 10 if positions fixed, 100 otherwise. Can be reduced though because it's expensive.
+    parser.add_argument('--num_test_envs',type=int,default=50)    # 10 if positions fixed, 100 otherwise. Can be reduced though because it's expensive.
     parser.add_argument('--well_spec',type=int,default=1)    # default is well-specified
     parser.add_argument('--subsampling',type=int,default=1)
     parser.add_argument('--num_subsamples',type=int,default=10000)
